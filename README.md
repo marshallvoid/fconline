@@ -74,6 +74,45 @@ playwright install chromium
 
 ## 🚀 Usage
 
+### 📦 Pre-built Executable
+
+Download the latest pre-built Windows executable from [GitHub Releases](../../releases/latest):
+
+1. Download `FC_Online_Tool.exe`
+2. Run as administrator (recommended)
+3. If Windows Defender shows a warning, click "More info" → "Run anyway"
+
+### 🔨 Building from Source
+
+#### Quick Build (Recommended)
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd fc-online
+
+# Run the build script
+./build.sh
+```
+
+#### Manual Build
+
+```bash
+# Install uv if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Sync dependencies
+uv sync
+
+# Add PyInstaller
+uv add pyinstaller
+
+# Build executable
+uv run pyinstaller build.spec
+
+# Output will be in: dist/FC_Online_Tool.exe
+```
+
 ### GUI Mode (Recommended)
 
 #### Using uv:
