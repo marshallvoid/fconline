@@ -21,7 +21,7 @@ class FileChangeHandler(FileSystemEventHandler):
         self.callback = callback
         self.extensions = extensions
         self.last_modified = {}
-        self.debounce_time = 0.5  # Seconds to wait before triggering reload
+        self.debounce_time = 2  # Seconds to wait before triggering reload
 
     def on_modified(self, event) -> None:
         if event.is_directory:
