@@ -2,7 +2,7 @@ import json
 import os
 
 from browser_use import Browser, BrowserContextConfig
-from browser_use.browser.context import BrowserContext
+from browser_use.browser.context import BrowserContext, BrowserSession
 from browser_use.utils import time_execution_async
 from loguru import logger
 from playwright.async_api import Browser as PlaywrightBrowser
@@ -10,8 +10,11 @@ from playwright.async_api import BrowserContext as PlaywrightBrowserContext
 
 
 class PatchedContext(BrowserContext):
+    session: BrowserSession | None = None
+    _page_event_handler: object | None
+
     @time_execution_async("--close")
-    async def close(self):  # noqa: C901
+    async def close(self) -> None:
         """Close the browser instance"""
         logger.debug("Closing browser context")
 

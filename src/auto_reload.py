@@ -3,12 +3,12 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Dict, Optional
 
 from loguru import logger
 
 try:
-    from watchdog.events import FileSystemEventHandler
+    from watchdog.events import DirModifiedEvent, FileModifiedEvent, FileSystemEventHandler
     from watchdog.observers import Observer
 
     WATCHDOG_AVAILABLE = True
@@ -20,10 +20,10 @@ class FileChangeHandler(FileSystemEventHandler):
     def __init__(self, callback: Callable[[], None], extensions: tuple = (".py",)) -> None:
         self.callback = callback
         self.extensions = extensions
-        self.last_modified = {}
+        self.last_modified: Dict[Any, Any] = {}
         self.debounce_time = 2  # Seconds to wait before triggering reload
 
-    def on_modified(self, event) -> None:
+    def on_modified(self, event: DirModifiedEvent | FileModifiedEvent) -> None:
         if event.is_directory:
             return
 
