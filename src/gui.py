@@ -2,7 +2,6 @@ import asyncio
 import threading
 import tkinter as tk
 from datetime import datetime
-from pathlib import Path
 from tkinter import messagebox, ttk
 
 import darkdetect
@@ -18,10 +17,7 @@ class FCOnlineGUI:
         self._root.title("FC Online Automation Tool")
         self._root.geometry("700x550")  # Increased height slightly for better layout
         self._root.resizable(False, False)
-        self._root.minsize(600, 500)  # Set minimum size to prevent UI breaking
-
-        icon_path = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
-        self._root.iconbitmap(icon_path)  # Set application icon
+        self._root.minsize(700, 500)  # Set minimum size to prevent UI breaking
 
         # Variables for form inputs
         self._username_var = tk.StringVar(value="b.vip250")
@@ -81,21 +77,21 @@ class FCOnlineGUI:
         # Username field
         username_frame = ttk.Frame(container)
         username_frame.pack(fill="x", pady=(0, 10))
-        ttk.Label(username_frame, text="Username:", width=15).pack(side="left")
+        ttk.Label(username_frame, text="Username:", width=20).pack(side="left")
         self.username_entry = ttk.Entry(username_frame, textvariable=self._username_var, width=30)
         self.username_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
         # Password field
         password_frame = ttk.Frame(container)
         password_frame.pack(fill="x", pady=(0, 10))
-        ttk.Label(password_frame, text="Password:", width=15).pack(side="left")
+        ttk.Label(password_frame, text="Password:", width=20).pack(side="left")
         self.password_entry = ttk.Entry(password_frame, textvariable=self._password_var, show="*", width=30)
         self.password_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
         # Target Special Jackpot field
         target_special_jackpot_frame = ttk.Frame(container)
         target_special_jackpot_frame.pack(fill="x", pady=(0, 20))
-        ttk.Label(target_special_jackpot_frame, text="Target Special Jackpot:", width=15).pack(side="left")
+        ttk.Label(target_special_jackpot_frame, text="Target Special Jackpot:", width=20).pack(side="left")
         self.target_special_jackpot_entry = ttk.Entry(
             target_special_jackpot_frame,
             textvariable=self._target_special_jackpot_var,
