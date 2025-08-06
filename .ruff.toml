@@ -1,0 +1,75 @@
+line-length = 120
+src = ["fc_online"]
+include = ["fc_online/**.py"]
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+lint.extend-select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "C",  # flake8-comprehensions
+    "B",  # flake8-bugbear
+    "N",        # https://docs.astral.sh/ruff/settings/#pep8-naming
+    "EM",       # https://docs.astral.sh/ruff/settings/#flake8-errmsg
+    "ISC",      # https://docs.astral.sh/ruff/settings/#flake8-implicit-str-concat
+    "G",        # https://docs.astral.sh/ruff/rules/#flake8-logging-format-g
+    "Q",        # https://docs.astral.sh/ruff/rules/#flake8-pytest-style-pt
+    "I",
+]
+lint.select = [
+    "F401",     # unused-import
+    "F406",     # undefined-local-with-nested-import-star-usage
+    "COM812",   # missing-trailing-comma
+    "DTZ003",   # call-datetime-utcnow
+    "EM102",    # f-string-in-exception
+    "INP001",   # implicit-namespace-package
+    "PIE794",   # duplicate-class-field-definition
+    "PIE796",   # non-unique-enums
+    "T201",     # print
+    "SLF001",   # private-member-access
+]
+
+lint.ignore = [
+    "COM812",  # missing trailing comma
+    "ISC001",  # implicit-str-concat
+    "B904",  # flake8-bugbear: Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+    "B006",  # do not use mutable data structures in argument defaults
+#    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+#    "C901",  # too complex
+    "B009",  # do not call .get() without a default argument
+    "SLF001" # Private member access
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["E402"]
+
+[format]
+quote-style = "double"
