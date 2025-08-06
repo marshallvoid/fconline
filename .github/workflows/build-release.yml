@@ -11,6 +11,10 @@ on:
          - main # Run on PR to main branch
    workflow_dispatch: # Allow manual trigger
 
+permissions:
+   contents: write # Required for creating releases
+   actions: read # Required for artifact access
+
 jobs:
    build:
       runs-on: windows-latest # Use Windows to build exe
@@ -87,4 +91,4 @@ jobs:
                  ---
                  **Note**: This is an automated release built from source code.
            env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
