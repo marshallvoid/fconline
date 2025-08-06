@@ -1,6 +1,6 @@
 line-length = 120
-src = ["fc_online"]
-include = ["fc_online/**.py"]
+src = ["src"]
+include = ["src/**.py", "tests/**.py"]
 exclude = [
     ".bzr",
     ".direnv",

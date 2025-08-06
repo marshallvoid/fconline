@@ -23,7 +23,7 @@ repos:
     rev: v1.15.0
     hooks:
       - id: mypy
-        files: ^fc_online/
+        files: ^src/
         additional_dependencies:
           - alembic
           - types-redis
