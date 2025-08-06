@@ -22,10 +22,25 @@ class FCOnlineTool:
     USERNAME_INPUT_SELECTOR = "form input[type='text']"
     PASSWORD_INPUT_SELECTOR = "form input[type='password']"
     SUBMIT_BTN_SELECTOR = "form button[type='submit']"
-    SPIN_ACTION_1_SELECTOR = "div.spin__actions.spin__actions--1"
-    SPIN_ACTION_2_SELECTOR = "div.spin__actions.spin__actions--2"
-    SPIN_ACTION_3_SELECTOR = "div.spin__actions.spin__actions--3"
-    SPIN_ACTION_4_SELECTOR = "div.spin__actions.spin__actions--4"
+
+    SPIN_ACTION_1_SELECTOR = "div.spin__actions a.spin__actions--1"
+    SPIN_ACTION_2_SELECTOR = "div.spin__actions a.spin__actions--2"
+    SPIN_ACTION_3_SELECTOR = "div.spin__actions a.spin__actions--3"
+    SPIN_ACTION_4_SELECTOR = "div.spin__actions a.spin__actions--4"
+
+    SPIN_ACTION_SELECTORS = {
+        1: SPIN_ACTION_1_SELECTOR,
+        2: SPIN_ACTION_2_SELECTOR,
+        3: SPIN_ACTION_3_SELECTOR,
+        4: SPIN_ACTION_4_SELECTOR,
+    }
+
+    SPIN_ACTION_TEXT = {
+        1: "Free Spin",
+        2: "FC10 Spin",
+        3: "...",
+        4: "...",
+    }
 
     # URL constants
     BASE_URL = "https://bilac.fconline.garena.vn/"
@@ -37,10 +52,12 @@ class FCOnlineTool:
         password: str,
         headless: bool = False,
         target_special_jackpot: int = 10000,
+        spin_action: int = 1,
     ) -> None:
         self.username = username
         self.password = password
         self.headless = headless
+        self.spin_action = spin_action
 
         self.target_special_jackpot = target_special_jackpot
         self.special_jackpot: int = 0
@@ -164,6 +181,65 @@ class FCOnlineTool:
             logger.error(f"❌ Login error: {e}")
             return False
 
+    async def _auto_spin(
+        self,
+        page: Page,
+        current_value: int,
+        target_value: int,
+        message_callback: Optional[Callable[[str], None]] = None,
+    ) -> None:
+        """Continuously click the spin button while target is reached"""
+        selector = self.SPIN_ACTION_SELECTORS.get(self.spin_action, self.SPIN_ACTION_1_SELECTOR)
+
+        try:
+            while current_value >= target_value and not self._stop_flag:
+                # Check for and handle SweetAlert2 modal first
+                await self._handle_swal_modal(page)
+
+                spin_element = await page.query_selector(selector)
+                if spin_element:
+                    try:
+                        # Use force click to bypass intercepting elements
+                        await spin_element.click(force=True, timeout=5000)
+                        if message_callback:
+                            msg = f"🎰 Auto-spinning with action: {self.SPIN_ACTION_TEXT.get(self.spin_action, 'Unknown')}"  # noqa: E501
+                            message_callback(msg)
+                    except Exception as click_error:
+                        logger.warning(f"⚠️ Click failed, trying alternative method: {click_error}")
+                        # Try JavaScript click as fallback
+                        await page.evaluate(f"document.querySelector('{selector}').click()")
+                else:
+                    logger.warning(f"⚠️ Spin element not found: {selector}")
+                    break
+
+                # Small delay to prevent overwhelming the browser
+                await asyncio.sleep(0.1)
+
+        except Exception as e:
+            logger.error(f"❌ Auto-spin error: {e}")
+
+    async def _handle_swal_modal(self, page: Page) -> None:
+        """Handle SweetAlert2 modal if present"""
+        try:
+            # Check if SweetAlert2 modal is present
+            swal_container = await page.query_selector(".swal2-container")
+            if swal_container:
+                # Try to find and click OK/Confirm button
+                confirm_btn = await page.query_selector(".swal2-confirm")
+                if confirm_btn:
+                    await confirm_btn.click(force=True)
+                    await asyncio.sleep(0.2)  # Wait for modal to close
+                else:
+                    # Try other common button selectors
+                    for btn_selector in [".swal2-styled", ".swal2-close", ".swal2-cancel"]:
+                        btn = await page.query_selector(btn_selector)
+                        if btn:
+                            await btn.click(force=True)
+                            await asyncio.sleep(0.2)
+                            break
+        except Exception as e:
+            logger.debug(f"Modal handling error (non-critical): {e}")
+
     def _process_frame(self, frame: str, message_callback: Optional[Callable[[str], None]]) -> None:  # noqa: C901
         # Handle Socket.IO format: 42["message",{"content":{...}}]
         if not frame.startswith("42["):
@@ -198,12 +274,24 @@ class FCOnlineTool:
             match type:
                 case "jackpot_value":
                     logger.success(f"🎰 Special Jackpot: {value}")
+                    prev_jackpot = self.special_jackpot
                     self.special_jackpot = value
 
                     if message_callback:
                         message_callback(f"🎰 Special Jackpot: {value}")
                         if value >= self.target_special_jackpot:
                             message_callback(f"🎯 Special Jackpot has reached {self.target_special_jackpot}")
+
+                            # If target just reached (wasn't reached before), start auto-spinning
+                            if prev_jackpot < self.target_special_jackpot and self._page:
+                                asyncio.create_task(
+                                    self._auto_spin(
+                                        page=self._page,
+                                        current_value=self.special_jackpot,
+                                        target_value=self.target_special_jackpot,
+                                        message_callback=message_callback,
+                                    )
+                                )
 
                 case "mini_jackpot":
                     logger.success(f"🎯 Mini Jackpot: {value}")
@@ -319,6 +407,7 @@ async def main_tool() -> None:
         password="dummy_password",
         headless=False,
         target_special_jackpot=10000,
+        spin_action=1,
     )
     await automation.run()
 

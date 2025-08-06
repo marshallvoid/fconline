@@ -22,14 +22,16 @@ class FCOnlineGUI:
         # Variables for form inputs
         self._username_var = tk.StringVar(value="b.vip250")
         self._password_var = tk.StringVar(value="Hau11111@")
-        self._target_special_jackpot_var = tk.StringVar(value="10000")
+        self._target_special_jackpot_var = tk.IntVar(value=10000)
+        self._spin_action_var = tk.IntVar(value=1)
 
         # Running state
         self._is_running = False
         self._tool_instance = FCOnlineTool(
             username=self._username_var.get(),
             password=self._password_var.get(),
-            target_special_jackpot=int(self._target_special_jackpot_var.get().strip()),
+            target_special_jackpot=self._target_special_jackpot_var.get(),
+            spin_action=self._spin_action_var.get(),
         )
 
         self._setup_ui()
@@ -90,7 +92,7 @@ class FCOnlineGUI:
 
         # Target Special Jackpot field
         target_special_jackpot_frame = ttk.Frame(container)
-        target_special_jackpot_frame.pack(fill="x", pady=(0, 20))
+        target_special_jackpot_frame.pack(fill="x", pady=(0, 10))
         ttk.Label(target_special_jackpot_frame, text="Target Special Jackpot:", width=20).pack(side="left")
         self.target_special_jackpot_entry = ttk.Entry(
             target_special_jackpot_frame,
@@ -98,6 +100,27 @@ class FCOnlineGUI:
             width=30,
         )
         self.target_special_jackpot_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
+
+        # Spin Action Radio Buttons
+        spin_action_frame = ttk.LabelFrame(container, text="Spin Action", padding=10)
+        spin_action_frame.pack(fill="x", pady=(0, 20))
+
+        radio_container = ttk.Frame(spin_action_frame)
+        radio_container.pack(fill="x")
+
+        self.radio_buttons = []
+        radio_options = [(1, "Free"), (2, "10FC"), (3, "..."), (4, "...")]
+
+        for value, text in radio_options:
+            radio_btn = ttk.Radiobutton(
+                radio_container,
+                text=text,
+                variable=self._spin_action_var,
+                value=value,
+                command=self._on_spin_action_changed,
+            )
+            radio_btn.pack(side="left", padx=(0, 20))
+            self.radio_buttons.append(radio_btn)
 
         # Instructions
         self.instructions_frame = ttk.LabelFrame(container, text="Messages", padding=10)
@@ -180,7 +203,7 @@ class FCOnlineGUI:
         if "jackpot" in message_lower or "mini jackpot" in message_lower:
             return "general"
 
-        return "default"
+        return "general"  # default
 
     def _add_message(self, message: str) -> None:
         # Skip empty or whitespace-only messages
@@ -248,10 +271,19 @@ class FCOnlineGUI:
         self.password_entry.config(state=state)
         self.target_special_jackpot_entry.config(state=state)
 
+        for radio_btn in self.radio_buttons:
+            radio_btn.config(state=state)
+
+    def _on_spin_action_changed(self) -> None:
+        """Called when radio button selection changes"""
+        if hasattr(self, "_tool_instance"):
+            self._tool_instance.spin_action = self._spin_action_var.get()
+
     def _update_config(self) -> None:
         self._tool_instance.username = self._username_var.get()
         self._tool_instance.password = self._password_var.get()
-        self._tool_instance.target_special_jackpot = int(self._target_special_jackpot_var.get().strip())
+        self._tool_instance.target_special_jackpot = self._target_special_jackpot_var.get()
+        self._tool_instance.spin_action = self._spin_action_var.get()
 
     def _stop_automation_task(self) -> None:
         loop = asyncio.new_event_loop()
@@ -313,7 +345,7 @@ class FCOnlineGUI:
 
         # Validate target jackpot
         try:
-            target_value = int(self._target_special_jackpot_var.get().strip())
+            target_value = self._target_special_jackpot_var.get()
             if target_value <= 0:
                 msg = "Target must be positive"
                 raise ValueError(msg)
