@@ -1,7 +1,7 @@
 [project]
 name = "src"
 version = "0.1.0"
-description = "Add your description here"
+description = "FC Online Automation Tool"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -12,10 +12,13 @@ dependencies = [
     "fake-useragent>=2.2.0",
     "faker>=37.5.3",
     "loguru>=0.7.3",
+    "pillow>=11.3.0",
+    "pillow-heif>=1.1.0",
     "pydantic>=2.11.7",
     "sv-ttk>=2.6.1",
     "ua-parser>=1.0.1",
     "user-agents>=2.2.0",
+    "watchdog>=6.0.0",
 ]
 
 [dependency-groups]
