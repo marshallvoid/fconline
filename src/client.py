@@ -9,7 +9,7 @@ from playwright.async_api import Browser as PlaywrightBrowser
 from playwright.async_api import BrowserContext as PlaywrightBrowserContext
 
 
-class PatchedBrowserContext(BrowserContext):
+class PatchedContext(BrowserContext):
     @time_execution_async("--close")
     async def close(self):  # noqa: C901
         """Close the browser instance"""
@@ -131,5 +131,5 @@ class PatchedBrowserContext(BrowserContext):
 
 
 class BrowserClient(Browser):
-    async def new_context(self, config: BrowserContextConfig = BrowserContextConfig()) -> PatchedBrowserContext:
-        return PatchedBrowserContext(config=config, browser=self)
+    async def new_context(self, config: BrowserContextConfig = BrowserContextConfig()) -> PatchedContext:
+        return PatchedContext(config=config, browser=self)
