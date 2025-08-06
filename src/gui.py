@@ -252,8 +252,8 @@ class FCOnlineGUI:
             if not line.strip():
                 continue
 
-            line_start = f"{i+1}.0"
-            line_end = f"{i+1}.end"
+            line_start = f"{i + 1}.0"
+            line_end = f"{i + 1}.end"
 
             # Apply appropriate styling
             style = self._get_message_tag(line)
