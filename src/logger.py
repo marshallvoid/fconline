@@ -75,16 +75,23 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
         logging_logger.propagate = False
         logging_logger.handlers = [InterceptHandler(level=logging_level)]
 
+    # Handle case where sys.stderr might be None (e.g., in exe files)
+    sink = sys.stderr if sys.stderr is not None else sys.stdout
+    if sink is None:
+        # Fallback to a file if both stderr and stdout are None
+        import tempfile
+
+        log_file = tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False)
+        sink = log_file.name
+
     handlers = [
         {
-            "sink": sys.stderr,
+            "sink": sink,
             "level": logging_level,
             "format": loguru_format,
         },
     ]
-    logger.configure(handlers=handlers)  # type: ignore
-
-    # Mark logger as initialized
+    logger.configure(handlers=handlers)  # type: ignore    # Mark logger as initialized
     _logger_initialized = True
 
 

@@ -15,20 +15,30 @@ try:
         main_gui()
 
 except ImportError as e:
-    root = tk.Tk()
-    root.withdraw()
-    messagebox.showerror(
-        "Import Error",
-        (
-            f"Import error: {e}\n"
-            "Make sure you have installed all required dependencies:\n"
-            "pip install -r requirements.txt"
-        ),
-    )
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror(
+            "Import Error",
+            (
+                f"Import error: {e}\n"
+                "Make sure you have installed all required dependencies:\n"
+                "pip install -r requirements.txt"
+            ),
+        )
+    except Exception:
+        # If even creating tkinter window fails, write to a file
+        with open("error.log", "w") as f:
+            f.write(f"Import error: {e}\n")
     sys.exit(1)
 
 except Exception as e:
-    root = tk.Tk()
-    root.withdraw()
-    messagebox.showerror("Error", f"Error starting GUI: {e}")
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror("Error", f"Error starting GUI: {e}")
+    except Exception:
+        # If even creating tkinter window fails, write to a file
+        with open("error.log", "w") as f:
+            f.write(f"Error starting GUI: {e}\n")
     sys.exit(1)
