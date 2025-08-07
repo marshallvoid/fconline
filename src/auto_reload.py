@@ -17,13 +17,26 @@ except ImportError:
 
 
 class FileChangeHandler(FileSystemEventHandler):
+    """Handle file system events for auto-reload functionality."""
+
     def __init__(self, callback: Callable[[], None], extensions: tuple = (".py",)) -> None:
+        """Initialize file change handler.
+
+        Args:
+            callback: Function to call when files change
+            extensions: File extensions to monitor
+        """
         self.callback = callback
         self.extensions = extensions
         self.last_modified: Dict[Any, Any] = {}
         self.debounce_time = 2  # Seconds to wait before triggering reload
 
     def on_modified(self, event: DirModifiedEvent | FileModifiedEvent) -> None:
+        """Handle file modification events with debouncing.
+
+        Args:
+            event: File system event
+        """
         if event.is_directory:
             return
 
@@ -44,13 +57,30 @@ class FileChangeHandler(FileSystemEventHandler):
 
 
 class AutoReloader:
+    """Automatic application reloader based on file changes."""
+
     def __init__(self, callback: Callable[[], None]) -> None:
+        """Initialize auto-reloader.
+
+        Args:
+            callback: Function to call when files change
+        """
         self.callback = callback
         self.observer: Optional[Observer] = None  # type: ignore
         self.watching = False
 
     def start_watching(self, paths: Optional[list[str]] = None) -> bool:
-        """Start watching for file changes"""
+        """Start watching for file changes.
+
+        Args:
+            paths: List of paths to watch (default: src directory)
+
+        Returns:
+            True if watching started successfully, False otherwise
+
+        Raises:
+            Exception: For file watcher setup errors
+        """
         if not WATCHDOG_AVAILABLE:
             logger.warning("watchdog not available. Install with: pip install watchdog")
             return False
@@ -85,7 +115,7 @@ class AutoReloader:
             return False
 
     def stop_watching(self) -> None:
-        """Stop watching for file changes"""
+        """Stop watching for file changes."""
         if self.observer and self.watching:
             self.observer.stop()
             self.observer.join()
@@ -93,7 +123,11 @@ class AutoReloader:
             logger.info("Stopped watching for file changes")
 
     def restart_application(self) -> None:
-        """Restart the current Python application"""
+        """Restart the current Python application.
+
+        Raises:
+            OSError: For application restart errors
+        """
         logger.info("Restarting application...")
 
         # Stop watching before restart
@@ -111,15 +145,17 @@ def enable_auto_reload(
     watch_paths: Optional[list[str]] = None,
     callback: Optional[Callable[[], None]] = None,
 ) -> AutoReloader:
-    """
-    Enable auto-reload functionality
+    """Enable auto-reload functionality for the application.
 
     Args:
-        callback: Function to call when files change (default: restart application)
         watch_paths: List of paths to watch (default: current src directory)
+        callback: Function to call when files change (default: restart application)
 
     Returns:
         AutoReloader instance
+
+    Raises:
+        Exception: For auto-reload setup errors
     """
     if callback is None:
         # Create a dummy reloader for the static method call
