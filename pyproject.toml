@@ -8,6 +8,7 @@ dependencies = [
     "aiohttp>=3.12.15",
     "beautifulsoup4>=4.13.4",
     "browser-use>=0.1.40,<0.2.0",
+    "cryptography>=45.0.6",
     "darkdetect>=0.8.0",
     "fake-useragent>=2.2.0",
     "faker>=37.5.3",

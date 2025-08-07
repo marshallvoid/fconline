@@ -1,10 +1,11 @@
 import os
 import sys
 import tkinter as tk
-from pathlib import Path
+
+# from pathlib import Path
 from tkinter import messagebox
 
-from src.auto_reload import enable_auto_reload
+# from src.auto_reload import enable_auto_reload
 
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
@@ -14,7 +15,7 @@ try:
     from src.gui import main_gui
 
     if __name__ == "__main__":
-        enable_auto_reload(watch_paths=[str(Path(project_root) / "src")])
+        #   enable_auto_reload(watch_paths=[str(Path(project_root) / "src")])
         main_gui()
 
 except ImportError as e:

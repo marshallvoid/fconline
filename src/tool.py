@@ -1,8 +1,8 @@
 import asyncio
 import json
 import os
-import platform
 import re
+import shutil
 from typing import Callable, Optional
 
 import aiohttp
@@ -13,6 +13,7 @@ from playwright.async_api import Page, WebSocket
 from src.client import BrowserClient, PatchedContext
 from src.logger import init_logger
 from src.types import UserInfo
+from src.utils import get_chrome_executable_path, get_default_browser_executable_path
 
 
 class FCOnlineTool:
@@ -29,17 +30,10 @@ class FCOnlineTool:
     SPIN_ACTION_4_SELECTOR = "div.spin__actions a.spin__actions--4"
 
     SPIN_ACTION_SELECTORS = {
-        1: SPIN_ACTION_1_SELECTOR,
-        2: SPIN_ACTION_2_SELECTOR,
-        3: SPIN_ACTION_3_SELECTOR,
-        4: SPIN_ACTION_4_SELECTOR,
-    }
-
-    SPIN_ACTION_TEXT = {
-        1: "Free Spin",
-        2: "FC10 Spin",
-        3: "...",
-        4: "...",
+        1: (SPIN_ACTION_1_SELECTOR, "Free Spin"),
+        2: (SPIN_ACTION_2_SELECTOR, "FC10 Spin"),
+        3: (SPIN_ACTION_3_SELECTOR, "..."),
+        4: (SPIN_ACTION_4_SELECTOR, "..."),
     }
 
     # URL constants
@@ -54,76 +48,53 @@ class FCOnlineTool:
         target_special_jackpot: int = 10000,
         spin_action: int = 1,
     ) -> None:
+        """Initialize FC Online automation tool.
+
+        Args:
+            username: User login username
+            password: User login password
+            headless: Run browser in headless mode
+            target_special_jackpot: Jackpot value to trigger auto-spin
+            spin_action: Spin action type (1-4)
+        """
         self.username = username
         self.password = password
         self.headless = headless
         self.spin_action = spin_action
 
         self.target_special_jackpot = target_special_jackpot
-        self.special_jackpot: int = 0
+        self._special_jackpot: int = 0
 
-        self.mini_jackpot: int = 0
+        self._mini_jackpot: int = 0
 
         self._context: Optional[PatchedContext] = None
         self._page: Optional[Page] = None
         self._stop_flag = False
+        self._needs_cookie_clear = False
 
-    @staticmethod
-    def _get_chrome_executable_path() -> Optional[str]:
-        """Automatically detect Chrome path across different operating systems"""
-        system = platform.system().lower()
+        # User info
+        self.user_info: Optional[UserInfo] = None
+        self._cookies: dict[str, str] = {}
 
-        match system:
-            case "windows":
-                chrome_paths = [
-                    os.path.expandvars(r"%PROGRAMFILES%\Google\Chrome\Application\chrome.exe"),
-                    os.path.expandvars(r"%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe"),
-                    os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
-                    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-                    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-                ]
-            case "darwin":  # macOS
-                chrome_paths = [
-                    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-                    os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-                ]
-            case "linux":
-                chrome_paths = [
-                    "/usr/bin/google-chrome",
-                    "/usr/bin/google-chrome-stable",
-                    "/usr/bin/chromium",
-                    "/usr/bin/chromium-browser",
-                    "/snap/bin/chromium",
-                    "/usr/local/bin/chrome",
-                    "/opt/google/chrome/chrome",
-                ]
-            case _:
-                chrome_paths = []
+        # User data directory path
+        self._user_data_dir = f"/tmp/chrome-automation-{username}"
 
-        # Check each path
-        for path in chrome_paths:
-            if os.path.exists(path):
-                return path
-
-        logger.warning("🌐 Chrome not found, will use default Chrome channel")
-        return None
-
-    async def _get_user_info_api(self, session: aiohttp.ClientSession) -> Optional[UserInfo]:
-        try:
-            async with session.get(self.API_URL) as response:
-                if response.status != 200:
-                    logger.error(f"❌ API Error: Status {response.status}")
-                    return None
-
-                data = await response.json()
-                return UserInfo.model_validate(data)
-
-        except Exception as e:
-            logger.error(f"❌ API call error: {e}")
-            return None
+        # Callbacks for GUI updates
+        self.message_callback: Optional[Callable[[str], None]] = None
+        self.user_info_callback: Optional[Callable[[], None]] = None
 
     async def _check_login(self, page: Page) -> bool:
+        """Check if user is logged in by looking for login/logout buttons.
+
+        Args:
+            page: Playwright page instance
+
+        Returns:
+            True if logged in, False otherwise
+
+        Raises:
+            Exception: For page interaction errors
+        """
         try:
             # Check for login button (not logged in)
             login_btn = await page.query_selector(selector=self.LOGIN_BTN_SELECTOR)
@@ -142,6 +113,17 @@ class FCOnlineTool:
             return False
 
     async def _perform_login(self, page: Page) -> bool:
+        """Perform login by filling credentials and submitting form.
+
+        Args:
+            page: Playwright page instance
+
+        Returns:
+            True if login successful, False otherwise
+
+        Raises:
+            Exception: For page interaction or login errors
+        """
         try:
             # Click login button
             login_btn = await page.query_selector(selector=self.LOGIN_BTN_SELECTOR)
@@ -172,24 +154,121 @@ class FCOnlineTool:
 
             await submit_btn.click()
 
-            # Wait for login completion and redirect
-            await page.wait_for_load_state(state="networkidle")
-            logger.success("🔐 Login completed successfully")
-            return True
+            # Wait for login completion - either redirect to BASE_URL or stay on login page for captcha
+            logger.info("🔐 Login form submitted, waiting for response...")
+
+            # Wait for either successful redirect to BASE_URL or captcha/error handling
+            try:
+                # Wait for navigation or URL change (up to 30 seconds for captcha solving)
+                wait_condition = (
+                    f"window.location.href.includes('{self.BASE_URL}') || "
+                    "document.querySelector('.captcha') || document.querySelector('.error')"
+                )
+                await page.wait_for_function(wait_condition, timeout=30000)
+
+                # Check current URL to determine login result
+                current_url = page.url
+                if self.BASE_URL in current_url:
+                    logger.success("🔐 Login completed successfully - redirected to main page")
+                    return True
+                else:
+                    # Still on login page, might need captcha or have error
+                    logger.info("🔐 Login requires additional steps (captcha/verification)")
+
+                    # Wait for user to solve captcha and redirect (up to 5 minutes)
+                    logger.info("⏳ Waiting for captcha resolution and redirect...")
+                    await page.wait_for_function(
+                        f"window.location.href.includes('{self.BASE_URL}')", timeout=300000  # 5 minutes
+                    )
+
+                    logger.success("🔐 Login completed successfully after captcha resolution")
+                    return True
+
+            except Exception as timeout_error:
+                logger.error(f"❌ Login timeout or failed: {timeout_error}")
+                return False
 
         except Exception as e:
             logger.error(f"❌ Login error: {e}")
             return False
 
-    async def _auto_spin(
-        self,
-        page: Page,
-        current_value: int,
-        target_value: int,
-        message_callback: Optional[Callable[[str], None]] = None,
-    ) -> None:
-        """Continuously click the spin button while target is reached"""
-        selector = self.SPIN_ACTION_SELECTORS.get(self.spin_action, self.SPIN_ACTION_1_SELECTOR)
+    async def _extract_cookies(self, page: Page) -> dict[str, str]:
+        """Extract cookies from browser for API authentication.
+
+        Args:
+            page: Playwright page instance
+
+        Returns:
+            Dictionary of cookie name-value pairs
+
+        Raises:
+            Exception: For cookie extraction errors
+        """
+        try:
+            cookies = await page.context.cookies()
+            cookie_dict = {}
+
+            for cookie in cookies:
+                domain = cookie.get("domain", "")
+                if domain in ["bilac.fconline.garena.vn", ".fconline.garena.vn"]:
+                    name = cookie.get("name", "")
+                    value = cookie.get("value", "")
+                    if name and value:
+                        cookie_dict[name] = value
+
+            logger.info(f"🍪 Extracted {len(cookie_dict)} cookies")
+            return cookie_dict
+
+        except Exception as e:
+            logger.error(f"❌ Failed to extract cookies: {e}")
+            return {}
+
+    async def _fetch_user_info(self) -> None:
+        """Fetch user info from API using extracted cookies.
+
+        Raises:
+            Exception: For API request or parsing errors
+        """
+        if not self._cookies and self._page:
+            self._cookies = await self._extract_cookies(self._page)
+
+        async with aiohttp.ClientSession() as session:
+            try:
+                cookie_header = "; ".join([f"{name}={value}" for name, value in self._cookies.items()])
+
+                headers = {
+                    "Cookie": cookie_header,
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                }
+
+                # Add CSRF token if available
+                if "csrftoken" in self._cookies:
+                    headers["X-CSRFToken"] = self._cookies["csrftoken"]
+
+                    async with session.get(self.API_URL, headers=headers) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            self.user_info = UserInfo.model_validate(data)
+
+                    # Notify GUI about user info update
+                    if self.user_info_callback:
+                        self.user_info_callback()
+
+            except Exception as e:
+                logger.error(f"❌ Failed to fetch user info: {e}")
+
+    async def _auto_spin(self, page: Page, current_value: int, target_value: int) -> None:
+        """Continuously click the spin button while target is reached.
+
+        Args:
+            page: Playwright page instance
+            current_value: Current jackpot value
+            target_value: Target jackpot threshold
+
+        Raises:
+            Exception: For page interaction errors
+        """
+        selector = self.SPIN_ACTION_SELECTORS.get(self.spin_action, self.SPIN_ACTION_1_SELECTOR)[0]
 
         try:
             while current_value >= target_value and not self._stop_flag:
@@ -201,9 +280,9 @@ class FCOnlineTool:
                     try:
                         # Use force click to bypass intercepting elements
                         await spin_element.click(force=True, timeout=5000)
-                        if message_callback:
-                            msg = f"🎰 Auto-spinning with action: {self.SPIN_ACTION_TEXT.get(self.spin_action, 'Unknown')}"  # noqa: E501
-                            message_callback(msg)
+                        if self.message_callback:
+                            msg = f"🎰 Auto-spinning with action: {self.SPIN_ACTION_SELECTORS.get(self.spin_action, 'Unknown')[1]}"  # noqa: E501
+                            self.message_callback(msg)
                     except Exception as click_error:
                         logger.warning(f"⚠️ Click failed, trying alternative method: {click_error}")
                         # Try JavaScript click as fallback
@@ -219,7 +298,14 @@ class FCOnlineTool:
             logger.error(f"❌ Auto-spin error: {e}")
 
     async def _handle_swal_modal(self, page: Page) -> None:
-        """Handle SweetAlert2 modal if present"""
+        """Handle SweetAlert2 modal if present.
+
+        Args:
+            page: Playwright page instance
+
+        Raises:
+            Exception: For modal handling errors (non-critical)
+        """
         try:
             # Check if SweetAlert2 modal is present
             swal_container = await page.query_selector(".swal2-container")
@@ -240,7 +326,12 @@ class FCOnlineTool:
         except Exception as e:
             logger.debug(f"Modal handling error (non-critical): {e}")
 
-    def _process_frame(self, frame: str, message_callback: Optional[Callable[[str], None]]) -> None:  # noqa: C901
+    def _process_frame(self, frame: str) -> None:  # noqa: C901
+        """Process WebSocket frame data for jackpot updates.
+
+        Args:
+            frame: Raw WebSocket frame string
+        """
         # Handle Socket.IO format: 42["message",{"content":{...}}]
         if not frame.startswith("42["):
             return
@@ -274,41 +365,46 @@ class FCOnlineTool:
             match type:
                 case "jackpot_value":
                     logger.success(f"🎰 Special Jackpot: {value}")
-                    prev_jackpot = self.special_jackpot
-                    self.special_jackpot = value
+                    prev_jackpot = self._special_jackpot
+                    self._special_jackpot = value
 
-                    if message_callback:
-                        message_callback(f"🎰 Special Jackpot: {value}")
+                    if self.message_callback:
+                        self.message_callback(f"🎰 Special Jackpot: {value}")
                         if value >= self.target_special_jackpot:
-                            message_callback(f"🎯 Special Jackpot has reached {self.target_special_jackpot}")
+                            self.message_callback(f"🎯 Special Jackpot has reached {self.target_special_jackpot}")
 
                             # If target just reached (wasn't reached before), start auto-spinning
                             if prev_jackpot < self.target_special_jackpot and self._page:
                                 asyncio.create_task(
                                     self._auto_spin(
                                         page=self._page,
-                                        current_value=self.special_jackpot,
+                                        current_value=self._special_jackpot,
                                         target_value=self.target_special_jackpot,
-                                        message_callback=message_callback,
                                     )
                                 )
 
                 case "mini_jackpot":
                     logger.success(f"🎯 Mini Jackpot: {value}")
-                    self.mini_jackpot = value
+                    self._mini_jackpot = value
 
-                    if message_callback:
-                        message_callback(f"🎯 Mini Jackpot: {value}")
+                    if self.message_callback:
+                        self.message_callback(f"🎯 Mini Jackpot: {value}")
 
         except json.JSONDecodeError:
             pass  # Ignore JSON decode errors
 
-    async def _setup_websocket(self, page: Page, message_callback: Optional[Callable[[str], None]] = None) -> None:
+    async def _setup_websocket(self, page: Page) -> None:
+        """Setup WebSocket listeners for real-time jackpot updates.
+
+        Args:
+            page: Playwright page instance
+        """
+
         def handle_websocket(websocket: WebSocket) -> None:
             async def on_framereceived(frame: bytes | str) -> None:
                 if not frame or not isinstance(frame, str):
                     return
-                self._process_frame(frame=frame, message_callback=message_callback)
+                self._process_frame(frame=frame)
 
             websocket.on("framereceived", on_framereceived)
             websocket.on("framesent", lambda frame: logger.info(f"🔗 WebSocket frame sent: {frame}"))
@@ -317,6 +413,14 @@ class FCOnlineTool:
         page.on("websocket", handle_websocket)
 
     async def _setup_context(self) -> tuple[PatchedContext, Page]:
+        """Setup browser context and page with Chrome configuration.
+
+        Returns:
+            Tuple of (browser_context, page)
+
+        Raises:
+            Exception: For browser setup errors
+        """
         extra_chromium_args = [
             "--disable-web-security",
             "--disable-features=VizDisplayCompositor",
@@ -334,17 +438,20 @@ class FCOnlineTool:
             "--hide-scrollbars",
             "--mute-audio",
             "--start-maximized",
-            "--user-data-dir=/tmp/chrome-automation",
+            "--user-data-dir=" + self._user_data_dir,
         ]
 
         if self.headless:
             extra_chromium_args.append("--headless")
 
+        # Choose browser based on user preference
+        browser_path = get_default_browser_executable_path() or get_chrome_executable_path()
+
         browser = BrowserClient(
             config=BrowserConfig(
                 headless=self.headless,
                 extra_chromium_args=extra_chromium_args,
-                chrome_instance_path=self._get_chrome_executable_path(),
+                chrome_instance_path=browser_path,
             )
         )
 
@@ -354,7 +461,88 @@ class FCOnlineTool:
 
         return browser_context, page
 
+    def stop(self) -> None:
+        """Stop the automation tool."""
+        self._stop_flag = True
+
+    def start(self) -> None:
+        """Start the automation tool."""
+        self._stop_flag = False
+
+    def update_credentials(self, username: str, password: str) -> None:
+        """Update login credentials and clean old user data if username changed.
+
+        Args:
+            username: New username
+            password: New password
+
+        Raises:
+            Exception: For file system cleanup errors
+        """
+        old_username = self.username
+        old_password = self.password
+
+        # Only clean up if credentials actually changed
+        credentials_changed = (old_username != username) or (old_password != password)
+
+        if not credentials_changed:
+            # No changes, nothing to do
+            return
+
+        if old_username != username:
+            # Username changed, clean old user data directory
+            old_user_data_dir = f"/tmp/chrome-automation-{old_username}"
+            try:
+                if os.path.exists(old_user_data_dir):
+                    shutil.rmtree(old_user_data_dir)
+                    logger.info(f"🧹 Cleaned old user data directory: {old_user_data_dir}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to clean old user data directory: {e}")
+
+        # Update credentials and user data directory
+        self.username = username
+        self.password = password
+        self._user_data_dir = f"/tmp/chrome-automation-{username}"
+
+        # Clear cached data only when credentials changed
+        self.user_info = None
+        self._cookies = {}
+
+        # Clear browser cookies if browser is running and credentials changed
+        if self._page:
+            self._clear_cookies()
+        else:
+            # Mark that cookies need to be cleared when browser starts
+            self._needs_cookie_clear = True
+            logger.info("🍪 Cookies will be cleared when browser starts")
+
+        # Notify GUI to update user info display
+        if self.user_info_callback:
+            self.user_info_callback()
+
+    def _clear_cookies(self) -> None:
+        """Safely clear browser cookies, handling event loop issues."""
+        if not self._page:
+            return
+
+        try:
+            # Check if we're already in an event loop
+            loop = asyncio.get_running_loop()
+            # Schedule the cookie clearing in the existing loop
+            loop.create_task(self._page.context.clear_cookies())
+        except RuntimeError:
+            # No running loop, safe to use asyncio.run()
+            try:
+                asyncio.run(self._page.context.clear_cookies())
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to clear cookies: {e}")
+
     async def close_browser(self) -> None:
+        """Close browser context and cleanup resources.
+
+        Raises:
+            Exception: For browser cleanup errors
+        """
         if not self._context:
             return
 
@@ -366,28 +554,50 @@ class FCOnlineTool:
         finally:
             self._context = None
             self._page = None
+            self._needs_cookie_clear = False
 
-    def stop(self) -> None:
-        self._stop_flag = True
+    async def run(self) -> None:
+        """Main automation loop - setup browser, login, and monitor WebSocket.
 
-    def start(self) -> None:
-        self._stop_flag = False
-
-    async def run(self, message_callback: Optional[Callable[[str], None]] = None) -> None:
+        Raises:
+            Exception: For various automation errors
+        """
         self._context, self._page = await self._setup_context()
 
         try:
             async with self._context:
+                # Clear cookies if needed (when credentials were updated before browser started)
+                if self._needs_cookie_clear:
+                    try:
+                        await self._page.context.clear_cookies()
+                        logger.info("🍪 Cleared cookies after browser startup")
+                        self._needs_cookie_clear = False
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to clear cookies at startup: {e}")
+
                 # Setup WebSocket interception before loading the page
-                await self._setup_websocket(page=self._page, message_callback=message_callback)
+                await self._setup_websocket(page=self._page)
 
                 await self._page.goto(url=self.BASE_URL)
                 await self._page.wait_for_load_state(state="networkidle")
 
-                # Check login status
-                if not await self._check_login(page=self._page) and not await self._perform_login(page=self._page):
-                    logger.error("❌ Login failed!")
-                    return
+                # Check login status and perform login if needed
+                login_needed = not await self._check_login(page=self._page)
+                if login_needed:
+                    login_success = await self._perform_login(page=self._page)
+                    if not login_success:
+                        logger.error("❌ Login failed!")
+                        return
+
+                    # After successful login, ensure we're back to BASE_URL
+                    current_url = self._page.url
+                    if self.BASE_URL not in current_url:
+                        logger.info("🔄 Navigating back to main page after login...")
+                        await self._page.goto(url=self.BASE_URL)
+                        await self._page.wait_for_load_state(state="networkidle")
+
+                # Always fetch user info when starting automation (whether logged in or just logged in)
+                await self._fetch_user_info()
 
                 logger.info("🚀 Starting WebSocket monitoring...")
                 # Keep the browser open and monitor WebSocket
