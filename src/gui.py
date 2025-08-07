@@ -455,7 +455,7 @@ class FCOnlineGUI:
 
         user = user_info.payload.user
         info_text = (
-            f"UID: {user.uid}\nUsername: {user.nickname}\n" f"Free Spin: {user.free_spin}\nFC: {user.fc}\nMC: {user.mc}"
+            f"UID: {user.uid}\nUsername: {user.nickname}\nFree Spin: {user.free_spin}\nFC: {user.fc}\nMC: {user.mc}"
         )
         self.user_info_label.config(text=info_text, foreground="green")
 

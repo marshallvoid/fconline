@@ -43,8 +43,8 @@ def detect_windows_default_browser() -> Optional[str]:
         import winreg
 
         registry_path = r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, registry_path) as key:
-            prog_id = winreg.QueryValueEx(key, "Progid")[0]
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, registry_path) as key:  # type: ignore[attr-defined]
+            prog_id = winreg.QueryValueEx(key, "Progid")[0]  # type: ignore[attr-defined]
 
             if "chrome" in prog_id.lower():
                 chrome_paths = [
@@ -101,6 +101,8 @@ def detect_linux_default_browser() -> Optional[str]:
 def get_default_browser_executable_path() -> Optional[str]:
     """Automatically detect default browser path across different operating systems"""
     system = platform.system().lower()
+
+    logger.info(f"🌐 Detecting default browser for {system}")
 
     default_browser_path = None
 

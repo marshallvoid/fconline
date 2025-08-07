@@ -177,7 +177,8 @@ class FCOnlineTool:
                     # Wait for user to solve captcha and redirect (up to 5 minutes)
                     logger.info("⏳ Waiting for captcha resolution and redirect...")
                     await page.wait_for_function(
-                        f"window.location.href.includes('{self.BASE_URL}')", timeout=300000  # 5 minutes
+                        f"window.location.href.includes('{self.BASE_URL}')",
+                        timeout=300000,  # 5 minutes
                     )
 
                     logger.success("🔐 Login completed successfully after captcha resolution")
@@ -363,7 +364,7 @@ class FCOnlineTool:
 
             match type:
                 case "jackpot_value":
-                    logger.success(f"🎰 Special Jackpot: {value}")
+                  #   logger.success(f"🎰 Special Jackpot: {value}")
                     prev_jackpot = self._special_jackpot
                     self._special_jackpot = value
 
@@ -383,7 +384,7 @@ class FCOnlineTool:
                                 )
 
                 case "mini_jackpot":
-                    logger.success(f"🎯 Mini Jackpot: {value}")
+                  #   logger.success(f"🎯 Mini Jackpot: {value}")
                     self._mini_jackpot = value
 
                     if self.message_callback:
@@ -494,7 +495,7 @@ class FCOnlineTool:
             try:
                 if os.path.exists(old_user_data_dir):
                     shutil.rmtree(old_user_data_dir)
-                    logger.info(f"🧹 Cleaned old user data directory: {old_user_data_dir}")
+                  #   logger.info(f"🧹 Cleaned old user data directory: {old_user_data_dir}")
             except Exception as e:
                 logger.warning(f"⚠️ Failed to clean old user data directory: {e}")
 
@@ -513,7 +514,7 @@ class FCOnlineTool:
         else:
             # Mark that cookies need to be cleared when browser starts
             self._needs_cookie_clear = True
-            logger.info("🍪 Cookies will be cleared when browser starts")
+            # logger.info("🍪 Cookies will be cleared when browser starts")
 
         # Notify GUI to update user info display
         if self.user_info_callback:
@@ -569,7 +570,7 @@ class FCOnlineTool:
                 if self._needs_cookie_clear:
                     try:
                         await self._page.context.clear_cookies()
-                        logger.info("🍪 Cleared cookies after browser startup")
+                        # logger.info("🍪 Cleared cookies after browser startup")
                         self._needs_cookie_clear = False
                     except Exception as e:
                         logger.warning(f"⚠️ Failed to clear cookies at startup: {e}")
@@ -591,7 +592,7 @@ class FCOnlineTool:
                     # After successful login, ensure we're back to BASE_URL
                     current_url = self._page.url
                     if self.BASE_URL not in current_url:
-                        logger.info("🔄 Navigating back to main page after login...")
+                        # logger.info("🔄 Navigating back to main page after login...")
                         await self._page.goto(url=self.BASE_URL)
                         await self._page.wait_for_load_state(state="networkidle")
 
