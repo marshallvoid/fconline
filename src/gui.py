@@ -9,9 +9,22 @@ from datetime import datetime
 from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING, Optional
 
-import darkdetect
-import sv_ttk
 from cryptography.fernet import Fernet
+
+# Optional imports that might fail in exe environment
+try:
+    import darkdetect
+
+    HAS_DARKDETECT = True
+except ImportError:
+    HAS_DARKDETECT = False
+
+try:
+    import sv_ttk
+
+    HAS_SV_TTK = True
+except ImportError:
+    HAS_SV_TTK = False
 
 from src.tool import FCOnlineTool
 
@@ -24,41 +37,59 @@ class FCOnlineGUI:
 
     def __init__(self) -> None:
         """Initialize GUI components and tool instance."""
-        self._root = tk.Tk()
-        self._root.title("FC Online Automation Tool")
-        self._root.geometry("700x600")
-        self._root.resizable(False, False)
-        self._root.minsize(700, 550)
+        try:
+            # Initialize logger first to avoid any logging issues
+            import src.logger
 
-        # Create user data directory
-        self._user_data_dir = self._get_user_data_dir()
-        self._config_file = os.path.join(self._user_data_dir, "config.json")
+            src.logger.ensure_logger_initialized()
 
-        # Load saved credentials or use defaults
-        saved_credentials = self._load_credentials()
+            self._root = tk.Tk()
+            self._root.title("FC Online Automation Tool")
+            self._root.geometry("700x600")
+            self._root.resizable(False, False)
+            self._root.minsize(700, 550)
 
-        # Variables for form inputs
-        self._username_var = tk.StringVar(value=saved_credentials.get("username", ""))
-        self._password_var = tk.StringVar(value=saved_credentials.get("password", ""))
-        self._target_special_jackpot_var = tk.IntVar(value=saved_credentials.get("target_special_jackpot", 10000))
-        self._spin_action_var = tk.IntVar(value=saved_credentials.get("spin_action", 1))
+            # Create user data directory
+            self._user_data_dir = self._get_user_data_dir()
+            self._config_file = os.path.join(self._user_data_dir, "config.json")
 
-        # Add trace callbacks for credential changes
-        self._username_var.trace_add("write", self._on_credentials_changed)
-        self._password_var.trace_add("write", self._on_credentials_changed)
-        self._target_special_jackpot_var.trace_add("write", self._on_config_changed)
-        self._spin_action_var.trace_add("write", self._on_config_changed)
+            # Load saved credentials or use defaults
+            saved_credentials = self._load_credentials()
 
-        # Running state
-        self._is_running = False
-        self._tool_instance = FCOnlineTool(
-            username=self._username_var.get(),
-            password=self._password_var.get(),
-            target_special_jackpot=self._target_special_jackpot_var.get(),
-            spin_action=self._spin_action_var.get(),
-        )
+            # Variables for form inputs
+            self._username_var = tk.StringVar(value=saved_credentials.get("username", ""))
+            self._password_var = tk.StringVar(value=saved_credentials.get("password", ""))
+            self._target_special_jackpot_var = tk.IntVar(value=saved_credentials.get("target_special_jackpot", 10000))
+            self._spin_action_var = tk.IntVar(value=saved_credentials.get("spin_action", 1))
 
-        self._setup_ui()
+            # Add trace callbacks for credential changes
+            self._username_var.trace_add("write", self._on_credentials_changed)
+            self._password_var.trace_add("write", self._on_credentials_changed)
+            self._target_special_jackpot_var.trace_add("write", self._on_config_changed)
+            self._spin_action_var.trace_add("write", self._on_config_changed)
+
+            # Running state
+            self._is_running = False
+            self._tool_instance = FCOnlineTool(
+                username=self._username_var.get(),
+                password=self._password_var.get(),
+                target_special_jackpot=self._target_special_jackpot_var.get(),
+                spin_action=self._spin_action_var.get(),
+            )
+
+            self._setup_ui()
+        except Exception as e:
+            # If GUI initialization fails, try to show error in a simple dialog
+            try:
+                error_root = tk.Tk()
+                error_root.withdraw()
+                messagebox.showerror("Initialization Error", f"Failed to initialize GUI: {e}")
+                error_root.destroy()
+            except Exception:
+                # Last resort: write to file
+                with open("gui_error.log", "w") as f:
+                    f.write(f"Failed to initialize GUI: {e}\n")
+            raise
 
     def _get_user_data_dir(self) -> str:
         """Get user data directory path that works across different systems.
@@ -643,14 +674,53 @@ class FCOnlineGUI:
         # Setup closing protocol
         self._root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
-        sv_ttk.set_theme(darkdetect.theme() or "dark")
+        # Apply theme if available
+        if HAS_SV_TTK and HAS_DARKDETECT:
+            try:
+                sv_ttk.set_theme(darkdetect.theme() or "dark")
+            except Exception:
+                # If theme setting fails, continue without theme
+                pass
+        elif HAS_SV_TTK:
+            try:
+                sv_ttk.set_theme("dark")
+            except Exception:
+                # If theme setting fails, continue without theme
+                pass
+
         self._root.mainloop()
 
 
 def main_gui() -> None:
     """Main entry point for GUI application."""
-    app = FCOnlineGUI()
-    app.run()
+    try:
+        app = FCOnlineGUI()
+        app.run()
+    except Exception as e:
+        # Final error handling - try multiple ways to show error
+        error_msg = f"Failed to start GUI application: {e}"
+
+        # Try to show error in messagebox
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("Application Error", error_msg)
+            root.destroy()
+        except Exception:
+            pass
+
+        # Also write to file as backup
+        try:
+            with open("app_error.log", "w") as f:
+                f.write(error_msg + "\n")
+                import traceback
+
+                f.write(traceback.format_exc())
+        except Exception:
+            pass
+
+        # Re-raise the error
+        raise
 
 
 if __name__ == "__main__":
