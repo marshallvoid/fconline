@@ -8,6 +8,7 @@ sys.path.insert(0, project_root)
 
 
 try:
+    import src.logger  # noqa: F401
     from src.gui import main_gui
 
     if __name__ == "__main__":

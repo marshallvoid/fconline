@@ -13,7 +13,6 @@ import darkdetect
 import sv_ttk
 from cryptography.fernet import Fernet
 
-from src.logger import init_logger
 from src.tool import FCOnlineTool
 
 if TYPE_CHECKING:
@@ -570,7 +569,7 @@ class FCOnlineGUI:
         Raises:
             Exception: For automation errors
         """
-        init_logger()
+        # No need to call init_logger() - it's auto-initialized
         try:
             self._root.after(0, lambda: self.status_label.config(text="🚀 Status: Running..."))
 
@@ -655,4 +654,6 @@ def main_gui() -> None:
 
 
 if __name__ == "__main__":
+    import src.logger  # noqa: F401
+
     main_gui()

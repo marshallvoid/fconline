@@ -5,14 +5,15 @@ import tkinter as tk
 # from pathlib import Path
 from tkinter import messagebox
 
-# from src.auto_reload import enable_auto_reload
-
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
 
 try:
+    import src.logger  # noqa: F401
     from src.gui import main_gui
+
+    # from src.auto_reload import enable_auto_reload
 
     if __name__ == "__main__":
         #   enable_auto_reload(watch_paths=[str(Path(project_root) / "src")])
