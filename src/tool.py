@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import platform as sys_platform
 import re
 import shutil
 from typing import Callable, Optional
@@ -75,8 +76,8 @@ class FCOnlineTool:
         self.user_info: Optional[UserInfo] = None
         self._cookies: dict[str, str] = {}
 
-        # User data directory path
-        self._user_data_dir = f"/tmp/chrome-automation-{username}"
+        # User data directory path - use platform-specific directory
+        self._user_data_dir = platform.get_user_data_directory(username)
 
         # Callbacks for GUI updates
         self.message_callback: Optional[Callable[[str], None]] = None
@@ -364,7 +365,7 @@ class FCOnlineTool:
 
             match type:
                 case "jackpot_value":
-                  #   logger.success(f"🎰 Special Jackpot: {value}")
+                    logger.success(f"🎰 Special Jackpot: {value}")
                     prev_jackpot = self._special_jackpot
                     self._special_jackpot = value
 
@@ -384,7 +385,7 @@ class FCOnlineTool:
                                 )
 
                 case "mini_jackpot":
-                  #   logger.success(f"🎯 Mini Jackpot: {value}")
+                    logger.success(f"🎯 Mini Jackpot: {value}")
                     self._mini_jackpot = value
 
                     if self.message_callback:
@@ -438,8 +439,27 @@ class FCOnlineTool:
             "--hide-scrollbars",
             "--mute-audio",
             "--start-maximized",
-            "--user-data-dir=" + self._user_data_dir,
+            f"--user-data-dir={self._user_data_dir}",
         ]
+
+        # Add Windows-specific arguments
+        system = sys_platform.platform().lower()
+        if "windows" in system:
+            extra_chromium_args.extend(
+                [
+                    "--disable-gpu-sandbox",
+                    "--disable-software-rasterizer",
+                    "--disable-background-networking",
+                    "--disable-default-apps",
+                    "--disable-extensions",
+                    "--disable-sync",
+                    "--disable-translate",
+                    "--hide-crash-restore-bubble",
+                    "--no-service-autorun",
+                    "--password-store=basic",
+                    "--use-mock-keychain",
+                ]
+            )
 
         if self.headless:
             extra_chromium_args.append("--headless")
@@ -491,18 +511,18 @@ class FCOnlineTool:
 
         if old_username != username:
             # Username changed, clean old user data directory
-            old_user_data_dir = f"/tmp/chrome-automation-{old_username}"
+            old_user_data_dir = platform.get_user_data_directory(old_username)
             try:
                 if os.path.exists(old_user_data_dir):
                     shutil.rmtree(old_user_data_dir)
-                  #   logger.info(f"🧹 Cleaned old user data directory: {old_user_data_dir}")
+                #   logger.info(f"🧹 Cleaned old user data directory: {old_user_data_dir}")
             except Exception as e:
                 logger.warning(f"⚠️ Failed to clean old user data directory: {e}")
 
         # Update credentials and user data directory
         self.username = username
         self.password = password
-        self._user_data_dir = f"/tmp/chrome-automation-{username}"
+        self._user_data_dir = platform.get_user_data_directory(username)
 
         # Clear cached data only when credentials changed
         self.user_info = None

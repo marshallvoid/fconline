@@ -163,3 +163,41 @@ def get_chrome_executable_path() -> Optional[str]:
 
     logger.warning("🌐 Chrome not found, will use default Chrome channel")
     return None
+
+
+def get_user_data_directory(username: str) -> str:
+    """Get user data directory path that works across different systems.
+
+    Args:
+        username: Username to include in directory name
+
+    Returns:
+        Path to user data directory
+    """
+    system = platform.system().lower()
+
+    if system == "windows":
+        # Use TEMP directory on Windows
+        temp_dir = os.environ.get("TEMP", os.environ.get("TMP", os.path.expanduser("~")))
+        user_data_dir = os.path.join(temp_dir, f"chrome-automation-{username}")
+    else:  # macOS and Linux
+        # Use /tmp on Unix-like systems
+        user_data_dir = f"/tmp/chrome-automation-{username}"
+
+    # Create directory if it doesn't exist
+    try:
+        os.makedirs(user_data_dir, exist_ok=True)
+        logger.info(f"📁 User data directory: {user_data_dir}")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to create user data directory: {e}")
+        # Fallback to current directory
+        user_data_dir = os.path.join(os.getcwd(), f"chrome-automation-{username}")
+        try:
+            os.makedirs(user_data_dir, exist_ok=True)
+            logger.info(f"📁 Fallback user data directory: {user_data_dir}")
+        except Exception as fallback_error:
+            logger.error(f"❌ Failed to create fallback directory: {fallback_error}")
+            # Last resort: use current directory
+            user_data_dir = os.getcwd()
+
+    return user_data_dir
