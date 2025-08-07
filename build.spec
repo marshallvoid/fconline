@@ -46,6 +46,7 @@ a = Analysis(
         'src.auto_reload',
         'src.utils',
         'src.utils.platform',
+        'winreg',  # For Windows registry access
     ],
     hookspath=[],
     hooksconfig={},
