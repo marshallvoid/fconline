@@ -11,9 +11,8 @@ from loguru import logger
 from playwright.async_api import Page, WebSocket
 
 from src.client import BrowserClient, PatchedContext
-from src.logger import init_logger
 from src.types import UserInfo
-from src.utils import get_chrome_executable_path, get_default_browser_executable_path
+from src.utils import platform
 
 
 class FCOnlineTool:
@@ -445,7 +444,7 @@ class FCOnlineTool:
             extra_chromium_args.append("--headless")
 
         # Choose browser based on user preference
-        browser_path = get_default_browser_executable_path() or get_chrome_executable_path()
+        browser_path = platform.get_default_browser_executable_path() or platform.get_chrome_executable_path()
 
         browser = BrowserClient(
             config=BrowserConfig(
@@ -623,5 +622,6 @@ async def main_tool() -> None:
 
 
 if __name__ == "__main__":
-    init_logger()
+    import src.logger  # noqa: F401
+
     asyncio.run(main_tool())

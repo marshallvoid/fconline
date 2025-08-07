@@ -14,6 +14,9 @@ LOGURU_FORMAT = (
     "<cyan>{line}</cyan> - <level>{message}</level>"
 )
 
+# Global flag to track if logger has been initialized
+_logger_initialized = False
+
 
 class InterceptHandler(logging.Handler):
     loglevel_mapping = {
@@ -45,6 +48,12 @@ class InterceptHandler(logging.Handler):
 
 
 def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMAT) -> None:
+    global _logger_initialized
+
+    # Check if logger has already been initialized
+    if _logger_initialized:
+        return
+
     # logging configuration
     logging_level = logging.DEBUG if debug else logging.INFO
     loggers = (
@@ -74,3 +83,15 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
         },
     ]
     logger.configure(handlers=handlers)  # type: ignore
+
+    # Mark logger as initialized
+    _logger_initialized = True
+
+
+def ensure_logger_initialized(debug: Optional[bool] = False) -> None:
+    """Ensure logger is initialized. Safe to call multiple times."""
+    init_logger(debug=debug)
+
+
+# Auto-initialize logger on module import with default settings
+init_logger()
