@@ -83,7 +83,7 @@ class PatchedContext(BrowserContext):
         if self.config.cookies_file and os.path.exists(self.config.cookies_file):
             with open(self.config.cookies_file, "r") as f:
                 cookies = json.load(f)
-                logger.info(f"Loaded {len(cookies)} cookies from {self.config.cookies_file}")  # noqa: G004
+                logger.debug(f"Loaded {len(cookies)} cookies from {self.config.cookies_file}")  # noqa: G004
                 await context.add_cookies(cookies)
 
         # Expose anti-detection scripts
@@ -127,8 +127,8 @@ class PatchedContext(BrowserContext):
       """
         )
 
-        context.set_default_timeout(timeout=10000)  # 10 seconds
-        context.set_default_navigation_timeout(timeout=60 * 1000 * 5)  # 5 minutes
+        context.set_default_timeout(timeout=0)
+        context.set_default_navigation_timeout(timeout=0)
 
         return context
 

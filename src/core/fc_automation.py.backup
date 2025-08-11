@@ -13,7 +13,7 @@ from playwright.async_api import Page, WebSocket
 
 from src.client import BrowserClient, PatchedContext
 from src.types import UserInfo
-from src.utils import platform
+from src.utils.platforms import get_chrome_executable_path, get_user_data_directory
 
 
 class FCOnlineTool:
@@ -32,8 +32,8 @@ class FCOnlineTool:
     SPIN_ACTION_SELECTORS = {
         1: (SPIN_ACTION_1_SELECTOR, "Free Spin"),
         2: (SPIN_ACTION_2_SELECTOR, "FC10 Spin"),
-        3: (SPIN_ACTION_3_SELECTOR, "..."),
-        4: (SPIN_ACTION_4_SELECTOR, "..."),
+        3: (SPIN_ACTION_3_SELECTOR, "FC190 Spin"),
+        4: (SPIN_ACTION_4_SELECTOR, "FC900 Spin"),
     }
 
     # URL constants
@@ -77,11 +77,12 @@ class FCOnlineTool:
         self._cookies: dict[str, str] = {}
 
         # User data directory path - use platform-specific directory
-        self._user_data_dir = platform.get_user_data_directory(username)
+        self._user_data_dir = get_user_data_directory(username)
 
         # Callbacks for GUI updates
         self.message_callback: Optional[Callable[[str], None]] = None
         self.user_info_callback: Optional[Callable[[], None]] = None
+        self.special_jackpot_callback: Optional[Callable[[], None]] = None
 
     async def _check_login(self, page: Page) -> bool:
         """Check if user is logged in by looking for login/logout buttons.
@@ -164,7 +165,7 @@ class FCOnlineTool:
                     f"window.location.href.includes('{self.BASE_URL}') || "
                     "document.querySelector('.captcha') || document.querySelector('.error')"
                 )
-                await page.wait_for_function(wait_condition, timeout=30000)
+                await page.wait_for_function(wait_condition)
 
                 # Check current URL to determine login result
                 current_url = page.url
@@ -177,10 +178,7 @@ class FCOnlineTool:
 
                     # Wait for user to solve captcha and redirect (up to 5 minutes)
                     logger.info("⏳ Waiting for captcha resolution and redirect...")
-                    await page.wait_for_function(
-                        f"window.location.href.includes('{self.BASE_URL}')",
-                        timeout=300000,  # 5 minutes
-                    )
+                    await page.wait_for_function(f"window.location.href.includes('{self.BASE_URL}')")
 
                     logger.success("🔐 Login completed successfully after captcha resolution")
                     return True
@@ -280,7 +278,8 @@ class FCOnlineTool:
                 if spin_element:
                     try:
                         # Use force click to bypass intercepting elements
-                        await spin_element.click(force=True, timeout=5000)
+                        # await spin_element.click(force=True)
+                        await page.evaluate(f"document.querySelector('{selector}').click()")
                         if self.message_callback:
                             msg = f"🎰 Auto-spinning with action: {self.SPIN_ACTION_SELECTORS.get(self.spin_action, 'Unknown')[1]}"  # noqa: E501
                             self.message_callback(msg)
@@ -369,20 +368,23 @@ class FCOnlineTool:
                     prev_jackpot = self._special_jackpot
                     self._special_jackpot = value
 
-                    if self.message_callback:
-                        self.message_callback(f"🎰 Special Jackpot: {value}")
-                        if value >= self.target_special_jackpot:
-                            self.message_callback(f"🎯 Special Jackpot has reached {self.target_special_jackpot}")
+                    # Use special jackpot callback to update user info instead of message
+                    if self.special_jackpot_callback:
+                        self.special_jackpot_callback()
 
-                            # If target just reached (wasn't reached before), start auto-spinning
-                            if prev_jackpot < self.target_special_jackpot and self._page:
-                                asyncio.create_task(
-                                    self._auto_spin(
-                                        page=self._page,
-                                        current_value=self._special_jackpot,
-                                        target_value=self.target_special_jackpot,
-                                    )
+                    # Only show message when target is reached
+                    if value >= self.target_special_jackpot and self.message_callback:
+                        self.message_callback(f"🎯 Special Jackpot has reached {self.target_special_jackpot}")
+
+                        # If target just reached (wasn't reached before), start auto-spinning
+                        if prev_jackpot < self.target_special_jackpot and self._page:
+                            asyncio.create_task(
+                                self._auto_spin(
+                                    page=self._page,
+                                    current_value=self._special_jackpot,
+                                    target_value=self.target_special_jackpot,
                                 )
+                            )
 
                 case "mini_jackpot":
                     logger.success(f"🎯 Mini Jackpot: {value}")
@@ -465,7 +467,7 @@ class FCOnlineTool:
             extra_chromium_args.append("--headless")
 
         # Choose browser based on user preference
-        browser_path = platform.get_default_browser_executable_path() or platform.get_chrome_executable_path()
+        browser_path = get_chrome_executable_path()
 
         browser = BrowserClient(
             config=BrowserConfig(
@@ -511,7 +513,7 @@ class FCOnlineTool:
 
         if old_username != username:
             # Username changed, clean old user data directory
-            old_user_data_dir = platform.get_user_data_directory(old_username)
+            old_user_data_dir = get_user_data_directory(old_username)
             try:
                 if os.path.exists(old_user_data_dir):
                     shutil.rmtree(old_user_data_dir)
@@ -522,7 +524,7 @@ class FCOnlineTool:
         # Update credentials and user data directory
         self.username = username
         self.password = password
-        self._user_data_dir = platform.get_user_data_directory(username)
+        self._user_data_dir = get_user_data_directory(username)
 
         # Clear cached data only when credentials changed
         self.user_info = None
@@ -530,7 +532,17 @@ class FCOnlineTool:
 
         # Clear browser cookies if browser is running and credentials changed
         if self._page:
-            self._clear_cookies()
+            try:
+                # Check if we're already in an event loop
+                loop = asyncio.get_running_loop()
+                # Schedule the cookie clearing in the existing loop
+                loop.create_task(self._page.context.clear_cookies())
+            except RuntimeError:
+                # No running loop, safe to use asyncio.run()
+                try:
+                    asyncio.run(self._page.context.clear_cookies())
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to clear cookies: {e}")
         else:
             # Mark that cookies need to be cleared when browser starts
             self._needs_cookie_clear = True
@@ -539,23 +551,6 @@ class FCOnlineTool:
         # Notify GUI to update user info display
         if self.user_info_callback:
             self.user_info_callback()
-
-    def _clear_cookies(self) -> None:
-        """Safely clear browser cookies, handling event loop issues."""
-        if not self._page:
-            return
-
-        try:
-            # Check if we're already in an event loop
-            loop = asyncio.get_running_loop()
-            # Schedule the cookie clearing in the existing loop
-            loop.create_task(self._page.context.clear_cookies())
-        except RuntimeError:
-            # No running loop, safe to use asyncio.run()
-            try:
-                asyncio.run(self._page.context.clear_cookies())
-            except Exception as e:
-                logger.warning(f"⚠️ Failed to clear cookies: {e}")
 
     async def close_browser(self) -> None:
         """Close browser context and cleanup resources.
@@ -585,44 +580,43 @@ class FCOnlineTool:
         self._context, self._page = await self._setup_context()
 
         try:
-            async with self._context:
-                # Clear cookies if needed (when credentials were updated before browser started)
-                if self._needs_cookie_clear:
-                    try:
-                        await self._page.context.clear_cookies()
-                        # logger.info("🍪 Cleared cookies after browser startup")
-                        self._needs_cookie_clear = False
-                    except Exception as e:
-                        logger.warning(f"⚠️ Failed to clear cookies at startup: {e}")
+            # Clear cookies if needed (when credentials were updated before browser started)
+            if self._needs_cookie_clear:
+                try:
+                    await self._page.context.clear_cookies()
+                    # logger.info("🍪 Cleared cookies after browser startup")
+                    self._needs_cookie_clear = False
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to clear cookies at startup: {e}")
 
-                # Setup WebSocket interception before loading the page
-                await self._setup_websocket(page=self._page)
+            # Setup WebSocket interception before loading the page
+            await self._setup_websocket(page=self._page)
 
-                await self._page.goto(url=self.BASE_URL)
-                await self._page.wait_for_load_state(state="networkidle")
+            await self._page.goto(url=self.BASE_URL)
+            await self._page.wait_for_load_state(state="networkidle")
 
-                # Check login status and perform login if needed
-                login_needed = not await self._check_login(page=self._page)
-                if login_needed:
-                    login_success = await self._perform_login(page=self._page)
-                    if not login_success:
-                        logger.error("❌ Login failed!")
-                        return
+            # Check login status and perform login if needed
+            login_needed = not await self._check_login(page=self._page)
+            if login_needed:
+                login_success = await self._perform_login(page=self._page)
+                if not login_success:
+                    logger.error("❌ Login failed!")
+                    return
 
-                    # After successful login, ensure we're back to BASE_URL
-                    current_url = self._page.url
-                    if self.BASE_URL not in current_url:
-                        # logger.info("🔄 Navigating back to main page after login...")
-                        await self._page.goto(url=self.BASE_URL)
-                        await self._page.wait_for_load_state(state="networkidle")
+                # After successful login, ensure we're back to BASE_URL
+                current_url = self._page.url
+                if self.BASE_URL not in current_url:
+                    # logger.info("🔄 Navigating back to main page after login...")
+                    await self._page.goto(url=self.BASE_URL)
+                    await self._page.wait_for_load_state(state="networkidle")
 
-                # Always fetch user info when starting automation (whether logged in or just logged in)
-                await self._fetch_user_info()
+            # Always fetch user info when starting automation (whether logged in or just logged in)
+            await self._fetch_user_info()
 
-                logger.info("🚀 Starting WebSocket monitoring...")
-                # Keep the browser open and monitor WebSocket
-                while not self._stop_flag:
-                    await asyncio.sleep(delay=1)
+            logger.info("🚀 Starting WebSocket monitoring...")
+            # Keep the browser open and monitor WebSocket
+            while not self._stop_flag:
+                await asyncio.sleep(delay=1)
 
         except Exception as e:
             logger.error(f"❌ Unexpected error: {e}")

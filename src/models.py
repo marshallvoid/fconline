@@ -67,7 +67,7 @@ class MiniJackpotBillboard(BaseModel):
 
 
 class Payload(BaseModel):
-    user: Optional[User] = None
+    user: User
     event_started: int
     socket_account_id: str
     socket_env: str

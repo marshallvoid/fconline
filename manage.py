@@ -1,39 +1,52 @@
 import os
 import sys
 import tkinter as tk
-
-# from pathlib import Path
+import traceback
 from tkinter import messagebox
+
+from loguru import logger
 
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-
 try:
-    import src.logger  # noqa: F401
-    from src.gui import main_gui
-
-    # from src.auto_reload import enable_auto_reload
+    import src.infrastructure.logger  # noqa: F401
+    from src.gui import main_window
 
     if __name__ == "__main__":
-        #   enable_auto_reload(watch_paths=[str(Path(project_root) / "src")])
-        main_gui()
+        main_window()
 
 except ImportError as e:
+    error_msg = (
+        f"Import error: {e}\n"
+        "Make sure you have installed all required dependencies:\n"
+        "pip install -r requirements.txt"
+    )
+
+    logger.error(traceback.format_exc())
+    logger.error(error_msg)
+
     root = tk.Tk()
     root.withdraw()
-    messagebox.showerror(
-        "Import Error",
-        (
-            f"Import error: {e}\n"
-            "Make sure you have installed all required dependencies:\n"
-            "pip install -r requirements.txt"
-        ),
-    )
+    messagebox.showerror("Import Error", error_msg)
     sys.exit(1)
 
 except Exception as e:
+    error_msg = f"Failed to start GUI application: {e}"
+    logger.error(traceback.format_exc())
+    logger.error(error_msg)
+
     root = tk.Tk()
     root.withdraw()
-    messagebox.showerror("Error", f"Error starting GUI: {e}")
+    messagebox.showerror("Error", error_msg)
+
+    # Also write to file as backup
+    try:
+        with open("app_error.log", "w") as f:
+            f.write(traceback.format_exc() + "\n")
+            f.write(error_msg)
+
+    except Exception:
+        pass
+
     sys.exit(1)
