@@ -5,20 +5,20 @@
 
 **An intelligent automation tool for FC Online jackpot management**
 
-[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](LICENSE)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![GUI](https://img.shields.io/badge/Interface-GUI%20%7C%20CLI-orange.svg)](#usage)
+[![GUI](https://img.shields.io/badge/Interface-GUI-orange.svg)](#usage)
 
 </div>
 
 ## 📋 Overview
 
-FC Online Automation Tool is a sophisticated Python application designed to automate jackpot monitoring and management for FC Online. The tool features both a modern GUI interface and CLI support, utilizing browser automation to interact with the FC Online platform intelligently.
+FC Online Automation Tool is a Python application that automates jackpot monitoring and management for FC Online via a modern desktop GUI. It uses browser automation to interact with the platform and provides real‑time insights.
 
 ### ✨ Key Features
 
 -  🎯 **Smart Jackpot Monitoring** - Automated tracking of special jackpot targets
--  🖥️ **Dual Interface** - Modern GUI with dark/light theme support and CLI options
+-  🖥️ **Modern GUI** - Dark/Light theme, header with theme toggle, improved spacing
 -  🤖 **Browser Automation** - Powered by Playwright and browser-use for reliable web interactions
 -  🔐 **Secure Authentication** - Safe login management with credential protection
 -  📊 **Real-time Status Updates** - Live monitoring of spin activities and jackpot progress
@@ -72,30 +72,40 @@ pip install -e .
 playwright install chromium
 ```
 
-## 🚀 Usage
+## 🚀 Usage (GUI)
 
-### 📦 Pre-built Executable
-
-Download the latest pre-built Windows executable from [GitHub Releases](../../releases/latest):
-
-1. Download `FC_Online_Tool.exe`
-2. Run as administrator (recommended)
-3. If Windows Defender shows a warning, click "More info" → "Run anyway"
-
-### 🔨 Building from Source
-
-#### Quick Build (Recommended)
+### Using uv
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd fc-online
+uv run python manage.py
+```
 
-# Run the build script
+### Using pip
+
+```bash
+python manage.py
+# or
+python src/main.py
+```
+
+### GUI Highlights
+
+-  Username/Password fields
+-  Target Special Jackpot and Spin Action
+-  Start/Stop controls
+-  Live user info with current special jackpot
+-  Activity Log with tabs (All/Info/Events/Targets/Errors)
+-  Theme toggle: Auto/Light/Dark
+
+## 🔨 Building
+
+### Quick Build
+
+```bash
 ./build.sh
 ```
 
-#### Manual Build
+### Manual Build
 
 ```bash
 # Install uv if not already installed
@@ -113,82 +123,7 @@ uv run pyinstaller build.spec
 # Output will be in: dist/FC_Online_Tool.exe
 ```
 
-### GUI Mode (Recommended)
-
-#### Using uv:
-
-```bash
-uv run python manage.py
-```
-
-#### Using pip:
-
-```bash
-python manage.py
-# or
-python src/main.py
-```
-
-#### GUI Features:
-
--  **Username/Password Fields** - Enter your FC Online credentials
--  **Target Special Jackpot** - Set your desired jackpot threshold
--  **Start/Stop Controls** - Begin or halt automation with one click
--  **Real-time Status** - Monitor current progress and system status
--  **Theme Support** - Automatic dark/light theme detection
-
-### CLI Mode
-
-For headless operation or server environments:
-
-```bash
-# Using uv
-uv run python -c "
-from src.tool import FCOnlineTool
-import asyncio
-
-async def main():
-    tool = FCOnlineTool(
-        username='your_username',
-        password='your_password',
-        target_special_jackpot=10000,
-        headless=True
-    )
-    await tool.run()
-
-asyncio.run(main())
-"
-
-# Using pip
-python -c "
-from src.tool import FCOnlineTool
-import asyncio
-
-async def main():
-    tool = FCOnlineTool(
-        username='your_username',
-        password='your_password',
-        target_special_jackpot=10000,
-        headless=True
-    )
-    await tool.run()
-
-asyncio.run(main())
-"
-```
-
 ## ⚙️ Configuration
-
-### Environment Variables
-
-You can configure the tool using environment variables:
-
-```bash
-export FC_USERNAME="your_username"
-export FC_PASSWORD="your_password"
-export FC_TARGET_JACKPOT="10000"
-export FC_HEADLESS="true"  # For CLI mode
-```
 
 ### Browser Configuration
 
@@ -205,11 +140,24 @@ fc-online/
 ├── src/
 │   ├── __init__.py          # Package initialization
 │   ├── main.py              # Application entry point
-│   ├── gui.py               # GUI interface implementation
-│   ├── tool.py              # Core automation logic
-│   ├── client.py            # Browser client management
-│   ├── types.py             # Data models and types
-│   └── logger.py            # Logging configuration
+│   ├── gui/                 # GUI components package
+│   │   ├── __init__.py      # Package initialization
+│   │   ├── main_window.py   # Main window application
+│   │   ├── base_component.py # Base component class
+│   │   ├── control_panel.py # Control panel component
+│   │   ├── user_settings_panel.py # User settings component
+│   │   ├── user_info_panel.py # User info display component
+│   │   ├── log_panel.py     # Log display component
+│   ├── core/                 # Core automation components
+│   │   ├── __init__.py      # Package initialization
+│   │   ├── fc_automation.py # Main FC automation tool
+│   │   ├── browser_manager.py # Browser management
+│   │   ├── login_handler.py # Login handling
+│   │   ├── websocket_monitor.py # WebSocket monitoring
+│   │   ├── auto_spin.py     # Auto-spin handling
+│   │   └── user_info_manager.py # User info management
+│   ├── models.py            # Data models and types
+│   └── infrastructure/      # Logging, browser client, utilities
 ├── manage.py                # Main application launcher
 ├── pyproject.toml           # Project configuration
 └── README.md                # This file
@@ -217,7 +165,7 @@ fc-online/
 
 ## 🔧 Development
 
-### Setting up development environment:
+### Setting up development environment
 
 ```bash
 # Clone and setup
@@ -239,7 +187,7 @@ uv run isort src/
 uv run mypy src/
 ```
 
-### Available development tools:
+### Available development tools
 
 -  **Black** - Code formatting
 -  **isort** - Import sorting

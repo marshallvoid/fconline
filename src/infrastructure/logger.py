@@ -95,10 +95,5 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
     _logger_initialized = True
 
 
-def ensure_logger_initialized(debug: Optional[bool] = False) -> None:
-    """Ensure logger is initialized. Safe to call multiple times."""
-    init_logger(debug=debug)
-
-
 # Auto-initialize logger on module import with default settings
 init_logger()

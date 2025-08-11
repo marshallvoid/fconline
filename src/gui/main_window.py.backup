@@ -1,0 +1,634 @@
+import asyncio
+import base64
+import json
+import os
+import platform
+import threading
+import tkinter as tk
+from datetime import datetime
+from tkinter import messagebox, ttk
+from typing import TYPE_CHECKING, Optional
+
+import darkdetect
+import sv_ttk
+from cryptography.fernet import Fernet
+
+from src.tool import FCOnlineTool
+
+if TYPE_CHECKING:
+    from src.types import UserInfo
+
+
+class FCOnlineGUI:
+    def __init__(self) -> None:
+        self._root = tk.Tk()
+        self._root.title("FC Online Automation Tool")
+        self._root.geometry("700x700")  # Increased default height
+        self._root.resizable(False, False)  # Disable resizing
+        self._root.minsize(700, 650)  # Increased minimum height
+        self._root.iconbitmap("assets/icon.ico")  # Set application icon
+
+        # Create user data directory
+        self._config_file = os.path.join(self.get_user_data_directory(), "config.json")
+
+        # Load saved credentials or use defaults
+        saved_credentials = self.load_credentials()
+
+        # Variables for form inputs
+        self._username_var = tk.StringVar(value=saved_credentials.get("username", ""))
+        self._password_var = tk.StringVar(value=saved_credentials.get("password", ""))
+        self._target_special_jackpot_var = tk.IntVar(value=saved_credentials.get("target_special_jackpot", 10000))
+        self._spin_action_var = tk.IntVar(value=saved_credentials.get("spin_action", 1))
+
+        # Add trace callbacks for credential changes
+        self._username_var.trace_add("write", self._on_credentials_changed)
+        self._password_var.trace_add("write", self._on_credentials_changed)
+        self._target_special_jackpot_var.trace_add("write", self._on_config_changed)
+        self._spin_action_var.trace_add("write", self._on_config_changed)
+
+        # Running state
+        self._is_running = False
+        self._tool_instance = FCOnlineTool(
+            username=self._username_var.get(),
+            password=self._password_var.get(),
+            target_special_jackpot=self._target_special_jackpot_var.get(),
+            spin_action=self._spin_action_var.get(),
+        )
+
+        self._setup_ui()
+
+    @staticmethod
+    def get_user_data_directory():
+        """Get or create user data directory."""
+        system = platform.system().lower()
+
+        if system == "windows":  # Windows
+            app_data = os.environ.get("APPDATA", os.path.expanduser("~"))
+            user_data_dir = os.path.join(app_data, "FCOnlineAutomation")
+        else:  # macOS and Linux
+            user_data_dir = os.path.expanduser("~/.fconline-automation")
+
+        # Create directory if it doesn't exist
+        os.makedirs(user_data_dir, exist_ok=True)
+        return user_data_dir
+
+    @staticmethod
+    def get_encryption_key():
+        """Get or create encryption key for data protection."""
+        user_data_dir = FCOnlineGUI.get_user_data_directory()
+        key_file = os.path.join(user_data_dir, ".key")
+
+        try:
+            # Try to load existing key
+            if os.path.exists(key_file):
+                with open(key_file, "rb") as f:
+                    return f.read()
+            else:
+                # Generate new key if doesn't exist
+                key = Fernet.generate_key()
+                with open(key_file, "wb") as f:
+                    f.write(key)
+                # Make key file hidden and read-only on Unix systems
+                if platform.system().lower() != "windows":
+                    os.chmod(key_file, 0o600)
+                return key
+        except Exception:
+            # Fallback to a simple key based on machine info
+            machine_id = platform.node() + platform.machine()
+            key = base64.urlsafe_b64encode(machine_id.encode().ljust(32)[:32])
+            return key
+
+    @staticmethod
+    def encrypt_data(data):
+        """Encrypt sensitive data."""
+        try:
+            key = FCOnlineGUI.get_encryption_key()
+            f = Fernet(key)
+            encrypted_data = f.encrypt(data.encode())
+            return base64.urlsafe_b64encode(encrypted_data).decode()
+        except Exception:
+            # Fallback to simple base64 encoding if encryption fails
+            return base64.urlsafe_b64encode(data.encode()).decode()
+
+    @staticmethod
+    def decrypt_data(encrypted_data):
+        """Decrypt sensitive data."""
+        try:
+            key = FCOnlineGUI.get_encryption_key()
+            f = Fernet(key)
+            data_bytes = base64.urlsafe_b64decode(encrypted_data.encode())
+            decrypted_data = f.decrypt(data_bytes)
+            return decrypted_data.decode()
+        except Exception:
+            # Fallback to simple base64 decoding if decryption fails
+            try:
+                return base64.urlsafe_b64decode(encrypted_data.encode()).decode()
+            except Exception:
+                return ""
+
+    @staticmethod
+    def load_credentials():
+        """Load saved credentials from config file."""
+        config_file = os.path.join(FCOnlineGUI.get_user_data_directory(), "config.json")
+        try:
+            if os.path.exists(config_file):
+                with open(config_file, "r", encoding="utf-8") as f:
+                    encrypted_data = json.load(f)
+
+                # Decrypt sensitive data
+                credentials = {}
+                for key, value in encrypted_data.items():
+                    if key in ["username", "password"]:
+                        # Decrypt sensitive fields
+                        credentials[key] = FCOnlineGUI.decrypt_data(value) if value else ""
+                    else:
+                        # Keep non-sensitive fields as is
+                        credentials[key] = value
+
+                return credentials
+        except Exception:
+            # Silent fail - just return empty dict if can't load
+            pass
+
+        return {}
+
+    @staticmethod
+    def save_credentials(credentials_dict):
+        """Save credentials to config file."""
+        config_file = os.path.join(FCOnlineGUI.get_user_data_directory(), "config.json")
+        try:
+            # Prepare credentials with encryption for sensitive data
+            encrypted_credentials = {}
+            for key, value in credentials_dict.items():
+                if key in ["username", "password"]:
+                    # Encrypt sensitive fields
+                    encrypted_credentials[key] = FCOnlineGUI.encrypt_data(value) if value else ""
+                else:
+                    # Keep non-sensitive fields as is
+                    encrypted_credentials[key] = value
+
+            with open(config_file, "w", encoding="utf-8") as f:
+                json.dump(encrypted_credentials, f, indent=2, ensure_ascii=False)
+
+        except Exception:
+            # Silent fail - don't crash the app if can't save
+            pass
+
+    @staticmethod
+    def get_message_tag(message):
+        """Get appropriate message tag based on content."""
+        message_lower = message.lower()
+        if "jackpot has reached" in message_lower:
+            return "target_reached"
+        if "jackpot" in message_lower or "mini jackpot" in message_lower:
+            return "general"
+        return "general"
+
+    def _save_credentials(self) -> None:
+        """Save current credentials to config file."""
+        credentials = {
+            "username": self._username_var.get(),
+            "password": self._password_var.get(),
+            "target_special_jackpot": self._target_special_jackpot_var.get(),
+            "spin_action": self._spin_action_var.get(),
+        }
+        self.save_credentials(credentials)
+
+    def _setup_ui(self) -> None:
+        """Setup main UI layout with control buttons and content area."""
+        # Control buttons at bottom
+        control_frame = ttk.Frame(self._root)
+        control_frame.pack(side="bottom", fill="x", padx=10, pady=(5, 10))
+
+        self.start_btn = ttk.Button(
+            control_frame,
+            text="Start",
+            command=self._start_tool,
+            style="Accent.TButton",
+        )
+        self.start_btn.pack(side="left", padx=(0, 5))
+
+        self.stop_btn = ttk.Button(
+            control_frame,
+            text="Stop",
+            command=self._stop_tool,
+            state="disabled",
+        )
+        self.stop_btn.pack(side="left", padx=5)
+
+        # Status label
+        self.status_label = ttk.Label(control_frame, text="✅ Status: Ready")
+        self.status_label.pack(side="right")
+
+        # Create main container
+        main_container = ttk.Frame(self._root)
+        main_container.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(main_container)
+        self.notebook.pack(fill="both", expand=True)
+
+        # Create App tab
+        self.app_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.app_tab, text="App")
+
+        # Create Log tab
+        self.log_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.log_tab, text="Log")
+
+        # Setup tabs
+        self._setup_app_tab()
+        self._setup_log_tab()
+
+    def _setup_app_tab(self) -> None:
+        """Setup App tab with form inputs and user info display."""
+        # Title
+        title_label = ttk.Label(self.app_tab, text="User Settings", font=("Arial", 14, "bold"))
+        title_label.pack(pady=(10, 20))
+
+        # Create main container
+        container = ttk.Frame(self.app_tab)
+        container.pack(fill="both", expand=True, padx=20)
+
+        # Username field
+        username_frame = ttk.Frame(container)
+        username_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(username_frame, text="Username:", width=20, font=("Arial", 12)).pack(side="left")
+        self.username_entry = ttk.Entry(username_frame, textvariable=self._username_var, width=30, font=("Arial", 12))
+        self.username_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
+
+        # Password field
+        password_frame = ttk.Frame(container)
+        password_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(password_frame, text="Password:", width=20, font=("Arial", 12)).pack(side="left")
+        self.password_entry = ttk.Entry(
+            password_frame, textvariable=self._password_var, show="*", width=30, font=("Arial", 12)
+        )
+        self.password_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
+
+        # Target Special Jackpot field
+        target_special_jackpot_frame = ttk.Frame(container)
+        target_special_jackpot_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(target_special_jackpot_frame, text="Target Special Jackpot:", width=20, font=("Arial", 12)).pack(
+            side="left"
+        )
+        self.target_special_jackpot_entry = ttk.Entry(
+            target_special_jackpot_frame, textvariable=self._target_special_jackpot_var, width=30, font=("Arial", 12)
+        )
+        self.target_special_jackpot_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
+
+        # User Info Display
+        user_info_frame = ttk.LabelFrame(container, text="User Information", padding=10)
+        user_info_frame.pack(fill="x", pady=(0, 10))
+
+        # Create user info container
+        user_info_container = ttk.Frame(user_info_frame)
+        user_info_container.pack(fill="x")
+
+        # Main user info label with better font
+        not_logged_text = (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🔒 NOT LOGGED IN\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "   Please enter your credentials and start the tool"
+        )
+        self.user_info_label = ttk.Label(
+            user_info_container,
+            text=not_logged_text,
+            foreground="#757575",
+            font=("Consolas", 12),  # Increased font size
+        )
+        self.user_info_label.pack(anchor="w")
+
+        # Spin Action Radio Buttons
+        spin_action_frame = ttk.LabelFrame(container, text="Spin Action", padding=10)
+        spin_action_frame.pack(fill="x", pady=(0, 20))
+
+        radio_container = ttk.Frame(spin_action_frame)
+        radio_container.pack(fill="x")
+
+        self.radio_buttons = []
+        radio_options = [(1, "Free"), (2, "10FC"), (3, "190FC"), (4, "900FC")]
+
+        for value, text in radio_options:
+            radio_btn = ttk.Radiobutton(
+                radio_container,
+                text=text,
+                variable=self._spin_action_var,
+                value=value,
+                command=self._on_spin_action_changed,
+            )
+            radio_btn.pack(side="left", padx=(0, 20))
+            self.radio_buttons.append(radio_btn)
+
+    def _setup_log_tab(self) -> None:
+        """Setup Log tab with messages display."""
+        # Title
+        title_label = ttk.Label(self.log_tab, text="Application Log", font=("Arial", 14, "bold"))
+        title_label.pack(pady=(10, 20))
+
+        # Create main container
+        container = ttk.Frame(self.log_tab)
+        container.pack(fill="both", expand=True, padx=20, pady=10)
+
+        # Messages with fixed height - always maintain same size
+        self.messages_frame = ttk.LabelFrame(container, text="Messages", padding=10)
+        self.messages_frame.pack(fill="both", expand=True)
+
+        # Fixed height configuration - messages area will expand to fill available space
+        # but maintain minimum height
+        self.messages_frame.configure(height=250)  # Increased minimum height
+        # Don't use pack_propagate(False) to allow expansion
+
+        # Create text container
+        text_container = ttk.Frame(self.messages_frame)
+        text_container.pack(fill="both", expand=True)
+
+        self.messages_text_widget = tk.Text(
+            text_container,
+            wrap=tk.WORD,
+            height=12,  # Increased height
+            font=("Arial", 12),  # Increased font size
+            bg="#2b2b2b",
+            fg="#e0e0e0",
+            relief="flat",
+            borderwidth=0,
+            state="disabled",
+            insertbackground="#e0e0e0",
+        )
+
+        # Configure text tags
+        self.messages_text_widget.tag_configure("general", foreground="#4caf50", font=("Arial", 12, "bold"))
+        self.messages_text_widget.tag_configure("target_reached", foreground="#ff9800", font=("Arial", 12, "bold"))
+        self.messages_text_widget.tag_configure("error", foreground="#f44336", font=("Arial", 12, "bold"))
+        self.messages_text_widget.tag_configure("info", foreground="#2196f3", font=("Arial", 12))
+        self.messages_text_widget.tag_configure("default", foreground="#e0e0e0", font=("Arial", 12))
+
+        # Create scrollbar
+        scrollbar = ttk.Scrollbar(text_container, orient="vertical", command=self.messages_text_widget.yview)
+        self.messages_text_widget.configure(yscrollcommand=scrollbar.set)
+
+        # Pack text widget and scrollbar
+        self.messages_text_widget.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def _get_message_tag(self, message: str) -> str:
+        """Get appropriate message tag based on content."""
+        return self.get_message_tag(message)
+
+    def _reset_display(self) -> None:
+        """Reset the messages display."""
+        self.messages_text_widget.config(state="normal")
+        self.messages_text_widget.delete("1.0", tk.END)
+        self.messages_text_widget.config(state="disabled")
+
+    def _toggle_inputs(self, enabled: bool) -> None:
+        """Enable or disable input widgets."""
+        state = "normal" if enabled else "disabled"
+        self.username_entry.config(state=state)
+        self.password_entry.config(state=state)
+        self.target_special_jackpot_entry.config(state=state)
+        for radio_btn in self.radio_buttons:
+            radio_btn.config(state=state)
+
+    def _on_spin_action_changed(self) -> None:
+        """Handle spin action radio button changes."""
+        if hasattr(self, "_tool_instance"):
+            self._tool_instance.spin_action = self._spin_action_var.get()
+            if not self._is_running:
+                self._save_credentials()
+
+    def _on_credentials_changed(self, *args: str) -> None:
+        """Handle credential changes and update tool instance."""
+        _ = args
+        if not self._is_running and hasattr(self, "_tool_instance"):
+            self._tool_instance.update_credentials(
+                self._username_var.get(),
+                self._password_var.get(),
+            )
+        self._save_credentials()
+
+    def _on_config_changed(self, *args: str) -> None:
+        """Handle configuration changes and auto-save."""
+        _ = args
+        if not self._is_running:
+            self._save_credentials()
+
+    def _update_user_info_display(self, user_info: Optional["UserInfo"]) -> None:
+        """Update user info display in GUI.
+
+        Args:
+            user_info: User information object or None
+        """
+        if not user_info or not user_info.payload.user:
+            not_logged_text = (
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "🔒 NOT LOGGED IN\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "   Please enter your credentials and start the tool"
+            )
+            self.user_info_label.config(text=not_logged_text, foreground="#757575")
+            return
+
+        user = user_info.payload.user
+        current_special_jackpot = (
+            getattr(self._tool_instance, "_special_jackpot", 0) if hasattr(self, "_tool_instance") else 0
+        )
+
+        # Create formatted info text with better styling including special jackpot
+        info_text = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 ACCOUNT INFORMATION\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"User ID    : {user.uid}\n"
+            f"Username   : {user.nickname}\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💰 CURRENCY & RESOURCES\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Free Spins : {user.free_spin:,}\n"
+            f"FC Points  : {user.fc:,}\n"
+            f"MC Points  : {user.mc:,}\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎰 SPECIAL JACKPOT: {current_special_jackpot:,} 💰\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+        self.user_info_label.config(text=info_text, foreground="#4caf50")
+
+    def _add_message(self, message: str) -> None:
+        """Add timestamped message to the messages widget.
+
+        Args:
+            message: Message text to display
+        """
+        # Skip empty or whitespace-only messages
+        if not message or not message.strip():
+            return
+
+        # Add timestamp to message
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        timestamped_message = f"[{timestamp}] {message.strip()}"
+
+        # Use the single messages widget
+        self.messages_text_widget.config(state="normal")
+
+        # Check if this is the first message
+        current_text = self.messages_text_widget.get("1.0", tk.END).strip()
+        if not current_text:
+            # First message - no newline needed
+            start_pos = "1.0"
+        else:
+            # Add new line for next message
+            self.messages_text_widget.insert(tk.END, "\n")
+            start_pos = self.messages_text_widget.index(tk.END + "-1c linestart")
+
+        # Insert the timestamped message
+        self.messages_text_widget.insert(tk.END, timestamped_message)
+        end_pos = self.messages_text_widget.index(tk.END + "-1c")
+
+        # Apply styling based on message content
+        tag = self._get_message_tag(message=message.strip())
+        self.messages_text_widget.tag_add(tag, start_pos, end_pos)
+
+        # Auto-scroll to bottom and make read-only
+        self.messages_text_widget.see(tk.END)
+        self.messages_text_widget.config(state="disabled")
+
+    def _update_config(self) -> None:
+        """Update tool configuration and setup callbacks."""
+
+        def message_callback(message: str) -> None:
+            """Thread-safe callback to update GUI with status messages"""
+            # Filter out special jackpot messages since they'll be handled by user info update
+            if "Special Jackpot:" not in message:
+                self._root.after(0, lambda: self._add_message(message))
+
+        def user_info_callback() -> None:
+            """Thread-safe callback to update user info display"""
+            user_info = self._tool_instance.user_info
+            self._root.after(0, lambda: self._update_user_info_display(user_info))
+
+        def special_jackpot_callback() -> None:
+            """Thread-safe callback to update user info when special jackpot changes"""
+            self._root.after(0, lambda: self._update_user_info_display(self._tool_instance.user_info))
+
+        # Set callbacks on the tool instance
+        self._tool_instance.message_callback = message_callback
+        self._tool_instance.user_info_callback = user_info_callback
+        self._tool_instance.special_jackpot_callback = special_jackpot_callback
+
+        # Update credentials
+        self._tool_instance.update_credentials(self._username_var.get(), self._password_var.get())
+        self._tool_instance.target_special_jackpot = self._target_special_jackpot_var.get()
+        self._tool_instance.spin_action = self._spin_action_var.get()
+
+    def _stop_automation_task(self) -> None:
+        """Stop automation task in separate event loop."""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(self._tool_instance.close_browser())
+        loop.close()
+
+    def _stop_tool(self) -> None:
+        """Stop automation tool and update UI state."""
+        if not self._is_running:
+            return
+
+        # Update UI state
+        self._is_running = False
+        self.start_btn.config(state="normal")
+        self.stop_btn.config(state="disabled")
+        self.status_label.config(text="⏹️ Status: Stopping...")
+
+        # Update configuration
+        self._toggle_inputs(enabled=True)
+
+        # Start automation in separate thread
+        self._tool_instance.stop()
+        threading.Thread(target=self._stop_automation_task, daemon=True).start()
+
+        self.status_label.config(text="✅ Status: Ready")
+
+    def _launch_automation_task(self) -> None:
+        """Launch automation task in asyncio event loop.
+
+        Raises:
+            Exception: For automation errors
+        """
+        # No need to call init_logger() - it's auto-initialized
+        try:
+            self._root.after(0, lambda: self.status_label.config(text="🚀 Status: Running..."))
+
+            # Run the automation
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            loop.run_until_complete(self._tool_instance.run())
+
+        except Exception as error:
+            error_msg = f"❌ Automation failed: {str(error)}"
+            self._root.after(0, lambda: messagebox.showerror("❌ Error", error_msg))
+
+    def _start_tool(self) -> None:
+        """Start automation tool with input validation and UI updates.
+
+        Raises:
+            ValueError: For invalid input values
+        """
+        if self._is_running:
+            return
+
+        # Validate inputs
+        if not self._username_var.get().strip():
+            messagebox.showerror("❌ Error", "Username cannot be empty!")
+            return
+
+        if not self._password_var.get().strip():
+            messagebox.showerror("❌ Error", "Password cannot be empty!")
+            return
+
+        # Validate target jackpot
+        try:
+            target_value = self._target_special_jackpot_var.get()
+            if target_value <= 0:
+                msg = "Target must be positive"
+                raise ValueError(msg)
+        except ValueError:
+            messagebox.showerror("❌ Error", "Target Jackpot must be a positive number!")
+            return
+
+        # Update UI state
+        self._is_running = True
+        self.start_btn.config(state="disabled")
+        self.stop_btn.config(state="normal")
+        self.status_label.config(text="🚀 Status: Starting...")
+
+        # Update configuration
+        self._toggle_inputs(enabled=False)
+        self._update_config()
+        self._reset_display()
+
+        # Start automation in separate thread
+        self._tool_instance.start()
+        threading.Thread(target=self._launch_automation_task, daemon=True).start()
+
+    def _on_closing(self) -> None:
+        """Handle application closing - save config and cleanup."""
+        # Save configuration before closing
+        self._save_credentials()
+
+        # Stop tool if running
+        if self._is_running:
+            self._tool_instance.stop()
+
+        # Close the application
+        self._root.destroy()
+
+    def run(self) -> None:
+        self._root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        sv_ttk.set_theme(darkdetect.theme() or "dark")
+        self._root.mainloop()
+
+
+def main_gui() -> None:
+    app = FCOnlineGUI()
+    app.run()
