@@ -1,6 +1,7 @@
 from typing import Callable, Dict, Optional
 
 import aiohttp
+from fake_useragent import UserAgent
 from loguru import logger
 from playwright.async_api import Page
 
@@ -71,13 +72,16 @@ class UserInfoManager:
             logger.warning("⚠️ No cookies available for API request")
             return
 
+        # Prefer a random desktop-like user agent to reduce detection
+        user_agent = self._get_random_user_agent()
+
         async with aiohttp.ClientSession() as session:
             try:
                 cookie_header = "; ".join([f"{name}={value}" for name, value in self._cookies.items()])
 
                 headers = {
                     "Cookie": cookie_header,
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                    "User-Agent": user_agent,
                 }
 
                 # Add CSRF token if available
@@ -97,6 +101,24 @@ class UserInfoManager:
 
             except Exception as e:
                 logger.error(f"❌ Failed to fetch user info: {e}")
+
+    def _get_random_user_agent(self) -> str:
+        """Return a random desktop User-Agent string with fallbacks."""
+        fallback = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        )
+        if UserAgent is None:
+            return fallback
+
+        try:
+            ua = UserAgent()
+            candidate = ua.random
+            return candidate if isinstance(candidate, str) and candidate else fallback
+
+        except Exception:
+            return fallback
 
     def clear_cookies(self) -> None:
         """Clear stored cookies."""
