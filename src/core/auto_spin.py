@@ -9,10 +9,10 @@ class AutoSpinHandler:
     """Handles automatic spinning when target jackpot is reached."""
 
     # Spin action selectors
-    SPIN_ACTION_1_SELECTOR = "div.spin__actions a.spin__actions--1"
-    SPIN_ACTION_2_SELECTOR = "div.spin__actions a.spin__actions--2"
-    SPIN_ACTION_3_SELECTOR = "div.spin__actions a.spin__actions--3"
-    SPIN_ACTION_4_SELECTOR = "div.spin__actions a.spin__actions--4"
+    SPIN_ACTION_1_SELECTOR = "div.spin__actions a.btn-spin.btn-spin--1"
+    SPIN_ACTION_2_SELECTOR = "div.spin__actions a.btn-spin.btn-spin--2"
+    SPIN_ACTION_3_SELECTOR = "div.spin__actions a.btn-spin.btn-spin--3"
+    SPIN_ACTION_4_SELECTOR = "div.spin__actions a.btn-spin.btn-spin--4"
 
     SPIN_ACTION_SELECTORS = {
         1: (SPIN_ACTION_1_SELECTOR, "Free Spin"),

@@ -19,7 +19,7 @@ class FCOnlineTool:
     """Main FC Online automation tool that coordinates all components."""
 
     # URL constants
-    BASE_URL = "https://bilac.fconline.garena.vn/"
+    BASE_URL = "https://typhu.fconline.garena.vn/"
 
     def __init__(
         self,
