@@ -1,7 +1,9 @@
+import json
 from typing import Callable, Dict, Optional
 
 import aiohttp
 from fake_useragent import UserAgent
+from icecream import ic
 from loguru import logger
 from playwright.async_api import Page
 
@@ -12,7 +14,7 @@ class UserInfoManager:
     """Manages user information and cookie extraction for API authentication."""
 
     # API constants
-    API_URL = "https://bilac.fconline.garena.vn/api/user/get"
+    API_URL = "https://typhu.fconline.garena.vn/api/user/get"
 
     def __init__(self) -> None:
         """Initialize the user info manager."""
@@ -40,12 +42,10 @@ class UserInfoManager:
             cookie_dict = {}
 
             for cookie in cookies:
-                domain = cookie.get("domain", "")
-                if domain in ["bilac.fconline.garena.vn", ".fconline.garena.vn"]:
-                    name = cookie.get("name", "")
-                    value = cookie.get("value", "")
-                    if name and value:
-                        cookie_dict[name] = value
+                name = cookie.get("name", "")
+                value = cookie.get("value", "")
+                if name and value:
+                    cookie_dict[name] = value
 
             logger.info(f"🍪 Extracted {len(cookie_dict)} cookies")
             self._cookies = cookie_dict
@@ -91,6 +91,7 @@ class UserInfoManager:
                 async with session.get(self.API_URL, headers=headers) as response:
                     if response.status == 200:
                         data = await response.json()
+                        ic(json.dumps(data, indent=4))
                         self.user_info = UserInfo.model_validate(data)
 
                         # Notify GUI about user info update

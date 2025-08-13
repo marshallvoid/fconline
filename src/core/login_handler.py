@@ -6,14 +6,14 @@ class LoginHandler:
     """Handles user login and authentication for FC Online."""
 
     # Selector constants
-    LOGIN_BTN_SELECTOR = "a.btn-header.btn-header--login"
-    LOGOUT_BTN_SELECTOR = "a.btn-header.btn-header--logout"
+    LOGIN_BTN_SELECTOR = "a[href='/user/login']"
+    LOGOUT_BTN_SELECTOR = "a[href='/user/logout']"
     USERNAME_INPUT_SELECTOR = "form input[type='text']"
     PASSWORD_INPUT_SELECTOR = "form input[type='password']"
     SUBMIT_BTN_SELECTOR = "form button[type='submit']"
 
     # URL constants
-    BASE_URL = "https://bilac.fconline.garena.vn/"
+    BASE_URL = "https://typhu.fconline.garena.vn/"
 
     def __init__(self, username: str, password: str) -> None:
         """
