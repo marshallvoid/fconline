@@ -23,6 +23,23 @@ class ActivityLogTab:
         container = ttk.Frame(self._frame)
         container.pack(fill="both", expand=True, padx=20, pady=10)
 
+        # Special Jackpot Display
+        jackpot_frame = ttk.LabelFrame(container, text="🎰 Special Jackpot Status", padding=10)
+        jackpot_frame.pack(fill="x", pady=(0, 10))
+
+        jackpot_container = ttk.Frame(jackpot_frame)
+        jackpot_container.pack(fill="x")
+
+        self.jackpot_label = ttk.Label(
+            jackpot_container,
+            text="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🎰 SPECIAL JACKPOT: 0 💰\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            foreground="#ff9800",
+            font=("Consolas", 12, "bold"),
+        )
+        self.jackpot_label.pack(anchor="w")
+
         self.messages_frame = ttk.LabelFrame(container, text="Messages", padding=10)
         self.messages_frame.pack(fill="both", expand=True)
         self.messages_frame.configure(height=250)
@@ -76,3 +93,12 @@ class ActivityLogTab:
         self.messages_text_widget.tag_add(tag, start_pos, end_pos)
         self.messages_text_widget.see(tk.END)
         self.messages_text_widget.config(state="disabled")
+
+    def update_jackpot(self, value: int) -> None:
+        """Update the special jackpot display"""
+        jackpot_text = (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎰 SPECIAL JACKPOT: {value:,} 💰\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+        self.jackpot_label.config(text=jackpot_text)
