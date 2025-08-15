@@ -6,7 +6,6 @@ from typing import Callable, Optional, Tuple
 
 import aiohttp
 from browser_use import BrowserConfig, BrowserContextConfig
-from icecream import ic
 from loguru import logger
 from playwright.async_api import Page, WebSocket
 
@@ -42,7 +41,7 @@ class MainTool:
         self._page: Optional[Page] = None
 
         self._cookies: dict[str, str] = {}
-        self._user_info: Optional[UserInfo] = None
+        self.user_info: Optional[UserInfo] = None
         self._user_data_dir: str = PlatformManager.get_user_data_directory(username=username)
 
     async def _check_login(self, page: Page) -> bool:
@@ -168,23 +167,35 @@ class MainTool:
             "Cookie": "; ".join([f"{name}={value}" for name, value in self._cookies.items()]),
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
         }
-        async with aiohttp.ClientSession(cookies=self._cookies, headers=headers) as session:
+        # Create SSL context that doesn't verify certificates
+        import ssl
+
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        async with aiohttp.ClientSession(cookies=self._cookies, headers=headers, connector=connector) as session:
             try:
                 logger.info("📡 Fetching user information from API...")
 
-                async with session.get(self.event_config.api_url, headers=headers) as response:
+                async with session.get(self.event_config.api_url) as response:
                     if response.status == 200:
                         data = await response.json()
-                        self._user_info = UserInfo.model_validate(data)
+                        self.user_info = UserInfo.model_validate(data)
                         logger.success("✅ User information fetched successfully")
 
                         if self.user_panel_callback:
-                            self.user_panel_callback(self._user_info)
+                            self.user_panel_callback(self.user_info)
 
-                        ic(self._cookies)
-                        ic(headers)
-                        ic(self.event_config.api_url)
-                        ic(data)
+                        if self.message_callback:
+                            self.message_callback(
+                                "info",
+                                (
+                                    f"🔍 User information fetched successfully: "
+                                    f"{self.user_info.payload.user.nickname if self.user_info.payload.user else 'Unknown'}"  # noqa: E501
+                                ),
+                            )
                     else:
                         logger.warning(f"⚠️ API request failed with status: {response.status}")
 
@@ -259,7 +270,7 @@ class MainTool:
                             self.special_jackpot = value
 
                             if self.user_panel_callback:
-                                self.user_panel_callback(self._user_info)
+                                self.user_panel_callback(self.user_info)
 
                             if value >= self.target_special_jackpot:
                                 if self.message_callback:
@@ -366,7 +377,7 @@ class MainTool:
         self.password = password
 
         self._cookies = {}
-        self._user_info = None
+        self.user_info = None
 
     async def close(self) -> None:
         if not self._context:

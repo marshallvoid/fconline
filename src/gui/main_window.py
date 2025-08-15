@@ -47,6 +47,8 @@ class MainWindow:
 
         self._is_running = False
         self._selected_event = "Bi Lắc"
+        self._locked_tab_index = None
+        self._original_tab_index = 0  # Store the original tab index before starting
         self._tool_instance = MainTool(
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
             username=self._username_var.get(),
@@ -57,7 +59,7 @@ class MainWindow:
 
         self._setup_ui()
 
-    def _setup_ui(self) -> None:
+    def _setup_ui(self) -> None:  # noqa: C901
         control_frame = ttk.Frame(self._root)
         control_frame.pack(side="bottom", fill="x", padx=10, pady=(5, 10))
 
@@ -137,12 +139,21 @@ class MainWindow:
 
         def _on_tab_changed(_: object) -> None:
             try:
+                # Block tab changes when tool is running
+                if self._is_running:
+                    self._block_tab_change()
+                    return
+
                 current_index = self._notebook.index(self._notebook.select())
                 tab_text = self._notebook.tab(current_index, "text")
-                if not self._is_running:
+
+                # Only allow changes to event tabs (not Activity Log) when not running
+                if tab_text in EVENT_CONFIGS_MAP:
                     self._selected_event = tab_text
                     # Update spin labels when tab changes
                     self._update_spin_labels_for_tab(tab_text)
+                    # Update the original tab index for future restoration
+                    self._original_tab_index = current_index
 
             except Exception:
                 pass
@@ -171,6 +182,29 @@ class MainWindow:
 
         target_tab.update_spin_labels(spin_action_selectors=EVENT_CONFIGS_MAP[tab_name].spin_action_selectors)
 
+    def _set_notebook_state(self, enabled: bool) -> None:
+        """Enable or disable notebook tab switching"""
+        if not enabled:
+            # Store the current tab index before switching
+            self._original_tab_index = self._notebook.index(self._notebook.select())
+            # Switch to Activity Log tab (last tab) and lock it
+            last_tab_index = self._notebook.index("end") - 1
+            self._notebook.select(last_tab_index)
+            self._locked_tab_index = last_tab_index
+        else:
+            # Restore to the original tab index
+            self._notebook.select(self._original_tab_index)
+            self._locked_tab_index = None
+
+    def _block_tab_change(self) -> str:
+        """Block tab changes when tool is running"""
+        if self._is_running:
+            # Always revert to Activity Log tab (last tab) when tool is running
+            last_tab_index = self._notebook.index("end") - 1
+            self._notebook.select(last_tab_index)
+            return "break"
+        return ""
+
     def _update_user_panel(self, user_info: Optional["UserInfo"]) -> None:
         info_text = (
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -185,15 +219,13 @@ class MainWindow:
                 f"👤 ACCOUNT INFORMATION\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"User ID    : {user_info.payload.user.uid}\n"
-                f"Username   : {user_info.payload.user.nickname}\n\n"
+                f"Username   : {user_info.payload.user.nickname}\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"💰 CURRENCY & RESOURCES\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"Free Spins : {user_info.payload.user.free_spin:,}\n"
                 f"FC Points  : {user_info.payload.user.fc:,}\n"
-                f"MC Points  : {user_info.payload.user.mc:,}\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🎰 SPECIAL JACKPOT: {self._tool_instance.special_jackpot:,} 💰\n"
+                f"MC Points  : {user_info.payload.user.mc:,}\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             )
 
@@ -238,6 +270,13 @@ class MainWindow:
         self._status_label.config(text="⏹️ Status: Stopping...")
         self._bilac_tab.set_enabled(True)
         self._typhu_tab.set_enabled(True)
+        # Re-enable notebook to allow tab switching
+        self._set_notebook_state(enabled=True)
+        # Add message to activity log about tab switching being re-enabled
+        self._activity_log_tab.add_message("info", "🔓 Tab switching re-enabled")
+        # Refresh user info display after re-enabling tabs
+        if self._tool_instance.user_info:
+            self._root.after(0, lambda: self._update_user_panel(self._tool_instance.user_info))
 
         self._tool_instance.stop_flag = True
 
@@ -261,6 +300,13 @@ class MainWindow:
             self._status_label.config(text="✅ Status: Ready")
             self._bilac_tab.set_enabled(True)
             self._typhu_tab.set_enabled(True)
+            # Re-enable notebook to allow tab switching
+            self._set_notebook_state(enabled=True)
+            # Add message to activity log about tab switching being re-enabled
+            self._activity_log_tab.add_message("info", "🔓 Tab switching re-enabled")
+            # Refresh user info display after re-enabling tabs
+            if self._tool_instance.user_info:
+                self._root.after(0, lambda: self._update_user_panel(self._tool_instance.user_info))
 
     def _handle_start_button(self) -> None:
         if self._is_running:
@@ -290,6 +336,12 @@ class MainWindow:
         self._status_label.config(text="🚀 Status: Starting...")
         self._bilac_tab.set_enabled(enabled=False)
         self._typhu_tab.set_enabled(enabled=False)
+        # Disable notebook to prevent tab switching
+        self._set_notebook_state(enabled=False)
+        # Add message to activity log about tab switching being disabled
+        self._root.after(
+            0, lambda: self._activity_log_tab.add_message("info", "🔒 Tab switching disabled while tool is running")
+        )
 
         widget = self._activity_log_tab.messages_text_widget
         widget.config(state="normal")
@@ -304,11 +356,16 @@ class MainWindow:
         self._tool_instance.special_jackpot = 0
         self._tool_instance.mini_jackpot = 0
 
+        # Update jackpot display to show initial value
+        self._activity_log_tab.update_jackpot(0)
+
         def message_callback(tag: str, message: str) -> None:
             self._root.after(0, lambda: self._activity_log_tab.add_message(tag=tag, message=message))
 
         def user_panel_callback(user_info: Optional["UserInfo"]) -> None:
             self._root.after(0, lambda: self._update_user_panel(user_info=user_info))
+            # Also update jackpot display in Activity Log tab
+            self._root.after(0, lambda: self._activity_log_tab.update_jackpot(self._tool_instance.special_jackpot))
 
         self._tool_instance.message_callback = message_callback
         self._tool_instance.user_panel_callback = user_panel_callback
