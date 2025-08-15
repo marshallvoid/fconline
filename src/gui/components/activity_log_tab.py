@@ -2,6 +2,8 @@ import tkinter as tk
 from datetime import datetime
 from tkinter import ttk
 
+from loguru import logger
+
 
 class ActivityLogTab:
     def __init__(self, parent: tk.Misc) -> None:
@@ -13,6 +15,8 @@ class ActivityLogTab:
         return self._frame
 
     def _build(self) -> None:
+        logger.info("🔧 Initializing ActivityLogTab")
+
         title_label = ttk.Label(self._frame, text="Application Log", font=("Arial", 14, "bold"))
         title_label.pack(pady=(10, 20))
 
@@ -51,6 +55,7 @@ class ActivityLogTab:
         self.messages_text_widget.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
+        logger.success("✅ ActivityLogTab initialized successfully")
 
     def add_message(self, tag: str, message: str) -> None:
         if not message or not message.strip():

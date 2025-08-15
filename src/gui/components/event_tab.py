@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable
+from typing import Callable, Dict
+
+from loguru import logger
 
 
 class EventTab:
@@ -45,12 +47,14 @@ class EventTab:
     def update_user_info_text(self, text: str, foreground: str = "#4caf50") -> None:
         self.user_info_label.config(text=text, foreground=foreground)
 
-    def update_spin_labels(self, spin_action_selectors: dict[int, tuple[str, str]]) -> None:
-        for i, (_, (_, label)) in enumerate(spin_action_selectors.items()):
-            if i < len(self._radio_labels):
-                self._radio_labels[i].config(text=label)
+    def update_spin_labels(self, spin_action_selectors: Dict[int, tuple[str, str]]) -> None:
+        for i, raido_label in enumerate(self._radio_labels, start=1):
+            if i < len(spin_action_selectors):
+                raido_label.config(text=spin_action_selectors[i][1])
 
     def _build(self) -> None:
+        logger.info(f"🔧 Initializing EventTab for event: {self._title}")
+
         title_label = ttk.Label(self._frame, text="User Settings", font=("Arial", 14, "bold"))
         title_label.pack(pady=(10, 20))
 
@@ -130,3 +134,5 @@ class EventTab:
             radio_btn.pack(side="left", padx=(0, 20))
             self._radio_buttons.append(radio_btn)
             self._radio_labels.append(radio_btn)
+
+        logger.success(f"✅ {self._title} EventTab initialized successfully")
