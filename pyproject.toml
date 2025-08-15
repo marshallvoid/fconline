@@ -15,6 +15,7 @@ dependencies = [
     "pillow-heif>=1.1.0",
     "pillow>=11.3.0",
     "pydantic>=2.11.7",
+    "semver>=3.0.4",
     "sv-ttk>=2.6.1",
     "ua-parser>=1.0.1",
     "user-agents>=2.2.0",
