@@ -349,12 +349,7 @@ class MainTool:
 
         logger.info(f"📁 Using user data directory: {self._user_data_dir}")
 
-        browser = BrowserClient(
-            config=BrowserConfig(
-                extra_chromium_args=extra_chromium_args,
-                chrome_instance_path=PlatformManager.get_chrome_executable_path(),
-            )
-        )
+        browser = BrowserClient(config=BrowserConfig(extra_chromium_args=extra_chromium_args))
 
         context_config = BrowserContextConfig(browser_window_size={"width": 1920, "height": 1080})
         logger.info("🖥️ Creating browser context with 1920x1080 resolution...")
