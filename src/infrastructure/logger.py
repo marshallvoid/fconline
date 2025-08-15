@@ -54,6 +54,13 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
     if _logger_initialized:
         return
 
+    # Check if running as exe (production build)
+    is_production = getattr(sys, "frozen", False)
+
+    # In production builds, force debug=False to reduce logging
+    if is_production:
+        debug = False
+
     # logging configuration
     logging_level = logging.DEBUG if debug else logging.INFO
     loggers = (
@@ -67,6 +74,9 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
         "sqlalchemy",
         "sqlalchemy.engine",
         "sqlalchemy.engine.Engine",
+        "playwright",
+        "browser_use",
+        "aiohttp",
     )
 
     logging.getLogger().handlers = [InterceptHandler()]
@@ -84,6 +94,11 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
         log_file = tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False)
         sink = log_file.name
 
+    # In production, use simpler format and only log errors
+    if is_production:
+        loguru_format = "<level>{level: <8}</level> | <level>{message}</level>"
+        logging_level = logging.ERROR
+
     handlers = [
         {
             "sink": sink,
@@ -91,7 +106,9 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
             "format": loguru_format,
         },
     ]
-    logger.configure(handlers=handlers)  # type: ignore    # Mark logger as initialized
+    logger.configure(handlers=handlers)  # type: ignore
+
+    # Mark logger as initialized
     _logger_initialized = True
 
 

@@ -4,7 +4,6 @@ from typing import Callable
 
 
 class EventTab:
-
     def __init__(
         self,
         parent: tk.Misc,
@@ -22,6 +21,8 @@ class EventTab:
         self._target_special_jackpot_var = target_special_jackpot_var
         self._spin_action_var = spin_action_var
         self._on_spin_action_changed = on_spin_action_changed
+        self._radio_buttons = []
+        self._radio_labels = []
 
         self._build()
 
@@ -38,11 +39,16 @@ class EventTab:
         self.username_entry.config(state=state)
         self.password_entry.config(state=state)
         self.target_special_jackpot_entry.config(state=state)
-        for radio_btn in self.radio_buttons:
+        for radio_btn in self._radio_buttons:
             radio_btn.config(state=state)
 
     def update_user_info_text(self, text: str, foreground: str = "#4caf50") -> None:
         self.user_info_label.config(text=text, foreground=foreground)
+
+    def update_spin_labels(self, spin_action_selectors: dict[int, tuple[str, str]]) -> None:
+        for i, (_, (_, label)) in enumerate(spin_action_selectors.items()):
+            if i < len(self._radio_labels):
+                self._radio_labels[i].config(text=label)
 
     def _build(self) -> None:
         title_label = ttk.Label(self._frame, text="User Settings", font=("Arial", 14, "bold"))
@@ -111,15 +117,16 @@ class EventTab:
         radio_container = ttk.Frame(spin_action_frame)
         radio_container.pack(fill="x")
 
-        self.radio_buttons = []
-        radio_options = [(1, "Free"), (2, "10FC"), (3, "190FC"), (4, "900FC")]
-        for value, text in radio_options:
+        # Default labels (will be updated based on event type)
+        default_labels = ["Free", "10FC", "190FC", "900FC"]
+        for value, default_text in zip([1, 2, 3, 4], default_labels, strict=False):
             radio_btn = ttk.Radiobutton(
                 radio_container,
-                text=text,
+                text=default_text,
                 variable=self._spin_action_var,
                 value=value,
                 command=self._on_spin_action_changed,
             )
             radio_btn.pack(side="left", padx=(0, 20))
-            self.radio_buttons.append(radio_btn)
+            self._radio_buttons.append(radio_btn)
+            self._radio_labels.append(radio_btn)
