@@ -11,11 +11,8 @@ permissions:
    actions: read # Required for artifact access
 
 jobs:
-   build-windows:
-      runs-on: windows-latest
-      strategy:
-         matrix:
-            python-version: ['3.12']
+   build:
+      runs-on: windows-latest # Use Windows to build exe
 
       steps:
          - name: Checkout code
@@ -24,7 +21,7 @@ jobs:
          - name: Set up Python
            uses: actions/setup-python@v4
            with:
-              python-version: ${{ matrix.python-version }}
+              python-version: '3.12'
 
          - name: Install uv
            uses: astral-sh/setup-uv@v4
@@ -36,88 +33,18 @@ jobs:
               uv sync
               uv add pyinstaller
 
-         - name: Build Windows executable
+         - name: Build executable
            run: |
               uv run pyinstaller build.spec
 
-         - name: Upload Windows artifact
+         - name: Upload artifact
            uses: actions/upload-artifact@v4
            with:
-              name: FC_Online_Tool-Windows-${{ github.sha }}
+              name: FC_Online_Tool-${{ github.sha }}
               path: dist/FC_Online_Tool.exe
 
-   build-macos:
-      runs-on: macos-latest
-      strategy:
-         matrix:
-            python-version: ['3.12']
-
-      steps:
-         - name: Checkout code
-           uses: actions/checkout@v4
-
-         - name: Set up Python
-           uses: actions/setup-python@v4
-           with:
-              python-version: ${{ matrix.python-version }}
-
-         - name: Install uv
-           uses: astral-sh/setup-uv@v4
-           with:
-              enable-cache: true
-
-         - name: Install dependencies
-           run: |
-              uv sync
-              uv add pyinstaller
-
-         - name: Build macOS executable
-           run: |
-              uv run pyinstaller build.spec
-
-         - name: Upload macOS artifact
-           uses: actions/upload-artifact@v4
-           with:
-              name: FC_Online_Tool-macOS-${{ github.sha }}
-              path: dist/FC_Online_Tool
-
-   build-linux:
-      runs-on: ubuntu-latest
-      strategy:
-         matrix:
-            python-version: ['3.12']
-
-      steps:
-         - name: Checkout code
-           uses: actions/checkout@v4
-
-         - name: Set up Python
-           uses: actions/setup-python@v4
-           with:
-              python-version: ${{ matrix.python-version }}
-
-         - name: Install uv
-           uses: astral-sh/setup-uv@v4
-           with:
-              enable-cache: true
-
-         - name: Install dependencies
-           run: |
-              uv sync
-              uv add pyinstaller
-
-         - name: Build Linux executable
-           run: |
-              uv run pyinstaller build.spec
-
-         - name: Upload Linux artifact
-           uses: actions/upload-artifact@v4
-           with:
-              name: FC_Online_Tool-Linux-${{ github.sha }}
-              path: dist/FC_Online_Tool
-
    release:
-      needs: [build-windows, build-macos, build-linux]
+      needs: build
       runs-on: ubuntu-latest
       if: startsWith(github.ref, 'refs/tags/') # Only create release when there's a tag
 
@@ -125,85 +52,38 @@ jobs:
          - name: Checkout code
            uses: actions/checkout@v4
 
-         - name: Download Windows artifact
+         - name: Download artifact
            uses: actions/download-artifact@v4
            with:
-              name: FC_Online_Tool-Windows-${{ github.sha }}
-              path: ./dist/windows/
-
-         - name: Download macOS artifact
-           uses: actions/download-artifact@v4
-           with:
-              name: FC_Online_Tool-macOS-${{ github.sha }}
-              path: ./dist/macos/
-
-         - name: Download Linux artifact
-           uses: actions/download-artifact@v4
-           with:
-              name: FC_Online_Tool-Linux-${{ github.sha }}
-              path: ./dist/linux/
-
-         - name: Verify artifacts
-           run: |
-              echo "Checking downloaded artifacts..."
-              ls -la ./dist/windows/
-              ls -la ./dist/macos/
-              ls -la ./dist/linux/
-              echo "Artifact verification complete"
+              name: FC_Online_Tool-${{ github.sha }}
+              path: ./dist/
 
          - name: Create Release
-           id: create_release
            uses: softprops/action-gh-release@v2
            with:
-              tag_name: ${{ github.ref_name }}
+              files: ./dist/FC_Online_Tool.exe
+              generate_release_notes: true
+              draft: false
+              prerelease: false
               name: 'FC Online Tool ${{ github.ref_name }}'
               body: |
                  ## 🚀 FC Online Automation Tool ${{ github.ref_name }}
 
-                 ### 📦 Downloads
-                 - **FC_Online_Tool.exe** - Windows executable
-                 - **FC_Online_Tool** - macOS application
-                 - **FC_Online_Tool** - Linux executable
+                 ### 📦 Download
+                 - **FC_Online_Tool.exe** - Ready to run Windows executable
 
                  ### 🔧 Installation
-
-                 #### Windows
-                 1. Download FC_Online_Tool.exe
+                 1. Download the exe file
                  2. Run as administrator (recommended)
                  3. Windows Defender might show a warning - click "More info" then "Run anyway"
-
-                 #### macOS
-                 1. Download FC_Online_Tool
-                 2. Right-click and select "Open" (first time only)
-                 3. Grant necessary permissions when prompted
-
-                 #### Linux
-                 1. Download FC_Online_Tool
-                 2. Make executable: `chmod +x FC_Online_Tool`
-                 3. Run: `./FC_Online_Tool`
 
                  ### ✨ Features
                  - GUI interface for easy configuration
                  - Automated FC Online operations
                  - Real-time status monitoring
                  - Dark/Light theme support
-                 - Cross-platform support
 
                  ---
-                 **Note**: This is an automated release built from source code for Windows, macOS, and Linux.
-              files: |
-                 ./dist/windows/FC_Online_Tool.exe
-                 ./dist/macos/FC_Online_Tool
-                 ./dist/linux/FC_Online_Tool
-              generate_release_notes: false
-              draft: false
-              prerelease: false
-              fail_on_unmatched_files: false
+                 **Note**: This is an automated release built from source code.
            env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-         - name: Verify release creation
-           run: |
-              echo "Release created successfully!"
-              echo "Tag: ${{ github.ref_name }}"
-              echo "Release ID: ${{ steps.create_release.outputs.id }}"
+              GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
