@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 try:
-    from watchdog.events import FileSystemEventHandler
+    from watchdog.events import FileSystemEvent, FileSystemEventHandler
     from watchdog.observers import Observer
 
     WATCHDOG_AVAILABLE = True
@@ -28,7 +28,7 @@ class AutoReloadHandler(FileSystemEventHandler):
         self.last_modified: Dict[Any, Any] = {}
         self.observer = Observer()
 
-    def on_modified(self, event) -> None:
+    def on_modified(self, event: FileSystemEvent) -> None:
         """
         Handle file modification events.
 
@@ -71,8 +71,8 @@ class AutoReloadHandler(FileSystemEventHandler):
 
 
 def auto_reload(
-    watch_paths: Optional[List[str]] = None,
     callback: Optional[Callable[[], None]] = None,
+    watch_paths: Optional[List[str]] = None,
 ) -> AutoReloadHandler:
     """
     Create and start an auto-reload handler.
@@ -84,6 +84,7 @@ def auto_reload(
     Returns:
         AutoReloadHandler instance
     """
+    callback = callback or (lambda: None)
     handler = AutoReloadHandler(callback, watch_paths)
     handler.start()
     return handler

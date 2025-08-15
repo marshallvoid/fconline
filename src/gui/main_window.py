@@ -2,328 +2,331 @@ import asyncio
 import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import darkdetect
 import sv_ttk
+from loguru import logger
 
-from src.core import FCOnlineTool
-from src.utils.credentials import CredentialManager
-
-from .control_panel import ControlPanel
-from .header import Header
-from .log_panel import LogPanel
-from .styles import apply_styles
-from .user_info_panel import UserInfoPanel
-from .user_settings_panel import UserSettingsPanel
+from src.core.main_tool import MainTool
+from src.gui.components import ActivityLogTab, EventTab
+from src.utils.contants import EVENT_CONFIGS_MAP
 
 if TYPE_CHECKING:
-    from src.models import UserInfo
+    from src.schemas import UserInfo
 
 
 class MainWindow:
-    """Main GUI application for FC Online Automation Tool."""
-
     def __init__(self) -> None:
-        """Initialize the main GUI application."""
         self._root = tk.Tk()
         self._root.title("FC Online Automation Tool")
-        self._root.geometry("760x740")
+        self._root.geometry("700x700")
         self._root.resizable(False, False)
-        self._root.minsize(720, 680)
-        self._root.iconbitmap("assets/icon.ico")
+        self._root.minsize(700, 650)
 
-        # Pre-apply base styles (will be re-applied after theme set)
-        apply_styles(self._root)
+        self._username_var = tk.StringVar(value="")
+        self._password_var = tk.StringVar(value="")
+        self._spin_action_var = tk.IntVar(value=1)
+        self._target_special_jackpot_var = tk.IntVar(value=10000)
 
-        # Load saved credentials
-        saved_credentials = CredentialManager.load_credentials()
-
-        # Variables for form inputs
-        self._username_var = tk.StringVar(value=saved_credentials.get("username", ""))
-        self._password_var = tk.StringVar(value=saved_credentials.get("password", ""))
-        self._target_special_jackpot_var = tk.IntVar(value=saved_credentials.get("target_special_jackpot", 10000))
-        self._spin_action_var = tk.IntVar(value=saved_credentials.get("spin_action", 1))
-
-        # Running state
-        self._is_running = False
-
-        # Tool instance
-        self._tool_instance = FCOnlineTool(
-            username=self._username_var.get(),
-            password=self._password_var.get(),
-            target_special_jackpot=self._target_special_jackpot_var.get(),
-            spin_action=self._spin_action_var.get(),
+        self._username_var.trace_add(
+            "write",
+            lambda *_: (
+                self._tool_instance.update_credentials(self._username_var.get(), self._password_var.get())
+                if not self._is_running
+                else None
+            ),
+        )
+        self._password_var.trace_add(
+            "write",
+            lambda *_: (
+                self._tool_instance.update_credentials(self._username_var.get(), self._password_var.get())
+                if not self._is_running
+                else None
+            ),
         )
 
-        # Initialize components
+        self._is_running = False
+        self._selected_event = "Bi Lắc"
+        self._tool_instance = MainTool(
+            event_config=EVENT_CONFIGS_MAP[self._selected_event],
+            username=self._username_var.get(),
+            password=self._password_var.get(),
+            spin_action=self._spin_action_var.get(),
+            target_special_jackpot=self._target_special_jackpot_var.get(),
+        )
+
         self._setup_ui()
 
     def _setup_ui(self) -> None:
-        """Setup main UI layout with control buttons and content area."""
-        # Header with theme toggle
-        self.header = Header(
-            self._root,
-            title="FC Online Automation Tool",
-            subtitle="Automate spins • Monitor jackpots in real-time",
-            on_toggle_theme=self._on_toggle_theme,
+        control_frame = ttk.Frame(self._root)
+        control_frame.pack(side="bottom", fill="x", padx=10, pady=(5, 10))
+
+        self._start_btn = ttk.Button(
+            control_frame,
+            text="Start",
+            command=self._handle_start_button,
+            style="Accent.TButton",
         )
-        self.header.pack(side="top", fill="x", padx=16, pady=(12, 4))
+        self._start_btn.pack(side="left", padx=(0, 5))
 
-        # Control panel at bottom
-        self.control_panel = ControlPanel(self._root, on_start=self._start_tool, on_stop=self._stop_tool)
-        self.control_panel.pack(side="bottom", fill="x", padx=16, pady=(6, 14))
+        self._stop_btn = ttk.Button(
+            control_frame,
+            text="Stop",
+            command=self._handle_stop_button,
+            state="disabled",
+        )
+        self._stop_btn.pack(side="left", padx=5)
 
-        # Create main container
+        self._status_label = ttk.Label(control_frame, text="✅ Status: Ready")
+        self._status_label.pack(side="right")
+
         main_container = ttk.Frame(self._root)
-        main_container.pack(fill="both", expand=True, padx=16, pady=8)
+        main_container.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Create notebook for tabs
-        self.notebook = ttk.Notebook(main_container)
-        self.notebook.pack(fill="both", expand=True)
-        # Avoid focus outline on selected tab label
-        try:
-            self.notebook.configure(takefocus=0)
-        except Exception:
-            pass
+        self._notebook = ttk.Notebook(main_container, takefocus=False)
+        self._notebook.pack(fill="both", expand=True)
 
-        # Create App tab
-        self.app_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.app_tab, text="Dashboard")
-
-        # Create Log tab
-        self.log_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.log_tab, text="Activity Log")
-
-        # Setup tabs
-        self._setup_app_tab()
-        self._setup_log_tab()
-
-        # Redirect focus to tab content so tab label doesn't keep focus ring
-        self.notebook.bind(
-            "<<NotebookTabChanged>>",
-            lambda e: self._root.after(0, self._focus_current_tab_content),
-            add=True,
-        )
-        self.notebook.bind(
-            "<ButtonPress-1>",
-            lambda e: self._root.after(0, self._focus_current_tab_content),
-            add=True,
-        )
-
-    def _setup_app_tab(self) -> None:
-        """Setup App tab with form inputs and user info display."""
-        # Create main container
-        container = ttk.Frame(self.app_tab)
-        container.pack(fill="both", expand=True, padx=20, pady=10)
-
-        # User settings panel
-        self.user_settings_panel = UserSettingsPanel(
-            container,
+        self._bilac_tab = EventTab(
+            parent=self._notebook,
+            title="Bi Lắc",
             username_var=self._username_var,
             password_var=self._password_var,
-            target_jackpot_var=self._target_special_jackpot_var,
+            target_special_jackpot_var=self._target_special_jackpot_var,
             spin_action_var=self._spin_action_var,
-            on_credentials_changed=self._on_credentials_changed,
-            on_config_changed=self._on_config_changed,
+            on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
         )
-        self.user_settings_panel.pack(fill="x", pady=(0, 10))
+        self._notebook.add(self._bilac_tab.frame, text="Bi Lắc")
 
-        # User info panel
-        self.user_info_panel = UserInfoPanel(container)
-        self.user_info_panel.pack(fill="x", pady=(0, 10))
+        self._typhu_tab = EventTab(
+            parent=self._notebook,
+            title="Tỷ Phú",
+            username_var=self._username_var,
+            password_var=self._password_var,
+            target_special_jackpot_var=self._target_special_jackpot_var,
+            spin_action_var=self._spin_action_var,
+            on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
+        )
+        self._notebook.add(self._typhu_tab.frame, text="Tỷ Phú")
 
-    def _setup_log_tab(self) -> None:
-        """Setup Log tab with messages display."""
-        # Title
-        title_label = ttk.Label(self.log_tab, text="Application Log", style="AppSubtitle.TLabel")
-        title_label.pack(pady=(10, 20))
+        self._activity_log_tab = ActivityLogTab(parent=self._notebook)
+        self._notebook.add(self._activity_log_tab.frame, text="Activity Log")
 
-        # Create main container
-        container = ttk.Frame(self.log_tab)
-        container.pack(fill="both", expand=True, padx=20, pady=10)
+        self._focus_after_id: Optional[str] = None
 
-        # Log panel
-        self.log_panel = LogPanel(container)
-        self.log_panel.pack(fill="both", expand=True)
+        def _schedule_focus_current_tab() -> None:
+            def _focus_current_tab() -> None:
+                try:
+                    current = self._notebook.nametowidget(self._notebook.select())
+                    if current and isinstance(current, (tk.Frame, ttk.Frame)):
+                        current.focus_set()
 
-    def _focus_current_tab_content(self) -> None:
-        """Move focus to the current tab's content to hide tab label focus outline."""
+                except Exception:
+                    pass
+
+            if self._focus_after_id:
+                try:
+                    self._root.after_cancel(self._focus_after_id)
+                except Exception:
+                    pass
+                finally:
+                    self._focus_after_id = None
+
+            self._focus_after_id = self._root.after(10, _focus_current_tab)
+
+        def _on_tab_changed(_: object) -> None:
+            try:
+                current_index = self._notebook.index(self._notebook.select())
+                tab_text = self._notebook.tab(current_index, "text")
+                if not self._is_running:
+                    self._selected_event = tab_text
+
+            except Exception:
+                pass
+
+            _schedule_focus_current_tab()
+
+        self._notebook.bind("<<NotebookTabChanged>>", _on_tab_changed)
+        self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
+        self._root.after_idle(_schedule_focus_current_tab)
+
+    def _update_user_panel(self, user_info: Optional["UserInfo"]) -> None:
+        info_text = (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🔒 NOT LOGGED IN\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "   Please enter your credentials and start the tool"
+        )
+
+        if user_info and user_info.payload.user:
+            info_text = (
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 ACCOUNT INFORMATION\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"User ID    : {user_info.payload.user.uid}\n"
+                f"Username   : {user_info.payload.user.nickname}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💰 CURRENCY & RESOURCES\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Free Spins : {user_info.payload.user.free_spin:,}\n"
+                f"FC Points  : {user_info.payload.user.fc:,}\n"
+                f"MC Points  : {user_info.payload.user.mc:,}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🎰 SPECIAL JACKPOT: {self._tool_instance.special_jackpot:,} 💰\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            )
+
+        current_index = self._notebook.index(self._notebook.select())
+        tab_text = self._notebook.tab(current_index, "text")
+
+        match tab_text:
+            case "Bi Lắc":
+                self._bilac_tab.update_user_info_text(info_text, foreground="#4caf50")
+            case "Tỷ Phú":
+                self._typhu_tab.update_user_info_text(info_text, foreground="#4caf50")
+            case _:
+                logger.warning(f"Unknown tab: {tab_text}")
+
+    def _handle_stop_task(self) -> None:
         try:
-            current = self.notebook.nametowidget(self.notebook.select())
-            current.focus_set()
-        except Exception:
-            # If anything goes wrong, simply clear focus
-            self._root.focus_set()
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-    def _on_toggle_theme(self) -> None:
-        """Handle theme toggle from header."""
-        mode = self.header.selected_mode
-        if mode == "Auto":
-            theme = darkdetect.theme() or "dark"
-        elif mode == "Light":
-            theme = "light"
-        else:
-            theme = "dark"
-        sv_ttk.set_theme(theme)
-        apply_styles(self._root)
-        if hasattr(self, "log_panel"):
-            self.log_panel.apply_theme(theme)
+            loop.run_until_complete(self._tool_instance.close())
+            loop.close()
 
-    def _on_credentials_changed(self) -> None:
-        """Handle credential changes and update tool instance."""
-        if not self._is_running and hasattr(self, "_tool_instance"):
-            self._tool_instance.update_credentials(
-                self._username_var.get(),
-                self._password_var.get(),
-            )
-            self._tool_instance.update_config(
-                target_special_jackpot=self._target_special_jackpot_var.get(), spin_action=self._spin_action_var.get()
-            )
-        self._save_credentials()
+            self._status_label.config(text="✅ Status: Ready")
 
-    def _on_config_changed(self) -> None:
-        """Handle configuration changes and auto-save."""
-        if not self._is_running and hasattr(self, "_tool_instance"):
-            self._tool_instance.update_config(
-                target_special_jackpot=self._target_special_jackpot_var.get(), spin_action=self._spin_action_var.get()
-            )
-            self._save_credentials()
+        except Exception as error:
+            error_msg = f"❌ Error: {str(error)}"
+            self._root.after(0, lambda: messagebox.showerror("❌ Error", error_msg))
 
-    def _save_credentials(self) -> None:
-        """Save current credentials to config file."""
-        credentials = {
-            "username": self._username_var.get(),
-            "password": self._password_var.get(),
-            "target_special_jackpot": self._target_special_jackpot_var.get(),
-            "spin_action": self._spin_action_var.get(),
-        }
-        CredentialManager.save_credentials(credentials)
-
-    def _update_user_info_display(self, user_info: Optional["UserInfo"]) -> None:
-        """Update user info display in GUI."""
-        current_special_jackpot = self._tool_instance.special_jackpot if hasattr(self, "_tool_instance") else 0
-        self.user_info_panel.update_user_info(user_info, current_special_jackpot)
-
-    def _add_message(self, message: str, code: str = "general") -> None:
-        """Add message to the log panel with category code."""
-        self.log_panel.add_message(message, code)
-
-    def _update_config(self) -> None:
-        """Update tool configuration and setup callbacks."""
-
-        def message_callback(message: str, code: str = "general") -> None:
-            """Thread-safe callback to update GUI with status messages (categorized)."""
-            self._root.after(0, lambda: self._add_message(message, code))
-
-        def user_info_callback() -> None:
-            """Thread-safe callback to update user info display"""
-            user_info = self._tool_instance.user_info
-            self._root.after(0, lambda: self._update_user_info_display(user_info))
-
-        def special_jackpot_callback() -> None:
-            """Thread-safe callback to update user info when special jackpot changes"""
-            self._root.after(0, lambda: self._update_user_info_display(self._tool_instance.user_info))
-
-        # Set callbacks on the tool instance
-        self._tool_instance.set_callbacks(
-            message_callback=message_callback,
-            user_info_callback=user_info_callback,
-            special_jackpot_callback=special_jackpot_callback,
-        )
-
-        # Update credentials and configuration
-        self._tool_instance.update_credentials(self._username_var.get(), self._password_var.get())
-        self._tool_instance.update_config(
-            target_special_jackpot=self._target_special_jackpot_var.get(), spin_action=self._spin_action_var.get()
-        )
-
-    def _stop_automation_task(self) -> None:
-        """Stop automation task in separate event loop."""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(self._tool_instance.close_browser())
-        loop.close()
-
-    def _stop_tool(self) -> None:
-        """Stop automation tool and update UI state."""
+    def _handle_stop_button(self) -> None:
         if not self._is_running:
             return
 
-        # Update UI state
         self._is_running = False
-        self.control_panel.set_stopping_status()
+        self._start_btn.config(state="normal")
+        self._stop_btn.config(state="disabled")
+        self._status_label.config(text="⏹️ Status: Stopping...")
+        self._bilac_tab.set_enabled(True)
+        self._typhu_tab.set_enabled(True)
 
-        # Update configuration
-        self.user_settings_panel.toggle_inputs(enabled=True)
+        self._tool_instance.stop_flag = True
 
-        # Start automation in separate thread
-        self._tool_instance.stop()
-        threading.Thread(target=self._stop_automation_task, daemon=True).start()
+        threading.Thread(target=self._handle_stop_task, daemon=True).start()
 
-        self.control_panel.set_running_state(False)
-
-    def _launch_automation_task(self) -> None:
-        """Launch automation task in asyncio event loop."""
+    def _handle_launch_task(self) -> None:
         try:
-            self._root.after(0, lambda: self.control_panel.set_status("🚀 Status: Running..."))
+            self._root.after(0, lambda: self._status_label.config(text="🚀 Status: Running..."))
 
-            # Run the automation
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+
             loop.run_until_complete(self._tool_instance.run())
 
         except Exception as error:
-            error_msg = f"❌ Automation failed: {str(error)}"
+            error_msg = f"❌ Error: {str(error)}"
             self._root.after(0, lambda: messagebox.showerror("❌ Error", error_msg))
 
-    def _start_tool(self) -> None:
-        """Start automation tool with input validation and UI updates."""
+    def _handle_start_button(self) -> None:
         if self._is_running:
             return
 
-        # Validate inputs
-        is_valid, error_msg = self.user_settings_panel.validate_inputs()
-        if not is_valid:
-            messagebox.showerror("❌ Error", error_msg)
+        if not self._username_var.get().strip():
+            messagebox.showerror("❌ Error", "Username cannot be empty!")
             return
 
-        # Update UI state
+        if not self._password_var.get().strip():
+            messagebox.showerror("❌ Error", "Password cannot be empty!")
+            return
+
+        try:
+            target_value = self._target_special_jackpot_var.get()
+            if target_value <= 0:
+                msg = "Target Jackpot must be a positive number!"
+                raise ValueError(msg)
+
+        except ValueError as error:
+            messagebox.showerror("❌ Error", str(error))
+            return
+
         self._is_running = True
-        self.control_panel.set_starting_status()
+        self._start_btn.config(state="disabled")
+        self._stop_btn.config(state="normal")
+        self._status_label.config(text="🚀 Status: Starting...")
+        self._bilac_tab.set_enabled(enabled=False)
+        self._typhu_tab.set_enabled(enabled=False)
 
-        # Update configuration
-        self.user_settings_panel.toggle_inputs(enabled=False)
-        self._update_config()
-        self.log_panel.clear_messages()
+        widget = self._activity_log_tab.messages_text_widget
+        widget.config(state="normal")
+        widget.delete("1.0", tk.END)
+        widget.config(state="disabled")
 
-        # Start automation in separate thread
-        self._tool_instance.start()
-        threading.Thread(target=self._launch_automation_task, daemon=True).start()
+        self._tool_instance.event_config = EVENT_CONFIGS_MAP[self._selected_event]
+        self._tool_instance.spin_action = self._spin_action_var.get()
+        self._tool_instance.target_special_jackpot = self._target_special_jackpot_var.get()
 
-        self.control_panel.set_running_state(True)
+        self._tool_instance.stop_flag = False
+        self._tool_instance.special_jackpot = 0
+        self._tool_instance.mini_jackpot = 0
 
-    def _on_closing(self) -> None:
-        """Handle application closing - save config and cleanup."""
-        # Save configuration before closing
-        self._save_credentials()
+        def message_callback(tag: str, message: str) -> None:
+            self._root.after(0, lambda: self._activity_log_tab.add_message(tag=tag, message=message))
 
-        # Stop tool if running
-        if self._is_running:
-            self._tool_instance.stop()
+        def user_panel_callback(user_info: Optional["UserInfo"]) -> None:
+            self._root.after(0, lambda: self._update_user_panel(user_info=user_info))
 
-        # Close the application
-        self._root.destroy()
+        self._tool_instance.message_callback = message_callback
+        self._tool_instance.user_panel_callback = user_panel_callback
+
+        threading.Thread(target=self._handle_launch_task, daemon=True).start()
 
     def run(self) -> None:
-        """Run the main application."""
-        self._root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        def on_close() -> None:
+            if self._is_running:
+                self._tool_instance.stop_flag = True
+
+            self._root.destroy()
+
+        self._root.protocol("WM_DELETE_WINDOW", on_close)
+
         sv_ttk.set_theme(darkdetect.theme() or "dark")
-        apply_styles(self._root)
+
+        try:
+            style = ttk.Style(self._root)
+            layout = style.layout("TNotebook.Tab")
+
+            def _strip_focus(elements: Any) -> Any:
+                if not isinstance(elements, (list, tuple)):
+                    return elements
+
+                cleaned = []
+                for elem in elements:
+                    if isinstance(elem, tuple) and elem:
+                        name = elem[0]
+                        opts = elem[1] if len(elem) > 1 else {}
+
+                        if isinstance(name, str) and name.endswith(".focus"):
+                            continue
+
+                        if isinstance(opts, dict) and "children" in opts:
+                            opts = dict(opts)
+                            opts["children"] = _strip_focus(opts.get("children", []))
+                            cleaned.append((name, opts))
+                            continue
+
+                        cleaned.append(elem)
+                        continue
+
+                    cleaned.append(elem)
+
+                return cleaned
+
+            cleaned_layout = _strip_focus(layout)
+            style.layout("TNotebook.Tab", cleaned_layout)
+
+        except Exception:
+            pass
+
         self._root.mainloop()
-
-
-def main_window() -> None:
-    """Main entry point for the GUI application."""
-    app = MainWindow()
-    app.run()

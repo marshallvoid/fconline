@@ -11,16 +11,15 @@ sys.path.insert(0, project_root)
 
 try:
     import src.infrastructure.logger  # noqa: F401
-    from src.gui import main_window
+    from src.gui import MainWindow
 
     if __name__ == "__main__":
-        main_window()
+        app = MainWindow()
+        app.run()
 
 except ImportError as e:
     error_msg = (
-        f"Import error: {e}\n"
-        "Make sure you have installed all required dependencies:\n"
-        "pip install -r requirements.txt"
+        f"Import error: {e}\nMake sure you have installed all required dependencies:\npip install -r requirements.txt"
     )
 
     logger.error(traceback.format_exc())

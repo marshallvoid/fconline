@@ -3,5 +3,5 @@ from .platforms import PlatformManager
 
 __all__ = [
     "CredentialManager",
-    "PlatformManager"
+    "PlatformManager",
 ]
