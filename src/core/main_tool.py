@@ -45,75 +45,98 @@ class MainTool:
 
     async def _check_login(self, page: Page) -> bool:
         try:
-            login_btn = await page.query_selector(selector=self.event_config.login_btn_selector)
-            if login_btn:
-                return False
-
+            # Check for logout button first (indicates user is logged in)
             logout_btn = await page.query_selector(selector=self.event_config.logout_btn_selector)
             if logout_btn:
                 return True
 
-            logger.warning("⚠️ Unable to determine login status")
+            # Check for login button (indicates user is not logged in)
+            login_btn = await page.query_selector(selector=self.event_config.login_btn_selector)
+            if login_btn:
+                return False
+
+            # If neither button is found, check URL or other indicators
+            current_url = page.url
+            if self.event_config.base_url in current_url:
+                # Check if we're on a logged-in page by looking for user-specific elements
+                try:
+                    # Wait a bit for page to fully load
+                    await page.wait_for_timeout(1000)
+
+                    # Try to find any user-specific content
+                    user_content = await page.query_selector("body")
+                    if user_content:
+                        page_content = await page.content()
+                        # Simple check for logged-in indicators
+                        if "logout" in page_content.lower() or "user" in page_content.lower():
+                            return True
+
+                except Exception:
+                    pass
+
             return False
 
-        except Exception as e:
-            logger.error(f"❌ Error checking login status: {e}")
-
-        return False
+        except Exception:
+            # Silent fail - don't log errors in production builds
+            return False
 
     async def _perform_login(self, page: Page) -> bool:
         try:
+            # First check if already logged in
+            if await self._check_login(page):
+                return True
+
+            # Find and click login button
             login_btn = await page.query_selector(selector=self.event_config.login_btn_selector)
             if not login_btn:
-                logger.error("❌ Login button not found")
                 return False
 
             await login_btn.click()
             await page.wait_for_load_state(state="networkidle")
+
+            # Fill username
             username_input = await page.query_selector(selector=self.event_config.username_input_selector)
             if username_input:
                 await username_input.fill(value=self.username)
 
+            # Fill password
             password_input = await page.query_selector(selector=self.event_config.password_input_selector)
             if password_input:
                 await password_input.fill(value=self.password)
 
+            # Submit form
             submit_btn = await page.query_selector(selector=self.event_config.submit_btn_selector)
             if not submit_btn:
-                logger.error("❌ Submit button not found")
                 return False
+
             await submit_btn.click()
 
-            logger.info("🔐 Login form submitted, waiting for response...")
+            # Wait for login response
             try:
                 await page.wait_for_function(
                     (
                         f"window.location.href.includes('{self.event_config.base_url}') || "
                         "document.querySelector('.captcha') || document.querySelector('.error')"
-                    )
+                    ),
+                    timeout=30000,
                 )
 
                 current_url = page.url
                 if self.event_config.base_url in current_url:
-                    logger.success("🔐 Login completed successfully - redirected to main page")
                     return True
 
-                logger.info("🔐 Login requires additional steps (captcha/verification)")
-                logger.info("⏳ Waiting for captcha resolution and redirect...")
-                await page.wait_for_function(f"window.location.href.includes('{self.event_config.base_url}')")
+                # Handle captcha or additional verification
+                await page.wait_for_function(
+                    f"window.location.href.includes('{self.event_config.base_url}')", timeout=60000
+                )
 
-                logger.success("🔐 Login completed successfully after captcha resolution")
                 return True
 
-            except Exception as timeout_error:
-                logger.error(f"❌ Login timeout or failed: {timeout_error}")
+            except Exception:
+                return False
 
+        except Exception:
             return False
-
-        except Exception as e:
-            logger.error(f"❌ Login error: {e}")
-
-        return False
 
     async def _fetch_user_info(self) -> None:
         if not self._cookies and self._page:
@@ -156,18 +179,19 @@ class MainTool:
     async def _auto_spin(self, page: Page, current_value: int, target_value: int) -> None:
         mapping = self.event_config.spin_action_selectors
         selector = mapping.get(self.spin_action, next(iter(mapping.values())))[0]
+        display_label = mapping.get(self.spin_action, ("", "Unknown"))[1]
 
         while current_value >= target_value and not self.stop_flag:
             try:
                 await page.evaluate(f"document.querySelector('{selector}').click()")
 
                 if self.message_callback:
-                    label = mapping.get(self.spin_action, ("", "Unknown"))[1]
-                    msg = f"🎰 Auto-spinning with action: {label}"
+                    msg = f"🎰 Auto-spinning with action: {display_label}"
                     self.message_callback("info", msg)
 
-            except Exception as error:
-                logger.error(f"❌ Auto-spin error: {error}")
+            except Exception:
+                # Silent fail in production builds
+                pass
 
             await asyncio.sleep(0.1)
 
@@ -325,29 +349,36 @@ class MainTool:
         try:
             await self._setup_websocket(page=self._page)
 
+            # Navigate to base URL
             await self._page.goto(url=self.event_config.base_url)
             await self._page.wait_for_load_state(state="networkidle")
 
-            login_success = await self._perform_login(page=self._page)
-            if not login_success:
-                already_logged_in = await self._check_login(page=self._page)
-                if not already_logged_in:
-                    logger.error("❌ Login failed!")
-                    return
+            # Check login status first
+            if not await self._check_login(page=self._page):
+                # Attempt to login
+                login_success = await self._perform_login(page=self._page)
+                if not login_success:
+                    # Double check if login actually succeeded
+                    await self._page.wait_for_timeout(2000)
+                    if not await self._check_login(page=self._page):
+                        return  # Login failed
 
+            # Ensure we're on the correct page
             current_url = self._page.url
             if self.event_config.base_url not in current_url:
                 await self._page.goto(url=self.event_config.base_url)
                 await self._page.wait_for_load_state(state="networkidle")
 
+            # Fetch user info
             await self._fetch_user_info()
 
-            logger.info("🚀 Starting WebSocket monitoring...")
+            # Main monitoring loop
             while not self.stop_flag:
                 await asyncio.sleep(delay=1)
 
-        except Exception as e:
-            logger.error(f"❌ Unexpected error: {e}")
+        except Exception:
+            # Silent fail in production builds
+            pass
 
         finally:
             await self.close()

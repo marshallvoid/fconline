@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import darkdetect
 import sv_ttk
-from loguru import logger
 
 from src.core.main_tool import MainTool
 from src.gui.components import ActivityLogTab, EventTab
@@ -112,6 +111,8 @@ class MainWindow:
         self._activity_log_tab = ActivityLogTab(parent=self._notebook)
         self._notebook.add(self._activity_log_tab.frame, text="Activity Log")
 
+        self._update_spin_labels_for_tab(self._selected_event)
+
         self._focus_after_id: Optional[str] = None
 
         def _schedule_focus_current_tab() -> None:
@@ -140,6 +141,8 @@ class MainWindow:
                 tab_text = self._notebook.tab(current_index, "text")
                 if not self._is_running:
                     self._selected_event = tab_text
+                    # Update spin labels when tab changes
+                    self._update_spin_labels_for_tab(tab_text)
 
             except Exception:
                 pass
@@ -149,6 +152,24 @@ class MainWindow:
         self._notebook.bind("<<NotebookTabChanged>>", _on_tab_changed)
         self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
         self._root.after_idle(_schedule_focus_current_tab)
+
+    def _update_spin_labels_for_tab(self, tab_name: str) -> None:
+        if tab_name not in EVENT_CONFIGS_MAP:
+            return
+
+        target_tab = None
+        match tab_name:
+            case "Bi Lắc":
+                target_tab = self._bilac_tab
+            case "Tỷ Phú":
+                target_tab = self._typhu_tab
+            case _:
+                pass
+
+        if target_tab is None:
+            return
+
+        target_tab.update_spin_labels(spin_action_selectors=EVENT_CONFIGS_MAP[tab_name].spin_action_selectors)
 
     def _update_user_panel(self, user_info: Optional["UserInfo"]) -> None:
         info_text = (
@@ -185,7 +206,7 @@ class MainWindow:
             case "Tỷ Phú":
                 self._typhu_tab.update_user_info_text(info_text, foreground="#4caf50")
             case _:
-                logger.warning(f"Unknown tab: {tab_text}")
+                pass
 
     def _handle_stop_task(self) -> None:
         try:
@@ -218,7 +239,7 @@ class MainWindow:
 
     def _handle_launch_task(self) -> None:
         try:
-            self._root.after(0, lambda: self._status_label.config(text="🚀 Status: Running..."))
+            self._root.after(0, lambda: self._status_label.config(text="🚀 Status: Starting..."))
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -228,6 +249,12 @@ class MainWindow:
         except Exception as error:
             error_msg = f"❌ Error: {str(error)}"
             self._root.after(0, lambda: messagebox.showerror("❌ Error", error_msg))
+            self._is_running = False
+            self._start_btn.config(state="normal")
+            self._stop_btn.config(state="disabled")
+            self._status_label.config(text="✅ Status: Ready")
+            self._bilac_tab.set_enabled(True)
+            self._typhu_tab.set_enabled(True)
 
     def _handle_start_button(self) -> None:
         if self._is_running:
