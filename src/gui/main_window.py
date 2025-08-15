@@ -157,7 +157,7 @@ class MainWindow:
         if tab_name not in EVENT_CONFIGS_MAP:
             return
 
-        target_tab = None
+        target_tab: Optional[EventTab] = None
         match tab_name:
             case "Bi Lắc":
                 target_tab = self._bilac_tab
@@ -200,23 +200,29 @@ class MainWindow:
         current_index = self._notebook.index(self._notebook.select())
         tab_text = self._notebook.tab(current_index, "text")
 
+        target_tab: Optional[EventTab] = None
         match tab_text:
             case "Bi Lắc":
-                self._bilac_tab.update_user_info_text(info_text, foreground="#4caf50")
+                target_tab = self._bilac_tab
             case "Tỷ Phú":
-                self._typhu_tab.update_user_info_text(info_text, foreground="#4caf50")
+                target_tab = self._typhu_tab
             case _:
                 pass
 
+        if target_tab is None:
+            return
+
+        target_tab.update_user_info_text(info_text, foreground="#4caf50")
+
     def _handle_stop_task(self) -> None:
         try:
+            self._root.after(0, lambda: self._status_label.config(text="✅ Status: Ready"))
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
             loop.run_until_complete(self._tool_instance.close())
             loop.close()
-
-            self._status_label.config(text="✅ Status: Ready")
 
         except Exception as error:
             error_msg = f"❌ Error: {str(error)}"
@@ -239,7 +245,7 @@ class MainWindow:
 
     def _handle_launch_task(self) -> None:
         try:
-            self._root.after(0, lambda: self._status_label.config(text="🚀 Status: Starting..."))
+            self._root.after(0, lambda: self._status_label.config(text="🚀 Status: Running..."))
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
