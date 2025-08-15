@@ -143,16 +143,19 @@ jobs:
               name: FC_Online_Tool-Linux-${{ github.sha }}
               path: ./dist/linux/
 
+         - name: Verify artifacts
+           run: |
+              echo "Checking downloaded artifacts..."
+              ls -la ./dist/windows/
+              ls -la ./dist/macos/
+              ls -la ./dist/linux/
+              echo "Artifact verification complete"
+
          - name: Create Release
+           id: create_release
            uses: softprops/action-gh-release@v2
            with:
-              files: |
-                 ./dist/windows/FC_Online_Tool.exe
-                 ./dist/macos/FC_Online_Tool
-                 ./dist/linux/FC_Online_Tool
-              generate_release_notes: true
-              draft: false
-              prerelease: false
+              tag_name: ${{ github.ref_name }}
               name: 'FC Online Tool ${{ github.ref_name }}'
               body: |
                  ## 🚀 FC Online Automation Tool ${{ github.ref_name }}
@@ -188,5 +191,19 @@ jobs:
 
                  ---
                  **Note**: This is an automated release built from source code for Windows, macOS, and Linux.
+              files: |
+                 ./dist/windows/FC_Online_Tool.exe
+                 ./dist/macos/FC_Online_Tool
+                 ./dist/linux/FC_Online_Tool
+              generate_release_notes: false
+              draft: false
+              prerelease: false
+              fail_on_unmatched_files: false
            env:
-              GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+         - name: Verify release creation
+           run: |
+              echo "Release created successfully!"
+              echo "Tag: ${{ github.ref_name }}"
+              echo "Release ID: ${{ steps.create_release.outputs.id }}"
