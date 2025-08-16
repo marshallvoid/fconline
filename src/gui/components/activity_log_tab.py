@@ -61,7 +61,7 @@ class ActivityLogTab:
         container.pack(fill="both", expand=True, padx=20, pady=10)
 
         # Special Jackpot Display
-        jackpot_frame = ttk.LabelFrame(container, text="Special Jackpot Status", padding=10)
+        jackpot_frame = ttk.LabelFrame(container, text="Jackpot Status", padding=10)
         jackpot_frame.pack(fill="x", pady=(0, 10))
 
         jackpot_container = ttk.Frame(jackpot_frame)

@@ -6,14 +6,7 @@ import aiohttp
 
 class RequestManager:
     @classmethod
-    def get_connector(cls) -> aiohttp.TCPConnector:
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        return aiohttp.TCPConnector(ssl=ssl_context)
-
-    @classmethod
-    def prepare_headers(cls, cookies: Dict[str, str], base_url: str) -> Dict[str, str]:
+    def headers(cls, cookies: Dict[str, str], base_url: str) -> Dict[str, str]:
         return {
             "x-csrftoken": cookies.get("csrftoken", ""),
             "Cookie": "; ".join([f"{name}={value}" for name, value in cookies.items()]),
@@ -32,3 +25,10 @@ class RequestManager:
             "Priority": "u=0",
             "TE": "trailers",
         }
+
+    @classmethod
+    def connector(cls) -> aiohttp.TCPConnector:
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        return aiohttp.TCPConnector(ssl=ssl_context)

@@ -11,7 +11,7 @@ sys.path.insert(0, project_root)
 
 try:
     import src.infrastructure.logger  # noqa: F401
-    from src.gui import MainWindow
+    from src.gui.main_window import MainWindow
 
     if __name__ == "__main__":
         app = MainWindow()

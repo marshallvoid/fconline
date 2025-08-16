@@ -1,33 +1,29 @@
 import base64
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from cryptography.fernet import Fernet
 
+from src.schemas.user_config import UserConfig
 from src.utils.platforms import PlatformManager
 
 
-class UserDataManager:
+class UserConfigManager:
     @classmethod
-    def save_configs(cls, configs_dict: Dict[str, Any]) -> None:
+    def save_configs(cls, config: UserConfig) -> None:
         try:
-            # Prepare configs with encryption for sensitive data
-            encrypted_configs = {}
-            for key, value in configs_dict.items():
-                if key in ["username", "password"]:
-                    # Encrypt sensitive fields
-                    encrypted_configs[key] = cls._encrypt_data(value=value)
-                else:
-                    # Keep non-sensitive fields as is
-                    encrypted_configs[key] = value
+            encrypted_config = {
+                "username": cls._encrypt_data(value=config.username),
+                "password": cls._encrypt_data(value=config.password),
+                **config.model_dump(exclude={"username", "password"}),
+            }
 
             config_file = os.path.join(cls._get_config_data_directory(), "configs.json")
             with open(config_file, "w", encoding="utf-8") as f:
-                json.dump(encrypted_configs, f, indent=2, ensure_ascii=False)
+                json.dump(encrypted_config, f, indent=2, ensure_ascii=False)
 
         except Exception:
-            # Silent fail - don't crash the app if can't save
             pass
 
     @classmethod
@@ -44,32 +40,27 @@ class UserDataManager:
             return base64.urlsafe_b64encode(value.encode()).decode()
 
     @classmethod
-    def load_configs(cls) -> Dict[str, Any]:
+    def load_configs(cls) -> UserConfig:
+        config = UserConfig()
+
         try:
             config_file = os.path.join(cls._get_config_data_directory(), "configs.json")
             if not os.path.exists(config_file):
-                return {}
+                return config
 
             with open(config_file, "r", encoding="utf-8") as f:
-                encrypted_configs = json.load(f)
+                encrypted_config = json.load(f)
 
-            # Decrypt sensitive data
-            decrypted_configs = {}
-            for key, value in encrypted_configs.items():
-                if key in ["username", "password"]:
-                    # Decrypt sensitive fields
-                    decrypted_configs[key] = cls._decrypt_data(value=value)
-                else:
-                    # Keep non-sensitive fields as is
-                    decrypted_configs[key] = value
+            config = UserConfig.model_validate(encrypted_config)
+            config.username = cls._decrypt_data(value=config.username)
+            config.password = cls._decrypt_data(value=config.password)
 
-            return decrypted_configs
+            return config
 
         except Exception:
-            # Silent fail - just return empty dict if can't load
             pass
 
-        return {}
+        return config
 
     @classmethod
     def _decrypt_data(cls, value: Optional[str] = None) -> str:

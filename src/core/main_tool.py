@@ -9,7 +9,7 @@ from loguru import logger
 from src.core.event_config import EventConfig
 from src.core.login_handler import LoginHandler
 from src.core.websocket_handler import WebsocketHandler
-from src.schemas import UserReponse
+from src.schemas.user_response import UserReponse
 from src.utils.methods import should_execute_callback
 from src.utils.platforms import PlatformManager
 from src.utils.requests import RequestManager
@@ -200,9 +200,9 @@ class MainTool:
                 browser_profile = BrowserProfile(
                     stealth=True,
                     ignore_https_errors=True,
-                    timeout=30000,  # 30 second timeout
-                    default_timeout=30000,  # 30 second default timeout
-                    default_navigation_timeout=60000,  # 60 second navigation timeout
+                    timeout=60000 * 3,
+                    default_timeout=60000 * 3,
+                    default_navigation_timeout=60000 * 3,
                     args=extra_chromium_args,
                     viewport={"width": 1920, "height": 1080},
                     user_data_dir=user_data_dir,
@@ -211,7 +211,7 @@ class MainTool:
                 )
 
                 browser_session = BrowserSession(browser_profile=browser_profile)
-                await asyncio.wait_for(browser_session.start(), timeout=45.0)  # 45 second timeout for startup
+                await asyncio.wait_for(browser_session.start(), timeout=60000 * 3)
                 page = await browser_session.get_current_page()
 
                 logger.success("✅ Browser context setup completed successfully")
@@ -241,12 +241,12 @@ class MainTool:
 
     async def _get_user_info(self) -> None:
         self.cookies = await self._extract_cookies()
-        self.headers = RequestManager.prepare_headers(cookies=self.cookies, base_url=self.event_config.base_url)
+        self.headers = RequestManager.headers(cookies=self.cookies, base_url=self.event_config.base_url)
 
         async with aiohttp.ClientSession(
             cookies=self.cookies,
             headers=self.headers,
-            connector=RequestManager.get_connector(),
+            connector=RequestManager.connector(),
         ) as session:
             logger.info("📡 Fetching user information from API...")
             try:

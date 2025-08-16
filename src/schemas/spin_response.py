@@ -13,14 +13,14 @@ class SpinResult(BaseModel):
     spin_result_reward_id: Optional[int] = None
 
 
-class Payload(BaseModel):
+class SpinPayload(BaseModel):
     jackpot_value: int
     spin_results: List[SpinResult]
 
 
 class SpinResponse(BaseModel):
     status: str
-    payload: Optional[Payload] = None
+    payload: Optional[SpinPayload] = None
     error_code: Optional[str] = None
 
     @property
