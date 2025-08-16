@@ -1,7 +1,7 @@
-from .credentials import CredentialManager
+from .credentials import UserDataManager
 from .platforms import PlatformManager
 
 __all__ = [
-    "CredentialManager",
+    "UserDataManager",
     "PlatformManager",
 ]

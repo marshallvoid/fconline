@@ -1,8 +1,11 @@
+from typing import Dict
+
 from src.core.event_config import EventConfig
 
-EVENT_CONFIGS_MAP = {
+EVENT_CONFIGS_MAP: Dict[str, EventConfig] = {
     "Bi Lắc": EventConfig(
-        name="Bi Lắc",
+        tab_name="_bilac_tab",
+        title="Bi Lắc",
         base_url="https://bilac.fconline.garena.vn/",
         api_url="https://bilac.fconline.garena.vn/api/user/get",
         login_btn_selector="a.btn-header.btn-header--login",
@@ -18,7 +21,8 @@ EVENT_CONFIGS_MAP = {
         },
     ),
     "Tỷ Phú": EventConfig(
-        name="Tỷ Phú",
+        tab_name="_typhu_tab",
+        title="Tỷ Phú",
         base_url="https://typhu.fconline.garena.vn/",
         api_url="https://typhu.fconline.garena.vn/api/user/get",
         login_btn_selector="a[href='/user/login']",
