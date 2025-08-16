@@ -1,0 +1,215 @@
+import asyncio
+import json
+import re
+from typing import Callable, Optional, Self
+
+from browser_use.browser.types import Page
+from loguru import logger
+from playwright.async_api import WebSocket
+
+from src.core.event_config import EventConfig
+
+
+class WebsocketHandler:
+    page: Page
+    is_logged_in: bool = False
+    event_config: EventConfig
+    spin_action: int
+    special_jackpot: int
+    mini_jackpot: int
+    target_special_jackpot: int
+    message_callback: Optional[Callable[[str, str], None]] = None
+    jackpot_callback: Optional[Callable[[int], None]] = None
+
+    _spin_task: Optional[asyncio.Task] = None
+    _spin_lock = asyncio.Lock()
+
+    @classmethod
+    def setup(
+        cls,
+        page: Page,
+        event_config: EventConfig,
+        spin_action: int,
+        special_jackpot: int,
+        mini_jackpot: int,
+        target_special_jackpot: int,
+        message_callback: Optional[Callable[[str, str], None]] = None,
+        jackpot_callback: Optional[Callable[[int], None]] = None,
+    ) -> type[Self]:
+        cls.page = page
+        cls.event_config = event_config
+        cls.spin_action = spin_action
+        cls.special_jackpot = special_jackpot
+        cls.mini_jackpot = mini_jackpot
+        cls.target_special_jackpot = target_special_jackpot
+        cls.message_callback = message_callback
+        cls.jackpot_callback = jackpot_callback
+
+        cls._spin_task = None  # Reset spin state on setup to avoid stale tasks
+        return cls
+
+    @classmethod
+    def run(cls) -> None:
+        logger.info(f"🔌 Starting WebSocket monitoring for {cls.page.url}")
+
+        def _on_websocket(websocket: WebSocket) -> None:
+            if not cls.is_logged_in:
+                return
+
+            logger.info(f"🔌 WebSocket connection established: {websocket.url}")
+
+            def _on_framereceived(frame: bytes | str) -> None:
+                cls._extract_frame(frame=frame)
+
+            websocket.on("framereceived", _on_framereceived)
+            websocket.on("framesent", lambda frame: logger.info(f"🔌 WebSocket frame sent: {frame}"))
+            websocket.on("close", lambda ws: logger.info(f"🔌 WebSocket connection closed: {ws.url}"))
+
+        cls.page.on("websocket", _on_websocket)
+
+    @classmethod
+    def _extract_frame(cls, frame: bytes | str) -> None:
+        logger.info(f"🔌 WebSocket frame received: {frame}")
+
+        if not frame:
+            return
+
+        if isinstance(frame, bytes):
+            frame = frame.decode("utf-8")
+
+        json_match = re.search(r"42(\[.*\])", frame)
+        if not json_match:
+            return
+
+        json_str = json_match.group(1)
+        try:
+            socket_data = json.loads(json_str)
+            if not isinstance(socket_data, list) or len(socket_data) < 2:
+                return
+
+            event_data = socket_data[1]
+            if not isinstance(event_data, dict):
+                return
+
+            content = event_data.get("content")
+            if not content or not isinstance(content, dict):
+                return
+
+            type, value = content.get("type"), content.get("value")
+            if type is None or not isinstance(type, str) or value is None or not isinstance(value, int):
+                return
+
+            cls._handle_jackpot(type=type, value=value)
+
+        except json.JSONDecodeError:
+            logger.debug("🔌 WebSocket frame received but failed to parse JSON")
+
+    @classmethod
+    def _handle_jackpot(cls, type: str, value: int) -> None:
+        match type:
+            case "jackpot_value":
+                logger.success(f"🎰 Special Jackpot: {value:,}")
+                cls.special_jackpot = value
+
+                if value >= cls.target_special_jackpot and cls.message_callback:
+                    cls.message_callback("jackpot", f"Special Jackpot has reached {cls.target_special_jackpot:,}")
+
+                # Start/stop spin task depending on live value
+                asyncio.create_task(cls._ensure_spin_state())
+
+                if cls.jackpot_callback:
+                    cls.jackpot_callback(value)
+
+            case "mini_jackpot":
+                logger.success(f"🎰 Mini Jackpot: {value:,}")
+                cls.mini_jackpot = value
+
+    @classmethod
+    async def _ensure_spin_state(cls) -> None:
+        """Start spin when jackpot >= target; stop otherwise. Single flight."""
+        async with cls._spin_lock:
+            should_spin = cls.special_jackpot >= cls.target_special_jackpot
+            task_alive = cls._spin_task and not cls._spin_task.done()
+
+            if should_spin and not task_alive:
+                logger.info("▶️ Starting auto-spin task")
+                cls._spin_task = asyncio.create_task(cls._auto_spin())
+
+            elif not should_spin and task_alive:
+                logger.info("⏹️ Stopping auto-spin task (jackpot below target)")
+                cls._spin_task.cancel()
+                try:
+                    await cls._spin_task
+                except asyncio.CancelledError:
+                    pass
+                finally:
+                    cls._spin_task = None
+
+                if cls.message_callback:
+                    cls.message_callback("info", "Auto-spinning stopped")
+
+    @classmethod
+    async def _auto_spin(cls) -> None:
+        """Continuously click the spin selector while jackpot stays above target."""
+        mapping = cls.event_config.spin_action_selectors
+        selector, display_label = mapping.get(cls.spin_action, next(iter(mapping.values())))
+        spin_count = 0
+
+        try:
+            while True:
+                # Live condition
+                if cls.special_jackpot < cls.target_special_jackpot:
+                    logger.info("✅ Jackpot dropped below target — stopping auto-spin")
+                    break
+
+                if getattr(cls.page, "is_closed", lambda: False)():
+                    logger.warning("🛑 Page is closed; stopping auto-spin")
+                    break
+
+                # Check and close modal if exists
+                modal_el = await cls.page.query_selector(".swal2-container")
+                if modal_el:
+                    logger.info("⚠️ Modal detected — closing it")
+                    try:
+                        await cls.page.evaluate("document.querySelector('.swal2-container').click()")
+                        await asyncio.sleep(0.1)  # Wait a moment after closing
+                    except Exception as e:
+                        logger.error(f"❌ Error closing modal: {e}")
+                    continue  # Skip this loop iteration, retry spin next
+
+                # Click spin
+                el = await cls.page.query_selector(selector=selector)
+                if not el:
+                    logger.warning(f"🔎 Spin element not found by selector: {selector}")
+                    await asyncio.sleep(0.5)
+                    continue
+
+                try:
+                    await cls.page.evaluate(f"document.querySelector('{selector}').click()")
+                    spin_count += 1
+
+                    if cls.message_callback:
+                        cls.message_callback("info", f"Auto-spinning: {display_label}")
+
+                    if spin_count % 10 == 0:
+                        logger.info(f"🎰 Auto-spin progress: {spin_count} spins completed")
+
+                except Exception as e:
+                    logger.error(f"❌ Auto-spin error on spin #{spin_count}: {e}")
+
+                await asyncio.sleep(0.1)
+
+        except asyncio.CancelledError:
+            logger.info("🌀 Auto-spin task cancelled")
+            raise
+
+        finally:
+            # Ensure spin task is cleaned up
+            if cls._spin_task and not cls._spin_task.done():
+                cls._spin_task.cancel()
+                try:
+                    await cls._spin_task
+                except asyncio.CancelledError:
+                    pass
+                finally:
+                    cls._spin_task = None

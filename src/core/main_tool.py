@@ -1,16 +1,15 @@
 import asyncio
-import json
-import platform
-import re
-from typing import Callable, Optional, Tuple
+import ssl
+from typing import Callable, Dict, Optional, Tuple
 
 import aiohttp
-from browser_use import BrowserConfig, BrowserContextConfig
+from browser_use import BrowserProfile, BrowserSession
+from browser_use.browser.types import Page
 from loguru import logger
-from playwright.async_api import Page, WebSocket
 
 from src.core.event_config import EventConfig
-from src.infrastructure.client import BrowserClient, PatchedContext
+from src.core.login_handler import LoginHandler
+from src.core.websocket_handler import WebsocketHandler
 from src.schemas import UserInfo
 from src.utils.platforms import PlatformManager
 
@@ -30,279 +29,115 @@ class MainTool:
         self.spin_action: int = spin_action
         self.target_special_jackpot: int = target_special_jackpot
 
-        self.stop_flag: bool = False
+        self.is_running: bool = False
         self.special_jackpot: int = 0
         self.mini_jackpot: int = 0
 
-        self.message_callback: Optional[Callable[[str, str], None]] = None
         self.user_panel_callback: Optional[Callable[[Optional[UserInfo]], None]] = None
+        self.message_callback: Optional[Callable[[str, str], None]] = None
+        self.special_jackpot_callback: Optional[Callable[[int], None]] = None
 
-        self._context: Optional[PatchedContext] = None
-        self._page: Optional[Page] = None
+        self.session: Optional[BrowserSession] = None
+        self.page: Optional[Page] = None
+        self.user_data_dir: Optional[str] = None
 
-        self._cookies: dict[str, str] = {}
         self.user_info: Optional[UserInfo] = None
 
-    async def _check_login(self, page: Page) -> bool:
+    async def run(self) -> None:
+        self.session, self.page = await self._setup_browser()
+
         try:
-            # Check for logout button first (indicates user is logged in)
-            logout_btn = await page.query_selector(selector=self.event_config.logout_btn_selector)
-            if logout_btn:
-                logger.info("🔍 Login status: User is already logged in")
-                return True
+            logger.info(f"🌐 Navigating to: {self.event_config.base_url}")
+            await self.page.goto(url=self.event_config.base_url)
+            await self.page.wait_for_load_state(state="networkidle")
 
-            # Check for login button (indicates user is not logged in)
-            login_btn = await page.query_selector(selector=self.event_config.login_btn_selector)
-            if login_btn:
-                logger.info("🔍 Login status: User is not logged in")
-                return False
+            WebsocketHandler.setup(
+                page=self.page,
+                event_config=self.event_config,
+                spin_action=self.spin_action,
+                special_jackpot=self.special_jackpot,
+                mini_jackpot=self.mini_jackpot,
+                target_special_jackpot=self.target_special_jackpot,
+                message_callback=self.message_callback,
+                jackpot_callback=self.special_jackpot_callback,
+            ).run()
 
-            logger.warning("⚠️ Unable to determine login status")
-            return False
+            await LoginHandler.setup(
+                page=self.page,
+                event_config=self.event_config,
+                username=self.username,
+                password=self.password,
+            ).run()
+
+            await self._fetch_user_info()
+
+            while self.is_running:
+                await asyncio.sleep(delay=1)
 
         except Exception as e:
-            logger.error(f"❌ Error checking login status: {e}")
-            return False
+            logger.error(f"❌ Unexpected error during execution: {e}")
 
-    async def _perform_login(self, page: Page) -> bool:
+        finally:
+            await self.close()
+            logger.info("🏁 FC Online automation tool stopped")
+
+    async def close(self) -> None:
+        if not self.session:
+            return
+
+        logger.info("🔒 Closing browser context and cleaning up resources...")
         try:
-            # First check if already logged in
-            if await self._check_login(page):
-                logger.info("🔐 User already logged in, skipping login process")
-                return True
-
-            logger.info("🔐 Starting login process...")
-
-            # Find and click login button
-            login_btn = await page.query_selector(selector=self.event_config.login_btn_selector)
-            if not login_btn:
-                logger.error("❌ Login button not found")
-                return False
-
-            logger.info("🔐 Clicking login button...")
-            await login_btn.click()
-            await page.wait_for_load_state(state="networkidle")
-
-            # Fill username
-            username_input = await page.query_selector(selector=self.event_config.username_input_selector)
-            if username_input:
-                await username_input.fill(value=self.username)
-                logger.info(f"🔐 Filled username: {self.username}")
-            else:
-                logger.warning("⚠️ Username input field not found")
-
-            # Fill password
-            password_input = await page.query_selector(selector=self.event_config.password_input_selector)
-            if password_input:
-                await password_input.fill(value=self.password)
-                logger.info("🔐 Filled password field")
-            else:
-                logger.warning("⚠️ Password input field not found")
-
-            # Submit form
-            submit_btn = await page.query_selector(selector=self.event_config.submit_btn_selector)
-            if not submit_btn:
-                logger.error("❌ Submit button not found")
-                return False
-
-            logger.info("🔐 Submitting login form...")
-            await submit_btn.click()
-
-            # Wait for login response
-            try:
-                logger.info("⏳ Waiting for login response...")
-                await page.wait_for_function(
-                    (
-                        f"window.location.href.includes('{self.event_config.base_url}') || "
-                        "document.querySelector('.captcha') || document.querySelector('.error')"
-                    ),
-                )
-
-                current_url = page.url
-                if self.event_config.base_url in current_url:
-                    logger.success("🔐 Login completed successfully - redirected to main page")
-                    return True
-                else:
-                    # Still on login page, might need captcha or have error
-                    logger.info("🔐 Login requires additional steps (captcha/verification)")
-
-                    # Wait for user to solve captcha and redirect (up to 5 minutes)
-                    logger.info("⏳ Waiting for captcha resolution and redirect...")
-                    await page.wait_for_function(f"window.location.href.includes('{self.event_config.base_url}')")
-
-                logger.success("🔐 Login completed successfully after captcha resolution")
-                return True
-
-            except Exception as timeout_error:
-                logger.error(f"❌ Login timeout or failed: {timeout_error}")
-                return False
+            await self.page.close()
+            await self.session.close()
+            logger.success("✅ Browser resources cleaned up successfully")
 
         except Exception as e:
-            logger.error(f"❌ Error performing login: {e}")
-            return False
+            logger.error(f"❌ Failed to clean up browser resource: {e}")
 
-    async def _fetch_user_info(self) -> None:
-        if not self._cookies and self._page:
-            try:
-                logger.info("🍪 Extracting cookies from browser session...")
-                for cookie in await self._page.context.cookies():
-                    domain = cookie.get("domain", "")
-                    if not domain:
-                        continue
+        finally:
+            self.session = None
+            self.page = None
 
-                    name, value = cookie.get("name", ""), cookie.get("value", "")
-                    if not name or not value:
-                        continue
+        # Clean up user data directory if it was created
+        if self.user_data_dir:
+            PlatformManager.cleanup_user_data_directory(self.user_data_dir)
+            self.user_data_dir = None
 
-                    self._cookies[name] = value
+    def update_credentials(self, username: str, password: str) -> None:
+        old_username = self.username
+        old_password = self.password
 
-                logger.success(f"🍪 Successfully extracted {len(self._cookies)} cookies")
+        credentials_changed = (old_username != username) or (old_password != password)
+        if not credentials_changed:
+            return
 
-            except Exception as e:
-                logger.error(f"❌ Failed to extract cookies: {e}")
+        self.user_info = None
+        self.username = username
+        self.password = password
 
-        headers = {
-            "x-csrftoken": self._cookies.get("csrftoken", ""),
-            "Cookie": "; ".join([f"{name}={value}" for name, value in self._cookies.items()]),
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-        }
-        # Create SSL context that doesn't verify certificates
-        import ssl
+    def update_configs(
+        self,
+        is_running: Optional[bool] = None,
+        event_config: Optional[EventConfig] = None,
+        special_jackpot: Optional[int] = None,
+        mini_jackpot: Optional[int] = None,
+        spin_action: Optional[int] = None,
+        target_special_jackpot: Optional[int] = None,
+        user_panel_callback: Optional[Callable[[Optional[UserInfo]], None]] = None,
+        message_callback: Optional[Callable[[str, str], None]] = None,
+        special_jackpot_callback: Optional[Callable[[int], None]] = None,
+    ) -> None:
+        self.is_running = is_running
+        self.event_config = event_config or self.event_config
+        self.special_jackpot = special_jackpot or self.special_jackpot
+        self.mini_jackpot = mini_jackpot or self.mini_jackpot
+        self.spin_action = spin_action or self.spin_action
+        self.target_special_jackpot = target_special_jackpot or self.target_special_jackpot
+        self.user_panel_callback = user_panel_callback or self.user_panel_callback
+        self.message_callback = message_callback or self.message_callback
+        self.special_jackpot_callback = special_jackpot_callback or self.special_jackpot_callback
 
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-
-        connector = aiohttp.TCPConnector(ssl=ssl_context)
-        async with aiohttp.ClientSession(cookies=self._cookies, headers=headers, connector=connector) as session:
-            try:
-                logger.info("📡 Fetching user information from API...")
-
-                async with session.get(self.event_config.api_url) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        self.user_info = UserInfo.model_validate(data)
-                        logger.success("✅ User information fetched successfully")
-
-                        if self.user_panel_callback:
-                            self.user_panel_callback(self.user_info)
-
-                        if self.message_callback:
-                            self.message_callback(
-                                "info",
-                                (
-                                    f"🔍 User information fetched successfully: "
-                                    f"{self.user_info.payload.user.nickname if self.user_info.payload.user else 'Unknown'}"  # noqa: E501
-                                ),
-                            )
-                    else:
-                        logger.warning(f"⚠️ API request failed with status: {response.status}")
-
-            except Exception as e:
-                logger.error(f"❌ Failed to fetch user info: {e}")
-
-    async def _auto_spin(self, page: Page, current_value: int, target_value: int) -> None:
-        mapping = self.event_config.spin_action_selectors
-        selector = mapping.get(self.spin_action, next(iter(mapping.values())))[0]
-        display_label = mapping.get(self.spin_action, ("", "Unknown"))[1]
-
-        spin_count = 0
-        spin_element = await page.query_selector(selector=selector)
-        while spin_element and current_value >= target_value and not self.stop_flag:
-            try:
-                await page.evaluate(f"document.querySelector('{selector}').click()")
-                spin_count += 1
-
-                if self.message_callback:
-                    msg = f"🎰 Auto-spinning with action: {display_label}"
-                    self.message_callback("info", msg)
-
-                # Log every 10 spins to avoid spam
-                if spin_count % 10 == 0:
-                    logger.info(f"🎰 Auto-spin progress: {spin_count} spins completed")
-
-            except Exception as e:
-                logger.error(f"❌ Auto-spin error on spin #{spin_count}: {e}")
-                # Continue spinning despite errors
-
-            await asyncio.sleep(0.1)
-
-    async def _setup_websocket(self, page: Page) -> None:  # noqa: C901
-        logger.info("🔌 Setting up WebSocket monitoring...")
-
-        def handle_websocket(websocket: WebSocket) -> None:  # noqa: C901
-            logger.info(f"🔌 WebSocket connection established: {websocket.url}")
-
-            async def on_framereceived(frame: bytes | str) -> None:  # noqa: C901
-                if not frame:
-                    return
-
-                if isinstance(frame, bytes):
-                    frame = frame.decode("utf-8")
-
-                json_match = re.search(r"42(\[.*\])", frame)
-                if not json_match:
-                    return
-
-                json_str = json_match.group(1)
-                try:
-                    socket_data = json.loads(json_str)
-                    if not isinstance(socket_data, list) or len(socket_data) < 2:
-                        return
-
-                    event_data = socket_data[1]
-                    if not isinstance(event_data, dict):
-                        return
-
-                    content = event_data.get("content")
-                    if not content or not isinstance(content, dict):
-                        return
-
-                    type, value = content.get("type"), content.get("value")
-                    if type is None or not isinstance(type, str) or value is None or not isinstance(value, int):
-                        return
-
-                    match type:
-                        case "jackpot_value":
-                            logger.success(f"🎰 Special Jackpot: {value:,}")
-                            prev_jackpot = self.special_jackpot
-                            self.special_jackpot = value
-
-                            if self.user_panel_callback:
-                                self.user_panel_callback(self.user_info)
-
-                            if value >= self.target_special_jackpot:
-                                if self.message_callback:
-                                    self.message_callback(
-                                        "target_reached",
-                                        f"🎯 Special Jackpot has reached {self.target_special_jackpot:,}",
-                                    )
-
-                                if prev_jackpot < self.target_special_jackpot and self._page:
-                                    asyncio.create_task(
-                                        self._auto_spin(
-                                            page=self._page,
-                                            current_value=self.special_jackpot,
-                                            target_value=self.target_special_jackpot,
-                                        )
-                                    )
-
-                        case "mini_jackpot":
-                            logger.success(f"🎯 Mini Jackpot: {value:,}")
-                            prev_jackpot = self.mini_jackpot
-                            self.mini_jackpot = value
-
-                except json.JSONDecodeError:
-                    logger.debug("🔌 WebSocket frame received but failed to parse JSON")
-
-            websocket.on("framereceived", on_framereceived)
-            websocket.on("framesent", lambda frame: logger.debug(f"🔌 WebSocket frame sent: {frame}"))
-            websocket.on("close", lambda ws: logger.info(f"🔌 WebSocket connection closed: {ws.url}"))
-
-        page.on("websocket", handle_websocket)
-        logger.success("✅ WebSocket monitoring setup completed")
-
-    async def _setup_context(self) -> Tuple[PatchedContext, Page]:
+    async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("🌐 Setting up browser context...")
 
         extra_chromium_args = [
@@ -322,15 +157,13 @@ class MainTool:
             "--hide-scrollbars",
             "--mute-audio",
             "--start-maximized",
+            "--ignore-certificate-errors",
+            "--no-sandbox",
         ]
 
-        system = platform.system().lower()
-        logger.info(f"🖥️ Detected platform: {system}")
-
-        if "windows" in system:
+        if PlatformManager.platform() == "windows":
             extra_chromium_args.extend(
                 [
-                    "--disable-gpu-sandbox",
                     "--disable-software-rasterizer",
                     "--disable-background-networking",
                     "--disable-default-apps",
@@ -345,89 +178,122 @@ class MainTool:
             )
             logger.info("🪟 Applied Windows-specific browser arguments")
 
-        browser = BrowserClient(
-            config=BrowserConfig(
-                extra_chromium_args=extra_chromium_args,
-                chrome_instance_path=PlatformManager.get_chrome_executable_path(),
-            )
-        )
+        # Force Chrome usage for better compatibility with browser automation
+        chrome_path = PlatformManager.get_chrome_executable_path()
+        if not chrome_path:
+            msg = "❌ Chrome/Chromium not found. Please install Chrome or Chromium."
+            logger.error(msg)
+            raise Exception(msg)
 
-        context_config = BrowserContextConfig(browser_window_size={"width": 1920, "height": 1080})
-        logger.info("🖥️ Creating browser context with 1920x1080 resolution...")
+        logger.info(f"🌐 Using Chrome browser: {chrome_path}")
 
-        browser_context = await browser.new_context(config=context_config)
-        page = await browser_context.get_current_page()
+        # Try multiple attempts with different profile strategies
+        for attempt in range(3):
+            try:
+                user_data_dir = None if attempt > 0 else PlatformManager.get_user_data_directory()
+                # Store for cleanup later
+                if user_data_dir:
+                    self.user_data_dir = user_data_dir
 
-        logger.success("✅ Browser context setup completed successfully")
-        return browser_context, page
+                browser_profile = BrowserProfile(
+                    stealth=True,
+                    ignore_https_errors=True,
+                    timeout=30000,  # 30 second timeout
+                    default_timeout=30000,  # 30 second default timeout
+                    default_navigation_timeout=60000,  # 60 second navigation timeout
+                    args=extra_chromium_args,
+                    viewport={"width": 1920, "height": 1080},
+                    user_data_dir=user_data_dir,
+                    executable_path=chrome_path,
+                    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                )
 
-    def update_credentials(self, username: str, password: str) -> None:
-        old_username = self.username
-        old_password = self.password
+                browser_session = BrowserSession(browser_profile=browser_profile)
+                await asyncio.wait_for(browser_session.start(), timeout=45.0)  # 45 second timeout for startup
+                page = await browser_session.get_current_page()
 
-        credentials_changed = (old_username != username) or (old_password != password)
-        if not credentials_changed:
-            return
+                logger.success("✅ Browser context setup completed successfully")
+                return browser_session, page
 
-        self.username = username
-        self.password = password
+            except asyncio.TimeoutError:
+                logger.warning(f"⚠️ Browser startup timeout on attempt {attempt + 1}/3")
+                if attempt > 1:
+                    logger.error("❌ Browser startup failed after 3 attempts")
+                    raise
 
-        self._cookies = {}
-        self.user_info = None
+                await asyncio.sleep(2)  # Wait before retry
+                continue
 
-    async def close(self) -> None:
-        if not self._context:
-            return
+            except Exception as e:
+                logger.warning(f"⚠️ Browser setup failed on attempt {attempt + 1}/3: {e}")
+                if attempt > 1:
+                    logger.error("❌ Browser setup failed after 3 attempts")
+                    raise
 
-        logger.info("🔒 Closing browser context and cleaning up resources...")
-        try:
-            await self._context.reset_context()
-            await self._context.close()
-            logger.success("✅ Browser resources cleaned up successfully")
-        except Exception as e:
-            logger.error(f"❌ Failed to clean up browser resource: {e}")
-        finally:
-            self._context = None
-            self._page = None
+                await asyncio.sleep(2)  # Wait before retry
+                continue
 
-    async def run(self) -> None:
-        self._context, self._page = await self._setup_context()
+        # This should never be reached due to the raise statements above
+        msg = "Failed to setup browser context after all attempts"
+        raise Exception(msg)
 
-        try:
-            # Navigate to base URL
-            logger.info(f"🌐 Navigating to: {self.event_config.base_url}")
-            await self._page.goto(url=self.event_config.base_url)
-            await self._page.wait_for_load_state(state="networkidle")
+    async def _fetch_user_info(self) -> None:
+        cookies: Dict[str, str] = await self._extract_cookies()
 
-            # Check login status first
-            logger.info("🔍 Checking login status...")
-            if not await self._check_login(page=self._page):
-                # Attempt to login
-                logger.info("🔐 User not logged in, attempting login...")
-                login_success = await self._perform_login(page=self._page)
-                if not login_success:
-                    logger.error("❌ Login failed! Exiting...")
-                    return
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        async with aiohttp.ClientSession(
+            cookies=cookies,
+            headers={
+                "x-csrftoken": cookies.get("csrftoken", ""),
+                "Cookie": "; ".join([f"{name}={value}" for name, value in cookies.items()]),
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            },
+            connector=connector,
+        ) as session:
+            try:
+                logger.info("📡 Fetching user information from API...")
 
-            # Ensure we're on the correct page
-            current_url = self._page.url
-            if self.event_config.base_url not in current_url:
-                logger.warning(f"⚠️ Redirected to unexpected URL: {current_url}")
-                logger.info(f"🔄 Redirecting to: {self.event_config.base_url}")
-                await self._page.goto(url=self.event_config.base_url)
-                await self._page.wait_for_load_state(state="networkidle")
+                async with session.get(self.event_config.api_url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        self.user_info = UserInfo.model_validate(data)
 
-            # Fetch user info
-            await self._fetch_user_info()
+                        if not self.user_info.payload.user:
+                            msg = "❌ User information not found"
+                            raise Exception(msg)
 
-            # Main monitoring loop
-            await self._setup_websocket(page=self._page)
-            logger.success("🚀 Starting WebSocket monitoring...")
-            while not self.stop_flag:
-                await asyncio.sleep(delay=1)
+                        logger.success("✅ User information fetched successfully")
 
-        except Exception as e:
-            logger.error(f"❌ Unexpected error during execution: {e}")
-        finally:
-            await self.close()
-            logger.info("🏁 FC Online automation tool stopped")
+                        if self.user_panel_callback:
+                            self.user_panel_callback(self.user_info)
+                    else:
+                        logger.warning(f"⚠️ API request failed with status: {response.status}")
+
+            except Exception as e:
+                logger.error(f"❌ Failed to fetch user info: {e}")
+
+    async def _extract_cookies(self) -> Dict[str, str]:
+        cookies: Dict[str, str] = {}
+        if self.page:
+            try:
+                logger.info("🍪 Extracting cookies from browser session...")
+                for cookie in await self.page.context.cookies():
+                    domain = cookie.get("domain", "")
+                    if not domain:
+                        continue
+
+                    name, value = cookie.get("name", ""), cookie.get("value", "")
+                    if not name or not value:
+                        continue
+
+                    cookies[name] = value
+
+                logger.success(f"🍪 Successfully extracted {len(cookies)} cookies")
+
+            except Exception as e:
+                logger.error(f"❌ Failed to extract cookies: {e}")
+
+        return cookies

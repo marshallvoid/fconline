@@ -4,7 +4,8 @@ from typing import Dict, Tuple
 
 @dataclass
 class EventConfig:
-    name: str
+    tab_name: str
+    title: str
 
     # URLs
     base_url: str
