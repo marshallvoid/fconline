@@ -194,7 +194,7 @@ class WebsocketHandler:
                                 break
 
                             for result in schema.payload.spin_results:
-                                msg = f"Spin Reward: {result.reward_name}"
+                                msg = f"Spin Reward: {result.reward_name} - {schema.payload.jackpot_value}"
                                 should_execute_callback(cls.message_callback, "reward", msg)
 
                     except Exception as e:
