@@ -36,6 +36,13 @@ build = [
     "pyinstaller>=6.0.0",
 ]
 
+[project.scripts]
+fconline = "cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.isort]
 multi_line_output = 3
 include_trailing_comma = true

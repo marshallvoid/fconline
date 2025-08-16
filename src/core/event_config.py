@@ -8,8 +8,8 @@ class EventConfig:
     spin_actions: Dict[int, str]
 
     base_url: str
-    user_endpoint: str
-    spin_endpoint: str
+    user_endpoint: str = "api/user/get"
+    spin_endpoint: str = "api/user/spin"
 
     login_btn_selector: str = "a[href='/user/login']"
     logout_btn_selector: str = "a[href='/user/logout']"
