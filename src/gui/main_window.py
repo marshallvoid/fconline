@@ -325,6 +325,7 @@ class MainWindow:
 
         # Update UI
         self._update_running_status(is_running=True)
+        self._notebook.select(self._notebook.index("end") - 1)
         self._activity_log_tab.clear_messages()
         self._activity_log_tab.update_special_jackpot(0)
         self._activity_log_tab.update_target_special_jackpot(target_value)

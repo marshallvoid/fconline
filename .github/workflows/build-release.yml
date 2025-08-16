@@ -1,143 +1,147 @@
 name: Build and Release
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
+   push:
+      branches: [main]
+   pull_request:
+      branches: [main]
+   workflow_dispatch:
 
 permissions:
-  contents: write
-  actions: read
+   contents: write
+   actions: read
 
 jobs:
-  version:
-    name: Compute next tag
-    runs-on: ubuntu-latest
-    outputs:
-      next_tag: ${{ steps.bump.outputs.next_tag }}
-    steps:
-      - name: Checkout (full history for tags)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+   version:
+      name: Compute next tag
+      runs-on: ubuntu-latest
+      outputs:
+         next_tag: ${{ steps.bump.outputs.next_tag }}
+      steps:
+         - name: Checkout (full history for tags)
+           uses: actions/checkout@v4
+           with:
+              fetch-depth: 0
 
-      - name: Fetch tags
-        run: git fetch --tags --force
+         - name: Fetch tags
+           run: git fetch --tags --force
 
-      - name: Find latest vX.Y.Z and bump
-        id: bump
-        shell: bash
-        run: |
-          # Get the latest tag in the format vX.Y.Z (single digit each part)
-          LATEST=$(git tag -l 'v[0-9].[0-9].[0-9]' --sort=-v:refname | head -n1)
+         - name: Find latest vX.Y.Z and bump
+           id: bump
+           shell: bash
+           run: |
+              # Get the latest tag in the format vX.Y.Z (single digit each part)
+              LATEST=$(git tag -l 'v[0-9].[0-9].[0-9]' --sort=-v:refname | head -n1)
 
-          if [[ -z "$LATEST" ]]; then
-            LATEST="v0.0.0"
-          fi
+              if [[ -z "$LATEST" ]]; then
+                LATEST="v0.0.0"
+              fi
 
-          if [[ ! "$LATEST" =~ ^v([0-9])\.([0-9])\.([0-9])$ ]]; then
-            echo "Tag '$LATEST' does not match pattern vX.Y.Z (single digit each part)."
-            exit 1
-          fi
+              if [[ ! "$LATEST" =~ ^v([0-9])\.([0-9])\.([0-9])$ ]]; then
+                echo "Tag '$LATEST' does not match pattern vX.Y.Z (single digit each part)."
+                exit 1
+              fi
 
-          MAJOR="${BASH_REMATCH[1]}"
-          MINOR="${BASH_REMATCH[2]}"
-          PATCH="${BASH_REMATCH[3]}"
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
 
-          # Increment version with carry-over rules
-          if (( PATCH < 9 )); then
-            PATCH=$((PATCH+1))
-          else
-            PATCH=0
-            if (( MINOR < 9 )); then
-              MINOR=$((MINOR+1))
-            else
-              MINOR=0
-              MAJOR=$((MAJOR+1))
-            fi
-          fi
+              # Increment version with carry-over rules
+              if (( PATCH < 9 )); then
+                PATCH=$((PATCH+1))
+              else
+                PATCH=0
+                if (( MINOR < 9 )); then
+                  MINOR=$((MINOR+1))
+                else
+                  MINOR=0
+                  MAJOR=$((MAJOR+1))
+                fi
+              fi
 
-          NEXT_TAG="v${MAJOR}.${MINOR}.${PATCH}"
-          echo "next_tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
-          echo "Latest: $LATEST -> Next: $NEXT_TAG"
+              NEXT_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+              echo "next_tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+              echo "Latest: $LATEST -> Next: $NEXT_TAG"
 
-  build:
-    name: Build Windows exe
-    needs: version
-    runs-on: windows-latest
+   build:
+      name: Build Windows exe
+      needs: version
+      runs-on: windows-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      steps:
+         - name: Checkout code
+           uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+         - name: Set up Python
+           uses: actions/setup-python@v5
+           with:
+              python-version: '3.12'
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
+         - name: Install uv
+           uses: astral-sh/setup-uv@v4
+           with:
+              enable-cache: true
 
-      - name: Install dependencies
-        run: |
-          uv sync
-          uv add pyinstaller
+         - name: Install dependencies
+           run: |
+              uv sync
+              uv add pyinstaller
 
-      - name: Build executable
-        run: uv run pyinstaller --clean build.spec
+         - name: Build executable
+           run: uv run pyinstaller --clean build.spec
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          # Name artifact with version so release job can fetch the correct one
-          name: FC_Online_Tool-${{ needs.version.outputs.next_tag }}
-          path: dist/FC_Online_Tool.exe
-          if-no-files-found: error
-          retention-days: 7
+         - name: Rename exe with version
+           run: |
+              mv dist/FC_Online_Tool.exe dist/FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe
 
-  release:
-    name: Create GitHub Release
-    needs: [version, build]
-    runs-on: ubuntu-latest
+         - name: Upload artifact
+           uses: actions/upload-artifact@v4
+           with:
+              # Name artifact with version so release job can fetch the correct one
+              name: FC_Online_Tool-${{ needs.version.outputs.next_tag }}
+              path: dist/FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe
+              if-no-files-found: error
+              retention-days: 7
 
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: FC_Online_Tool-${{ needs.version.outputs.next_tag }}
-          path: ./dist/
+   release:
+      name: Create GitHub Release
+      needs: [version, build]
+      runs-on: ubuntu-latest
 
-      - name: Create Release (auto-create tag if missing)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.version.outputs.next_tag }}   # <- automatically creates tag if it does not exist
-          name: "FC Online Tool ${{ needs.version.outputs.next_tag }}"
-          files: ./dist/FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe
-          generate_release_notes: true
-          draft: false
-          prerelease: false
-          body: |
-            ## 🚀 FC Online Automation Tool ${{ needs.version.outputs.next_tag }}
+      steps:
+         - name: Download artifact
+           uses: actions/download-artifact@v4
+           with:
+              name: FC_Online_Tool-${{ needs.version.outputs.next_tag }}
+              path: ./dist/
 
-            ### 📦 Download
-            - **FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe** — Ready-to-run Windows executable
+         - name: Create Release (auto-create tag if missing)
+           uses: softprops/action-gh-release@v2
+           with:
+              tag_name: ${{ needs.version.outputs.next_tag }} # <- automatically creates tag if it does not exist
+              name: 'FC Online Tool ${{ needs.version.outputs.next_tag }}'
+              files: ./dist/FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe
+              generate_release_notes: true
+              draft: false
+              prerelease: false
+              body: |
+                 ## 🚀 FC Online Automation Tool ${{ needs.version.outputs.next_tag }}
 
-            ### 🔧 Installation
-            1. Download the exe file
-            2. Run the exe file
-            3. Windows Defender may show a warning — click "More info" then "Run anyway"
+                 ### 📦 Download
+                 - **FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe** — Ready-to-run Windows executable
 
-            ### ✨ Features
-            - GUI interface for easy configuration
-            - Automated FC Online operations
-            - Real-time status monitoring
-            - Dark/Light theme support
+                 ### 🔧 Installation
+                 1. Download the exe file
+                 2. Run the exe file
+                 3. Windows Defender may show a warning — click "More info" then "Run anyway"
 
-            ---
-            **Note**: This release is automatically built from source.
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                 ### ✨ Features
+                 - GUI interface for easy configuration
+                 - Automated FC Online operations
+                 - Real-time status monitoring
+                 - Dark/Light theme support
+
+                 ---
+                 **Note**: This release is automatically built from source.
+           env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
