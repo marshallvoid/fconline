@@ -1,18 +1,24 @@
 import asyncio
 import json
 import re
-from typing import Callable, Optional, Self
+import ssl
+from typing import Callable, Dict, Optional, Self
 
+import aiohttp
 from browser_use.browser.types import Page
 from loguru import logger
 from playwright.async_api import WebSocket
 
 from src.core.event_config import EventConfig
+from src.schemas.spin import SpinResponse
+from src.utils.methods import should_execute_callback
 
 
 class WebsocketHandler:
     page: Page
     is_logged_in: bool = False
+    cookies: Dict[str, str] = {}
+    headers: Dict[str, str] = {}
     event_config: EventConfig
     spin_action: int
     special_jackpot: int
@@ -69,13 +75,13 @@ class WebsocketHandler:
 
     @classmethod
     def _extract_frame(cls, frame: bytes | str) -> None:
-        logger.info(f"🔌 WebSocket frame received: {frame}")
-
         if not frame:
             return
 
         if isinstance(frame, bytes):
             frame = frame.decode("utf-8")
+
+        logger.info(f"🔌 WebSocket frame received: {frame}")
 
         json_match = re.search(r"42(\[.*\])", frame)
         if not json_match:
@@ -111,18 +117,24 @@ class WebsocketHandler:
                 logger.success(f"🎰 Special Jackpot: {value:,}")
                 cls.special_jackpot = value
 
-                if value >= cls.target_special_jackpot and cls.message_callback:
-                    cls.message_callback("jackpot", f"Special Jackpot has reached {cls.target_special_jackpot:,}")
+                if value >= cls.target_special_jackpot:
+                    should_execute_callback(
+                        cls.message_callback,
+                        "jackpot",
+                        f"Special Jackpot has reached {cls.target_special_jackpot:,}",
+                    )
 
                 # Start/stop spin task depending on live value
                 asyncio.create_task(cls._ensure_spin_state())
 
-                if cls.jackpot_callback:
-                    cls.jackpot_callback(value)
+                should_execute_callback(cls.jackpot_callback, value)
 
             case "mini_jackpot":
                 logger.success(f"🎰 Mini Jackpot: {value:,}")
                 cls.mini_jackpot = value
+
+            case _:
+                logger.warning(f"🔌 Unknown event type: {type}: {value}")
 
     @classmethod
     async def _ensure_spin_state(cls) -> None:
@@ -132,11 +144,73 @@ class WebsocketHandler:
             task_alive = cls._spin_task and not cls._spin_task.done()
 
             if should_spin and not task_alive:
-                logger.info("▶️ Starting auto-spin task")
-                cls._spin_task = asyncio.create_task(cls._auto_spin())
+                logger.info("▶️ Starting auto-spin API task")
+                cls._spin_task = asyncio.create_task(cls._auto_spin_api())
 
             elif not should_spin and task_alive:
                 logger.info("⏹️ Stopping auto-spin task (jackpot below target)")
+                if cls._spin_task:
+                    cls._spin_task.cancel()
+                    try:
+                        await cls._spin_task
+                    except asyncio.CancelledError:
+                        pass
+                    finally:
+                        cls._spin_task = None
+
+                should_execute_callback(cls.message_callback, "info", "Auto-spinning stopped")
+
+    @classmethod
+    async def _auto_spin_api(cls) -> None:
+        """Continuously send POST requests to spin API while jackpot stays above target."""
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        payload = {"spin_type": cls.spin_action, "payment_type": 1}
+
+        try:
+            async with aiohttp.ClientSession(cookies=cls.cookies, headers=cls.headers, connector=connector) as session:
+                while True:
+                    # Live condition
+                    if cls.special_jackpot < cls.target_special_jackpot:
+                        logger.info("✅ Jackpot dropped below target — stopping auto-spin API")
+                        break
+
+                    if getattr(cls.page, "is_closed", lambda: False)():
+                        logger.warning("🛑 Page is closed; stopping auto-spin API")
+                        break
+
+                    try:
+                        async with session.post(cls.event_config.spin_api_url, json=payload) as response:
+                            if not response.ok:
+                                logger.error(f"❌ API request failed with status: {response.status}")
+                                break
+
+                            data = await response.json()
+                            schema = SpinResponse.model_validate(data)
+                            if not schema.payload or not schema.is_successful or schema.error_code:
+                                msg = f"Auto-spin failed: {schema.error_code or 'Unknown error'}"
+                                should_execute_callback(cls.message_callback, "error", msg)
+                                break
+
+                            for result in schema.payload.spin_results:
+                                msg = f"Spin Reward: {result.reward_name}"
+                                should_execute_callback(cls.message_callback, "reward", msg)
+
+                    except Exception as e:
+                        logger.error(f"❌ Auto-spin API error: {e}")
+                        break
+
+                    await asyncio.sleep(1)
+
+        except asyncio.CancelledError:
+            logger.info("🌀 Auto-spin API task cancelled")
+            raise
+
+        finally:
+            # Ensure spin task is cleaned up
+            if cls._spin_task and not cls._spin_task.done():
                 cls._spin_task.cancel()
                 try:
                     await cls._spin_task
@@ -145,11 +219,8 @@ class WebsocketHandler:
                 finally:
                     cls._spin_task = None
 
-                if cls.message_callback:
-                    cls.message_callback("info", "Auto-spinning stopped")
-
     @classmethod
-    async def _auto_spin(cls) -> None:
+    async def _auto_spin_button(cls) -> None:
         """Continuously click the spin selector while jackpot stays above target."""
         mapping = cls.event_config.spin_action_selectors
         selector, display_label = mapping.get(cls.spin_action, next(iter(mapping.values())))
@@ -188,11 +259,14 @@ class WebsocketHandler:
                     await cls.page.evaluate(f"document.querySelector('{selector}').click()")
                     spin_count += 1
 
-                    if cls.message_callback:
-                        cls.message_callback("info", f"Auto-spinning: {display_label}")
-
                     if spin_count % 10 == 0:
                         logger.info(f"🎰 Auto-spin progress: {spin_count} spins completed")
+
+                        should_execute_callback(
+                            cls.message_callback,
+                            "info",
+                            f"Completed {spin_count} spins with action {cls.spin_action}",
+                        )
 
                 except Exception as e:
                     logger.error(f"❌ Auto-spin error on spin #{spin_count}: {e}")

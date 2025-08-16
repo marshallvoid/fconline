@@ -18,5 +18,5 @@ class Payload(BaseModel):
     user: Optional[User] = None
 
 
-class UserInfo(BaseModel):
+class UserReponse(BaseModel):
     payload: Payload

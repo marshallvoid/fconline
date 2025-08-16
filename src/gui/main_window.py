@@ -13,7 +13,7 @@ from src.utils.contants import EVENT_CONFIGS_MAP
 from src.utils.credentials import UserDataManager
 
 if TYPE_CHECKING:
-    from src.schemas import UserInfo
+    from src.schemas import UserReponse
 
 
 class MainWindow:
@@ -33,8 +33,9 @@ class MainWindow:
 
         self._is_running = False
         self._selected_event = "Bi Lắc"
-        self._locked_tab_index = None
-        self._original_tab_index = 0
+        self._locked_tab_index: Optional[int] = None
+        self._original_tab_index: Optional[int] = 0
+
         self._tool_instance = MainTool(
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
             username=self._username_var.get(),
@@ -207,12 +208,12 @@ class MainWindow:
                 self._tool_instance.update_credentials(self._username_var.get(), self._password_var.get())
                 _save_configs()
 
-        self._username_var.trace_add("write", _on_credentials_changed)
-        self._password_var.trace_add("write", _on_credentials_changed)
-        self._spin_action_var.trace_add("write", _save_configs)
-        self._target_special_jackpot_var.trace_add("write", _save_configs)
+        self._username_var.trace_add("write", lambda *args: _on_credentials_changed())
+        self._password_var.trace_add("write", lambda *args: _on_credentials_changed())
+        self._spin_action_var.trace_add("write", lambda *args: _save_configs())
+        self._target_special_jackpot_var.trace_add("write", lambda *args: _save_configs())
 
-    def _update_user_panel(self, user_info: Optional["UserInfo"]) -> None:
+    def _update_user_panel(self, user_info: Optional["UserReponse"]) -> None:
         info_text = (
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "NOT LOGGED IN\n"
@@ -247,8 +248,8 @@ class MainWindow:
 
     def _set_notebook_state(self, enabled: bool) -> None:
         if not enabled:
-            self._original_tab_index = self._notebook.index(self._notebook.select())
-            last_tab_index = self._notebook.index("end") - 1
+            self._original_tab_index = int(self._notebook.index(self._notebook.select()))
+            last_tab_index = int(self._notebook.index("end") - 1)
             self._notebook.select(last_tab_index)
             self._locked_tab_index = last_tab_index
             return
@@ -299,7 +300,7 @@ class MainWindow:
         self._activity_log_tab.update_target_special_jackpot(self._target_special_jackpot_var.get())
 
         # Update configs of tool instance and callbacks
-        def user_panel_callback(user_info: Optional["UserInfo"]) -> None:
+        def user_panel_callback(user_info: Optional["UserReponse"]) -> None:
             self._root.after(0, lambda: self._update_user_panel(user_info=user_info))
 
         def message_callback(tag: str, message: str) -> None:

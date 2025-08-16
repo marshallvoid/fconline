@@ -10,7 +10,8 @@ from loguru import logger
 from src.core.event_config import EventConfig
 from src.core.login_handler import LoginHandler
 from src.core.websocket_handler import WebsocketHandler
-from src.schemas import UserInfo
+from src.schemas import UserReponse
+from src.utils.methods import should_execute_callback
 from src.utils.platforms import PlatformManager
 
 
@@ -33,7 +34,7 @@ class MainTool:
         self.special_jackpot: int = 0
         self.mini_jackpot: int = 0
 
-        self.user_panel_callback: Optional[Callable[[Optional[UserInfo]], None]] = None
+        self.user_panel_callback: Optional[Callable[[Optional[UserReponse]], None]] = None
         self.message_callback: Optional[Callable[[str, str], None]] = None
         self.special_jackpot_callback: Optional[Callable[[int], None]] = None
 
@@ -41,7 +42,9 @@ class MainTool:
         self.page: Optional[Page] = None
         self.user_data_dir: Optional[str] = None
 
-        self.user_info: Optional[UserInfo] = None
+        self.cookies: Dict[str, str] = {}
+        self.headers: Dict[str, str] = {}
+        self.user_info: Optional[UserReponse] = None
 
     async def run(self) -> None:
         self.session, self.page = await self._setup_browser()
@@ -71,6 +74,9 @@ class MainTool:
 
             await self._fetch_user_info()
 
+            WebsocketHandler.cookies = self.cookies
+            WebsocketHandler.headers = self.headers
+
             while self.is_running:
                 await asyncio.sleep(delay=1)
 
@@ -87,7 +93,9 @@ class MainTool:
 
         logger.info("🔒 Closing browser context and cleaning up resources...")
         try:
-            await self.page.close()
+            if self.page:
+                await self.page.close()
+
             await self.session.close()
             logger.success("✅ Browser resources cleaned up successfully")
 
@@ -123,11 +131,11 @@ class MainTool:
         mini_jackpot: Optional[int] = None,
         spin_action: Optional[int] = None,
         target_special_jackpot: Optional[int] = None,
-        user_panel_callback: Optional[Callable[[Optional[UserInfo]], None]] = None,
+        user_panel_callback: Optional[Callable[[Optional[UserReponse]], None]] = None,
         message_callback: Optional[Callable[[str, str], None]] = None,
         special_jackpot_callback: Optional[Callable[[int], None]] = None,
     ) -> None:
-        self.is_running = is_running
+        self.is_running = is_running or self.is_running
         self.event_config = event_config or self.event_config
         self.special_jackpot = special_jackpot or self.special_jackpot
         self.mini_jackpot = mini_jackpot or self.mini_jackpot
@@ -135,7 +143,9 @@ class MainTool:
         self.target_special_jackpot = target_special_jackpot or self.target_special_jackpot
         self.user_panel_callback = user_panel_callback or self.user_panel_callback
         self.message_callback = message_callback or self.message_callback
-        self.special_jackpot_callback = special_jackpot_callback or self.special_jackpot_callback
+
+        if special_jackpot_callback:
+            self.special_jackpot_callback = special_jackpot_callback
 
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("🌐 Setting up browser context...")
@@ -238,39 +248,48 @@ class MainTool:
         raise Exception(msg)
 
     async def _fetch_user_info(self) -> None:
-        cookies: Dict[str, str] = await self._extract_cookies()
+        self.cookies = await self._extract_cookies()
+        self.headers = {
+            "x-csrftoken": self.cookies.get("csrftoken", ""),
+            "Cookie": "; ".join([f"{name}={value}" for name, value in self.cookies.items()]),
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Referer": self.event_config.base_url,
+            "Origin": self.event_config.base_url,
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "content-type": "application/json",
+            "foo": "bar",
+            "Connection": "keep-alive",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "Priority": "u=0",
+            "TE": "trailers",
+        }
 
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
         connector = aiohttp.TCPConnector(ssl=ssl_context)
-        async with aiohttp.ClientSession(
-            cookies=cookies,
-            headers={
-                "x-csrftoken": cookies.get("csrftoken", ""),
-                "Cookie": "; ".join([f"{name}={value}" for name, value in cookies.items()]),
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            },
-            connector=connector,
-        ) as session:
+
+        async with aiohttp.ClientSession(cookies=self.cookies, headers=self.headers, connector=connector) as session:
+            logger.info("📡 Fetching user information from API...")
             try:
-                logger.info("📡 Fetching user information from API...")
-
-                async with session.get(self.event_config.api_url) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        self.user_info = UserInfo.model_validate(data)
-
-                        if not self.user_info.payload.user:
-                            msg = "❌ User information not found"
-                            raise Exception(msg)
-
-                        logger.success("✅ User information fetched successfully")
-
-                        if self.user_panel_callback:
-                            self.user_panel_callback(self.user_info)
-                    else:
+                async with session.get(self.event_config.user_api_url) as response:
+                    if not response.ok:
                         logger.warning(f"⚠️ API request failed with status: {response.status}")
+                        return
+
+                    data = await response.json()
+                    self.user_info = UserReponse.model_validate(data)
+
+                    if not self.user_info.payload.user:
+                        msg = "❌ User information not found"
+                        raise Exception(msg)
+
+                    logger.success("✅ User information fetched successfully")
+                    should_execute_callback(self.user_panel_callback, self.user_info)
 
             except Exception as e:
                 logger.error(f"❌ Failed to fetch user info: {e}")
