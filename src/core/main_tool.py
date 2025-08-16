@@ -250,7 +250,7 @@ class MainTool:
         ) as session:
             logger.info("📡 Fetching user information from API...")
             try:
-                async with session.get(self.event_config.user_api_url) as response:
+                async with session.get(f"{self.event_config.base_url}/{self.event_config.user_endpoint}") as response:
                     if not response.ok:
                         msg = f"API request failed with status: {response.status}"
                         should_execute_callback(self.message_callback, "error", msg)

@@ -128,19 +128,19 @@ class MainWindow:
         self._notebook = ttk.Notebook(main_container, takefocus=False)
         self._notebook.pack(fill="both", expand=True)
 
-        for event_config in EVENT_CONFIGS_MAP.values():
+        for title, event_config in EVENT_CONFIGS_MAP.items():
             tab = EventTab(
                 parent=self._notebook,
-                title=event_config.title,
+                title=title,
                 username_var=self._username_var,
                 password_var=self._password_var,
                 spin_action_var=self._spin_action_var,
                 target_special_jackpot_var=self._target_special_jackpot_var,
-                spin_action_labels=event_config.spin_action_selectors,
+                spin_actions=event_config.spin_actions,
                 on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
             )
-            setattr(self, event_config.tab_name, tab)
-            self._notebook.add(tab.frame, text=event_config.title)
+            setattr(self, event_config.tab_attr_name, tab)
+            self._notebook.add(tab.frame, text=title)
 
         self._activity_log_tab = ActivityLogTab(parent=self._notebook)
         self._notebook.add(self._activity_log_tab.frame, text="Activity Log")
@@ -243,7 +243,7 @@ class MainWindow:
         if tab_text not in EVENT_CONFIGS_MAP:
             return
 
-        target_tab: EventTab = getattr(self, EVENT_CONFIGS_MAP[tab_text].tab_name)
+        target_tab: EventTab = getattr(self, EVENT_CONFIGS_MAP[tab_text].tab_attr_name)
         target_tab.update_user_info_text(info_text, foreground="#22c55e")
 
     def _set_notebook_state(self, enabled: bool) -> None:
@@ -271,7 +271,7 @@ class MainWindow:
         self._status_label.config(text=status_text)
 
         for event_config in EVENT_CONFIGS_MAP.values():
-            target_tab: EventTab = getattr(self, event_config.tab_name)
+            target_tab: EventTab = getattr(self, event_config.tab_attr_name)
             target_tab.set_enabled(enabled=not is_running)
 
     def _handle_click_start(self) -> None:
