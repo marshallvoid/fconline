@@ -36,30 +36,6 @@ a = Analysis(
         'cryptography.fernet',
         'watchdog',
 
-        # Langchain dependencies (required by browser_use)
-        'langchain_core',
-        'langchain_core.callbacks',
-        'langchain_core.callbacks.manager',
-        'langchain_core.callbacks.base',
-        'langchain_core.language_models',
-        'langchain_core.language_models.chat_models',
-        'langchain_core.language_models.llms',
-        'langchain_core.messages',
-        'langchain_core.messages.base',
-        'langchain_core.messages.ai',
-        'langchain_core.messages.human',
-        'langchain_core.messages.system',
-        'langchain_core.prompts',
-        'langchain_core.prompts.base',
-        'langchain_core.prompts.chat',
-        'langchain_core.runnables',
-        'langchain_core.runnables.base',
-        'langchain_core.tools',
-        'langchain_core.tools.base',
-        'langchain_core.utils',
-        'langchain_core.outputs',
-        'langchain_core.load',
-
         # HTTP client libraries (required by browser_use and langchain)
         'requests',
         'requests.auth',
@@ -68,11 +44,6 @@ a = Analysis(
         'requests.adapters',
         'httpx',
         'httpcore',
-
-        # Additional dependencies
-        'anthropic',
-        'openai',
-        'tiktoken',
 
         # Project modules (explicit to help PyInstaller discovery)
         'src.main',
@@ -125,11 +96,12 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
+    version='version_info.txt',
     name='FC_Online_Tool',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
@@ -138,4 +110,15 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon='assets/icon.ico' if os.path.exists('assets/icon.ico') else None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='FC_Online_Tool'
 )
