@@ -23,7 +23,7 @@ class MainWindow:
         self._root = tk.Tk()
         self._root.title(string="FC Online Automation Tool")
         self._root.geometry(newGeometry="700x700")
-        self._root.resizable(width=False, height=False)
+        self._root.resizable(width=True, height=True)
         self._root.minsize(width=700, height=650)
 
         saved_configs = UserConfigManager.load_configs()
@@ -35,8 +35,7 @@ class MainWindow:
 
         self._is_running = False
         self._selected_event = "Bi Lắc"
-        self._locked_tab_index: Optional[int] = None
-        self._original_tab_index: Optional[int] = 0
+        self._event_radio_buttons: list[ttk.Radiobutton] = []
 
         self._tool_instance = MainTool(
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
@@ -120,29 +119,55 @@ class MainWindow:
         self._status_label = ttk.Label(control_frame, text="Status: Ready")
         self._status_label.pack(side="right")
 
-        self._setup_notebook()
+        self._setup_event_selection()
+        self._setup_main_content()
         self._setup_trace_callbacks()
 
-    def _setup_notebook(self) -> None:
-        main_container = ttk.Frame(self._root)
-        main_container.pack(fill="both", expand=True, padx=10, pady=10)
+    def _setup_event_selection(self) -> None:
+        event_selection_frame = ttk.LabelFrame(self._root, text="Event Selection", padding=10)
+        event_selection_frame.pack(fill="x", padx=10, pady=(10, 5))
 
+        self._event_var = tk.StringVar(value=self._selected_event)
+
+        # Create radio buttons in a grid layout, 4 per row
+        row, col = 0, 0
+        for title in EVENT_CONFIGS_MAP.keys():
+            radio_btn = ttk.Radiobutton(
+                event_selection_frame,
+                text=title,
+                variable=self._event_var,
+                value=title,
+                command=self._on_event_changed,
+            )
+            radio_btn.grid(row=row, column=col, padx=(0, 20), pady=2, sticky="w")
+
+            self._event_radio_buttons.append(radio_btn)
+
+            col += 1
+            if col >= 4:  # Wrap to next row after 4 buttons
+                col = 0
+                row += 1
+
+    def _setup_main_content(self) -> None:
+        main_container = ttk.Frame(self._root)
+        main_container.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Create notebook for user settings and activity log
         self._notebook = ttk.Notebook(main_container, takefocus=False)
         self._notebook.pack(fill="both", expand=True)
 
-        for title, event_config in EVENT_CONFIGS_MAP.items():
-            tab = EventTab(
-                parent=self._notebook,
-                title=title,
-                username_var=self._username_var,
-                password_var=self._password_var,
-                spin_action_var=self._spin_action_var,
-                target_special_jackpot_var=self._target_special_jackpot_var,
-                spin_actions=event_config.spin_actions,
-                on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
-            )
-            setattr(self, event_config.tab_attr_name, tab)
-            self._notebook.add(tab.frame, text=title)
+        # Create event tab for current selected event
+        self._event_tab = EventTab(
+            parent=self._notebook,
+            title=self._selected_event,
+            username_var=self._username_var,
+            password_var=self._password_var,
+            spin_action_var=self._spin_action_var,
+            target_special_jackpot_var=self._target_special_jackpot_var,
+            spin_actions=EVENT_CONFIGS_MAP[self._selected_event].spin_actions,
+            on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
+        )
+        self._notebook.add(self._event_tab.frame, text="User Settings")
 
         self._activity_log_tab = ActivityLogTab(parent=self._notebook)
         self._notebook.add(self._activity_log_tab.frame, text="Activity Log")
@@ -155,7 +180,6 @@ class MainWindow:
                     current = self._notebook.nametowidget(self._notebook.select())
                     if current and isinstance(current, (tk.Frame, ttk.Frame)):
                         current.focus_set()
-
                 except Exception:
                     pass
 
@@ -171,20 +195,9 @@ class MainWindow:
 
         def _on_tab_changed(_: object) -> None:
             try:
-                if self._is_running:
-                    last_tab_index = self._notebook.index("end") - 1
-                    self._notebook.select(last_tab_index)
-                    return
-
-                current_index = self._notebook.index(self._notebook.select())
-                tab_text = self._notebook.tab(current_index, "text")
-
-                if tab_text not in EVENT_CONFIGS_MAP:
-                    return
-
-                self._selected_event = tab_text
-                self._original_tab_index = current_index
-
+                current = self._notebook.nametowidget(self._notebook.select())
+                if current and isinstance(current, (tk.Frame, ttk.Frame)):
+                    current.focus_set()
             except Exception:
                 pass
 
@@ -193,6 +206,37 @@ class MainWindow:
         self._notebook.bind("<<NotebookTabChanged>>", _on_tab_changed)
         self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
         self._root.after_idle(_schedule_focus_current_tab)
+
+    def _on_event_changed(self) -> None:
+        # Get the selected event from radio buttons
+        for radio_btn in self._event_radio_buttons:
+            if radio_btn.instate(["selected"]):
+                self._selected_event = radio_btn.cget("text")
+                break
+
+        # Update the event tab with new event configuration
+        # Instead of recreating the tab, update the existing one
+        self._event_tab = EventTab(
+            parent=self._notebook,
+            title=self._selected_event,
+            username_var=self._username_var,
+            password_var=self._password_var,
+            spin_action_var=self._spin_action_var,
+            target_special_jackpot_var=self._target_special_jackpot_var,
+            spin_actions=EVENT_CONFIGS_MAP[self._selected_event].spin_actions,
+            on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
+        )
+
+        # Replace the content of the first tab without changing tab selection
+        self._notebook.forget(0)
+        self._notebook.insert(0, self._event_tab.frame, text="User Settings")
+
+        # Force the notebook to stay on the current tab
+        self._notebook.select(0)
+
+        # Update tool instance with new event config
+        if not self._is_running:
+            self._tool_instance.update_configs(event_config=EVENT_CONFIGS_MAP[self._selected_event])
 
     def _setup_trace_callbacks(self) -> None:
         def _save_configs() -> None:
@@ -239,30 +283,10 @@ class MainWindow:
                 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             )
 
-        current_index = self._notebook.index(self._notebook.select())
-        tab_text = self._notebook.tab(current_index, "text")
-
-        if tab_text not in EVENT_CONFIGS_MAP:
-            return
-
-        target_tab: EventTab = getattr(self, EVENT_CONFIGS_MAP[tab_text].tab_attr_name)
-        target_tab.update_user_info_text(info_text, foreground="#22c55e")
-
-    def _set_notebook_state(self, enabled: bool) -> None:
-        if not enabled:
-            self._original_tab_index = int(self._notebook.index(self._notebook.select()))
-            last_tab_index = int(self._notebook.index("end") - 1)
-            self._locked_tab_index = last_tab_index
-            self._notebook.select(last_tab_index)
-            return
-
-        self._original_tab_index = self._locked_tab_index
-        self._locked_tab_index = None
-        self._notebook.select(self._original_tab_index)
+        self._event_tab.update_user_info_text(info_text, foreground="#22c55e")
 
     def _update_running_status(self, is_running: bool, is_error: bool = False) -> None:
         self._is_running = is_running
-        self._set_notebook_state(enabled=not is_running)
         self._start_btn.config(state="disabled" if is_running else "normal")
         self._stop_btn.config(state="normal" if is_running else "disabled")
 
@@ -272,9 +296,11 @@ class MainWindow:
 
         self._status_label.config(text=status_text)
 
-        for event_config in EVENT_CONFIGS_MAP.values():
-            target_tab: EventTab = getattr(self, event_config.tab_attr_name)
-            target_tab.set_enabled(enabled=not is_running)
+        # Disable/enable event selection radio buttons
+        for radio_btn in self._event_radio_buttons:
+            radio_btn.config(state="disabled" if is_running else "normal")
+
+        self._event_tab.set_enabled(enabled=not is_running)
 
     def _handle_click_start(self) -> None:
         if self._is_running:
@@ -299,8 +325,9 @@ class MainWindow:
 
         # Update UI
         self._update_running_status(is_running=True)
+        self._activity_log_tab.clear_messages()
         self._activity_log_tab.update_special_jackpot(0)
-        self._activity_log_tab.update_target_special_jackpot(self._target_special_jackpot_var.get())
+        self._activity_log_tab.update_target_special_jackpot(target_value)
 
         # Update configs of tool instance and callbacks
         def user_panel_callback(user_info: Optional["UserReponse"]) -> None:
@@ -318,7 +345,7 @@ class MainWindow:
             special_jackpot=0,
             mini_jackpot=0,
             spin_action=self._spin_action_var.get(),
-            target_special_jackpot=self._target_special_jackpot_var.get(),
+            target_special_jackpot=target_value,
             user_panel_callback=user_panel_callback,
             message_callback=message_callback,
             special_jackpot_callback=special_jackpot_callback,
