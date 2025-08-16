@@ -6,11 +6,11 @@ from pydantic import BaseModel
 class SpinResult(BaseModel):
     reward_name: str
     image: str
-    dice_result: int
-    step_type: int
-    extra_value: None
-    accumulation_point: int
-    spin_result_reward_id: int
+    dice_result: Optional[int] = None
+    step_type: Optional[int] = None
+    extra_value: Optional[int] = None
+    accumulation_point: Optional[int] = None
+    spin_result_reward_id: Optional[int] = None
 
 
 class Payload(BaseModel):
