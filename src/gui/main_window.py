@@ -8,12 +8,14 @@ import darkdetect
 import sv_ttk
 
 from src.core.main_tool import MainTool
-from src.gui.components import ActivityLogTab, EventTab
+from src.gui.components.activity_log_tab import ActivityLogTab
+from src.gui.components.event_tab import EventTab
+from src.schemas.user_config import UserConfig
 from src.utils.contants import EVENT_CONFIGS_MAP
-from src.utils.credentials import UserDataManager
+from src.utils.credentials import UserConfigManager
 
 if TYPE_CHECKING:
-    from src.schemas import UserReponse
+    from src.schemas.user_response import UserReponse
 
 
 class MainWindow:
@@ -24,12 +26,12 @@ class MainWindow:
         self._root.resizable(width=False, height=False)
         self._root.minsize(width=700, height=650)
 
-        saved_configs = UserDataManager.load_configs()
+        saved_configs = UserConfigManager.load_configs()
 
-        self._username_var = tk.StringVar(value=saved_configs.get("username", ""))
-        self._password_var = tk.StringVar(value=saved_configs.get("password", ""))
-        self._spin_action_var = tk.IntVar(value=saved_configs.get("spin_action", 1))
-        self._target_special_jackpot_var = tk.IntVar(value=saved_configs.get("target_special_jackpot", 10000))
+        self._username_var = tk.StringVar(value=saved_configs.username)
+        self._password_var = tk.StringVar(value=saved_configs.password)
+        self._spin_action_var = tk.IntVar(value=saved_configs.spin_action)
+        self._target_special_jackpot_var = tk.IntVar(value=saved_configs.target_special_jackpot)
 
         self._is_running = False
         self._selected_event = "Bi Lắc"
@@ -194,13 +196,13 @@ class MainWindow:
 
     def _setup_trace_callbacks(self) -> None:
         def _save_configs() -> None:
-            UserDataManager.save_configs(
-                {
-                    "username": self._username_var.get(),
-                    "password": self._password_var.get(),
-                    "spin_action": self._spin_action_var.get(),
-                    "target_special_jackpot": self._target_special_jackpot_var.get(),
-                }
+            UserConfigManager.save_configs(
+                config=UserConfig(
+                    username=self._username_var.get(),
+                    password=self._password_var.get(),
+                    spin_action=self._spin_action_var.get(),
+                    target_special_jackpot=self._target_special_jackpot_var.get(),
+                )
             )
 
         def _on_credentials_changed() -> None:

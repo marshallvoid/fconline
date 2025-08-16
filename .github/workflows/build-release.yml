@@ -116,7 +116,7 @@ jobs:
         with:
           tag_name: ${{ needs.version.outputs.next_tag }}   # <- automatically creates tag if it does not exist
           name: "FC Online Tool ${{ needs.version.outputs.next_tag }}"
-          files: ./dist/FC_Online_Tool.exe
+          files: ./dist/FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe
           generate_release_notes: true
           draft: false
           prerelease: false
@@ -124,7 +124,7 @@ jobs:
             ## 🚀 FC Online Automation Tool ${{ needs.version.outputs.next_tag }}
 
             ### 📦 Download
-            - **FC_Online_Tool.exe** — Ready-to-run Windows executable
+            - **FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe** — Ready-to-run Windows executable
 
             ### 🔧 Installation
             1. Download the exe file

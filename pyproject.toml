@@ -1,25 +1,18 @@
 [project]
 name = "src"
-version = "0.1.0"
+version = "1.0.0"
 description = "FC Online Automation Tool"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.12.15",
-    "beautifulsoup4>=4.13.4",
     "browser-use>=0.5.11",
     "cryptography>=45.0.6",
     "darkdetect>=0.8.0",
-    "fake-useragent>=2.2.0",
     "loguru>=0.7.3",
-    "pillow-heif>=1.1.0",
-    "pillow>=11.3.0",
     "pydantic>=2.11.7",
-    "semver>=3.0.4",
     "shortuuid>=1.0.13",
     "sv-ttk>=2.6.1",
-    "ua-parser>=1.0.1",
-    "user-agents>=2.2.0",
     "watchdog>=6.0.0",
 ]
 

@@ -5,7 +5,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-class User(BaseModel):
+class UserDetail(BaseModel):
     id: int
     uid: str
     nickname: str
@@ -14,9 +14,9 @@ class User(BaseModel):
     mc: int
 
 
-class Payload(BaseModel):
-    user: Optional[User] = None
+class UserPayload(BaseModel):
+    user: Optional[UserDetail] = None
 
 
 class UserReponse(BaseModel):
-    payload: Payload
+    payload: UserPayload

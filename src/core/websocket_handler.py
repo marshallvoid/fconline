@@ -9,8 +9,8 @@ from loguru import logger
 from playwright.async_api import WebSocket
 
 from src.core.event_config import EventConfig
-from src.schemas.spin import SpinResponse
-from src.utils.methods import should_execute_callback
+from src.schemas.spin_response import SpinResponse
+from src.utils.methods import format_spin_block_compact, should_execute_callback
 from src.utils.requests import RequestManager
 
 
@@ -162,7 +162,7 @@ class WebsocketHandler:
             async with aiohttp.ClientSession(
                 cookies=cls.cookies,
                 headers=cls.headers,
-                connector=RequestManager.get_connector(),
+                connector=RequestManager.connector(),
             ) as session:
                 while True:
                     # Live condition
@@ -189,9 +189,14 @@ class WebsocketHandler:
                                 should_execute_callback(cls.message_callback, "error", msg)
                                 break
 
-                            for result in schema.payload.spin_results:
-                                msg = f"Spin Reward: {result.reward_name} - {schema.payload.jackpot_value}"
-                                should_execute_callback(cls.message_callback, "reward", msg)
+                            should_execute_callback(
+                                cls.message_callback,
+                                "reward",
+                                format_spin_block_compact(
+                                    spin_results=schema.payload.spin_results,
+                                    jackpot_value=schema.payload.jackpot_value,
+                                ),
+                            )
 
                     except Exception as e:
                         should_execute_callback(cls.message_callback, "error", f"Auto-spin API error: {e}")
