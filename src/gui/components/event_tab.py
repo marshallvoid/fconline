@@ -2,8 +2,6 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Dict, List
 
-from loguru import logger
-
 
 class EventTab:
     def __init__(
@@ -50,8 +48,6 @@ class EventTab:
         self._user_info_label.config(text=text, foreground=foreground)
 
     def _build(self) -> None:
-        logger.info(f"🔧 Initializing EventTab for event: {self._title}")
-
         title_label = ttk.Label(self._frame, text="User Settings", font=("Arial", 14, "bold"))
         title_label.pack(pady=(10, 20))
 
@@ -132,5 +128,3 @@ class EventTab:
             )
             radio_btn.pack(side="left", padx=(0, 20))
             self._radio_buttons.append(radio_btn)
-
-        logger.success(f"✅ {self._title} EventTab initialized successfully")

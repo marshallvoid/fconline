@@ -2,8 +2,6 @@ import tkinter as tk
 from datetime import datetime
 from tkinter import ttk
 
-from loguru import logger
-
 
 class ActivityLogTab:
     def __init__(self, parent: tk.Misc) -> None:
@@ -35,6 +33,11 @@ class ActivityLogTab:
         self._messages_text_widget.see(tk.END)
         self._messages_text_widget.config(state="disabled")
 
+    def clear_messages(self) -> None:
+        self._messages_text_widget.config(state="normal")
+        self._messages_text_widget.delete("1.0", tk.END)
+        self._messages_text_widget.config(state="disabled")
+
     def update_special_jackpot(self, special_jackpot: int) -> None:
         jackpot_text = (
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -52,8 +55,6 @@ class ActivityLogTab:
         self._target_special_jackpot_label.config(text=target_text)
 
     def _build(self) -> None:
-        logger.info("🔧 Initializing ActivityLogTab")
-
         title_label = ttk.Label(self._frame, text="Activity Log", font=("Arial", 14, "bold"))
         title_label.pack(pady=(10, 20))
 
@@ -123,5 +124,3 @@ class ActivityLogTab:
 
         self._messages_text_widget.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-
-        logger.success("✅ ActivityLogTab initialized successfully")
