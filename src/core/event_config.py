@@ -9,7 +9,8 @@ class EventConfig:
 
     # URLs
     base_url: str
-    api_url: str
+    user_api_url: str
+    spin_api_url: str
 
     # Login/logout selectors
     login_btn_selector: str

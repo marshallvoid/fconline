@@ -108,11 +108,12 @@ class ActivityLogTab:
             insertbackground="#e0e0e0",
         )
 
-        self._messages_text_widget.tag_configure("default", foreground="#e0e0e0", font=("Arial", 12))
-        self._messages_text_widget.tag_configure("general", foreground="#4caf50", font=("Arial", 12, "bold"))
-        self._messages_text_widget.tag_configure("info", foreground="#2196f3", font=("Arial", 12))
-        self._messages_text_widget.tag_configure("error", foreground="#f44336", font=("Arial", 12, "bold"))
-        self._messages_text_widget.tag_configure("jackpot", foreground="#ff9800", font=("Arial", 12, "bold"))
+        self._messages_text_widget.tag_configure("default", foreground="#d1d5db", font=("Arial", 12))
+        self._messages_text_widget.tag_configure("general", foreground="#22c55e", font=("Arial", 12, "bold"))
+        self._messages_text_widget.tag_configure("info", foreground="#38bdf8", font=("Arial", 12))
+        self._messages_text_widget.tag_configure("error", foreground="#ef4444", font=("Arial", 12, "bold"))
+        self._messages_text_widget.tag_configure("jackpot", foreground="#f97316", font=("Arial", 12, "bold"))
+        self._messages_text_widget.tag_configure("reward", foreground="#a855f7", font=("Arial", 12, "bold"))
 
         scrollbar = ttk.Scrollbar(text_container, orient="vertical", command=self._messages_text_widget.yview)
         self._messages_text_widget.configure(yscrollcommand=scrollbar.set)
