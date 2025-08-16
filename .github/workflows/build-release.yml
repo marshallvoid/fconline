@@ -135,12 +135,6 @@ jobs:
                  2. Run the exe file
                  3. Windows Defender may show a warning — click "More info" then "Run anyway"
 
-                 ### ✨ Features
-                 - GUI interface for easy configuration
-                 - Automated FC Online operations
-                 - Real-time status monitoring
-                 - Dark/Light theme support
-
                  ---
                  **Note**: This release is automatically built from source.
            env:

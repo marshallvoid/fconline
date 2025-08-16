@@ -114,14 +114,13 @@ class WebsocketHandler:
     def _handle_jackpot(cls, type: str, value: int) -> None:
         match type:
             case "jackpot_value":
+                logger.info(f"Special Jackpot: {value:,}")
                 cls.special_jackpot = value
 
                 if value >= cls.target_special_jackpot:
-                    should_execute_callback(
-                        cls.message_callback,
-                        "jackpot",
-                        f"Special Jackpot has reached {cls.target_special_jackpot:,}",
-                    )
+                    msg = f"Special Jackpot has reached {cls.target_special_jackpot:,}"
+                    logger.success(f"🔌 {msg}")
+                    should_execute_callback(cls.message_callback, "jackpot", msg)
 
                 # Start/stop spin task depending on live value
                 asyncio.create_task(cls._ensure_spin_state())
@@ -129,6 +128,7 @@ class WebsocketHandler:
                 should_execute_callback(cls.jackpot_callback, value)
 
             case "mini_jackpot":
+                logger.info(f"Mini Jackpot: {value:,}")
                 cls.mini_jackpot = value
 
             case _:
@@ -186,6 +186,7 @@ class WebsocketHandler:
                             schema = SpinResponse.model_validate(await response.json())
                             if not schema.payload or not schema.is_successful or schema.error_code:
                                 msg = f"Auto-spin failed: {schema.error_code or 'Unknown error'}"
+                                logger.error(f"❌ {msg}")
                                 should_execute_callback(cls.message_callback, "error", msg)
                                 break
 
@@ -199,6 +200,7 @@ class WebsocketHandler:
                             )
 
                     except Exception as e:
+                        logger.error(f"❌ Auto-spin API error: {e}")
                         should_execute_callback(cls.message_callback, "error", f"Auto-spin API error: {e}")
                         break
 

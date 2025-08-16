@@ -92,31 +92,79 @@ uv run python src/main.py
 uv run python src/infrastructure/auto_reload.py
 ```
 
-## 📖 Usage
+#### CLI Application
 
-1. **Launch the Application**
+The CLI application provides a command-line interface for automated FC Online jackpot monitoring and spinning. It's ideal for headless servers, automation scripts, or when you prefer command-line tools over the GUI.
 
-   ```bash
-   uv run python manage.py
-   ```
+**CLI Options:**
 
-2. **Configure Your Settings**
+| Option                     | Type    | Required | Default       | Description                                                      |
+| -------------------------- | ------- | -------- | ------------- | ---------------------------------------------------------------- |
+| `--base-url`               | string  | Yes      | -             | FC Online event URL (e.g., https://typhu.fconline.garena.vn)     |
+| `--username, -u`           | string  | No       | -             | Account username (can be omitted to read from ENV FC_USERNAME)   |
+| `--password, -p`           | string  | No       | -             | Account password (can be omitted to read from ENV FC_PASSWORD)   |
+| `--spin-action`            | integer | No       | 1             | Spin type (default: 1)                                           |
+| `--target-special-jackpot` | integer | No       | 10000         | Special Jackpot threshold to stop auto (default: 10000)          |
+| `--user-endpoint`          | string  | No       | api/user/get  | User info endpoint (default: api/user/get)                       |
+| `--spin-endpoint`          | string  | No       | api/user/spin | Spin endpoint (default: api/user/spin)                           |
+| `--duration`               | integer | No       | -             | Run for N seconds then exit (default: run until Ctrl+C)          |
+| `--log-level`              | string  | No       | INFO          | Log level: TRACE, DEBUG, INFO, SUCCESS, WARNING, ERROR, CRITICAL |
 
-   -  Enter your FC Online username and password
-   -  Select the event tab ("Bi Lắc", "Tỷ Phú", etc.)
-   -  Set your target Special Jackpot threshold
-   -  Choose your preferred spin action (Free Spin, 10 FC, 190 FC, etc.)
+**Examples:**
 
-3. **Start Automation**
+1. **Basic monitoring with default settings:**
 
-   -  Click the "Start" button to begin monitoring
-   -  The tool will automatically log in and start tracking jackpot values
-   -  When the Special Jackpot reaches your target, auto-spinning will activate
-   -  Monitor real-time activity in the Activity Log tab
+```bash
+uv run fconline \
+  --base-url https://typhu.fconline.garena.vn \
+  --username player123 \
+  --password mypass123 \
+  --spin-action 1 \
+  --target-special-jackpot 15000
+```
 
-4. **Stop When Done**
-   -  Click "Stop" to halt the automation
-   -  Your credentials are securely stored for next time
+2. **Custom endpoints with duration limit:**
+
+```bash
+uv run fconline \
+  --base-url https://typhu.fconline.garena.vn \
+  --username player123 \
+  --password mypass123 \
+  --spin-action 2 \
+  --target-special-jackpot 8000 \
+  --duration 3600 \
+  --log-level DEBUG
+```
+
+3. **Environment variables with minimal logging:**
+
+```bash
+# Set environment variables
+export FC_USERNAME=player123
+export FC_PASSWORD=mypass123
+
+# Run without username/password arguments
+uv run fconline \
+  --base-url https://typhu.fconline.garena.vn \
+  --spin-action 1 \
+  --target-special-jackpot 20000 \
+  --log-level WARNING
+```
+
+4. **Interactive credential input:**
+
+```bash
+# Run without username/password arguments or environment variables
+# The tool will prompt you to enter them interactively
+uv run fconline \
+  --base-url https://typhu.fconline.garena.vn \
+  --spin-action 1 \
+  --target-special-jackpot 15000
+
+# You'll see prompts like:
+# Username:
+# Password: (hidden input)
+```
 
 ## ⚙️ Configuration
 
