@@ -1,89 +1,143 @@
 name: Build and Release
 
 on:
-   push:
-      tags:
-         - 'v*' # Trigger when tag starts with 'v' (e.g., v1.0.0)
-   workflow_dispatch: # Allow manual trigger
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
-   contents: write # Required for creating releases
-   actions: read # Required for artifact access
+  contents: write
+  actions: read
 
 jobs:
-   build:
-      runs-on: windows-latest # Use Windows to build exe
+  version:
+    name: Compute next tag
+    runs-on: ubuntu-latest
+    outputs:
+      next_tag: ${{ steps.bump.outputs.next_tag }}
+    steps:
+      - name: Checkout (full history for tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      steps:
-         - name: Checkout code
-           uses: actions/checkout@v4
+      - name: Fetch tags
+        run: git fetch --tags --force
 
-         - name: Set up Python
-           uses: actions/setup-python@v4
-           with:
-              python-version: '3.12'
+      - name: Find latest vX.Y.Z and bump
+        id: bump
+        shell: bash
+        run: |
+          # Get the latest tag in the format vX.Y.Z (single digit each part)
+          LATEST=$(git tag -l 'v[0-9].[0-9].[0-9]' --sort=-v:refname | head -n1)
 
-         - name: Install uv
-           uses: astral-sh/setup-uv@v4
-           with:
-              enable-cache: true
+          if [[ -z "$LATEST" ]]; then
+            LATEST="v0.0.0"
+          fi
 
-         - name: Install dependencies
-           run: |
-              uv sync
-              uv add pyinstaller
+          if [[ ! "$LATEST" =~ ^v([0-9])\.([0-9])\.([0-9])$ ]]; then
+            echo "Tag '$LATEST' does not match pattern vX.Y.Z (single digit each part)."
+            exit 1
+          fi
 
-         - name: Build executable
-           run: |
-              uv run pyinstaller build.spec
+          MAJOR="${BASH_REMATCH[1]}"
+          MINOR="${BASH_REMATCH[2]}"
+          PATCH="${BASH_REMATCH[3]}"
 
-         - name: Upload artifact
-           uses: actions/upload-artifact@v4
-           with:
-              name: FC_Online_Tool-${{ github.sha }}
-              path: dist/FC_Online_Tool.exe
+          # Increment version with carry-over rules
+          if (( PATCH < 9 )); then
+            PATCH=$((PATCH+1))
+          else
+            PATCH=0
+            if (( MINOR < 9 )); then
+              MINOR=$((MINOR+1))
+            else
+              MINOR=0
+              MAJOR=$((MAJOR+1))
+            fi
+          fi
 
-   release:
-      needs: build
-      runs-on: ubuntu-latest
-      if: startsWith(github.ref, 'refs/tags/') # Only create release when there's a tag
+          NEXT_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "next_tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+          echo "Latest: $LATEST -> Next: $NEXT_TAG"
 
-      steps:
-         - name: Checkout code
-           uses: actions/checkout@v4
+  build:
+    name: Build Windows exe
+    needs: version
+    runs-on: windows-latest
 
-         - name: Download artifact
-           uses: actions/download-artifact@v4
-           with:
-              name: FC_Online_Tool-${{ github.sha }}
-              path: ./dist/
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-         - name: Create Release
-           uses: softprops/action-gh-release@v2
-           with:
-              files: ./dist/FC_Online_Tool.exe
-              generate_release_notes: true
-              draft: false
-              prerelease: false
-              name: 'FC Online Tool ${{ github.ref_name }}'
-              body: |
-                 ## 🚀 FC Online Automation Tool ${{ github.ref_name }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-                 ### 📦 Download
-                 - **FC_Online_Tool.exe** - Ready to run Windows executable
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
 
-                 ### 🔧 Installation
-                 1. Download the exe file
-                 2. Run as administrator (recommended)
-                 3. Windows Defender might show a warning - click "More info" then "Run anyway"
+      - name: Install dependencies
+        run: |
+          uv sync
+          uv add pyinstaller
 
-                 ### ✨ Features
-                 - GUI interface for easy configuration
-                 - Automated FC Online operations
-                 - Real-time status monitoring
-                 - Dark/Light theme support
+      - name: Build executable
+        run: uv run pyinstaller build.spec
 
-                 ---
-                 **Note**: This is an automated release built from source code.
-           env:
-              GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # Name artifact with version so release job can fetch the correct one
+          name: FC_Online_Tool-${{ needs.version.outputs.next_tag }}
+          path: dist/FC_Online_Tool.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Create GitHub Release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: FC_Online_Tool-${{ needs.version.outputs.next_tag }}
+          path: ./dist/
+
+      - name: Create Release (auto-create tag if missing)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.next_tag }}   # <- automatically creates tag if it does not exist
+          name: "FC Online Tool ${{ needs.version.outputs.next_tag }}"
+          files: ./dist/FC_Online_Tool.exe
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          body: |
+            ## 🚀 FC Online Automation Tool ${{ needs.version.outputs.next_tag }}
+
+            ### 📦 Download
+            - **FC_Online_Tool.exe** — Ready-to-run Windows executable
+
+            ### 🔧 Installation
+            1. Download the exe file
+            2. Run as administrator (recommended)
+            3. Windows Defender may show a warning — click "More info" then "Run anyway"
+
+            ### ✨ Features
+            - GUI interface for easy configuration
+            - Automated FC Online operations
+            - Real-time status monitoring
+            - Dark/Light theme support
+
+            ---
+            **Note**: This release is automatically built from source.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
