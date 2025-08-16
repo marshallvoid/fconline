@@ -46,7 +46,7 @@ class EventTab:
         for radio_btn in self._radio_buttons:
             radio_btn.config(state=state)
 
-    def update_user_info_text(self, text: str, foreground: str = "#4caf50") -> None:
+    def update_user_info_text(self, text: str, foreground: str = "#22c55e") -> None:
         self._user_info_label.config(text=text, foreground=foreground)
 
     def _build(self) -> None:

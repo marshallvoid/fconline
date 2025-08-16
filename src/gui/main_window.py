@@ -244,18 +244,19 @@ class MainWindow:
             return
 
         target_tab: EventTab = getattr(self, EVENT_CONFIGS_MAP[tab_text].tab_name)
-        target_tab.update_user_info_text(info_text, foreground="#4caf50")
+        target_tab.update_user_info_text(info_text, foreground="#22c55e")
 
     def _set_notebook_state(self, enabled: bool) -> None:
         if not enabled:
             self._original_tab_index = int(self._notebook.index(self._notebook.select()))
             last_tab_index = int(self._notebook.index("end") - 1)
-            self._notebook.select(last_tab_index)
             self._locked_tab_index = last_tab_index
+            self._notebook.select(last_tab_index)
             return
 
         self._original_tab_index = self._locked_tab_index
         self._locked_tab_index = None
+        self._notebook.select(self._original_tab_index)
 
     def _update_running_status(self, is_running: bool, is_error: bool = False) -> None:
         self._is_running = is_running

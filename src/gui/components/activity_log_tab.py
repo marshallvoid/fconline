@@ -72,7 +72,7 @@ class ActivityLogTab:
             text="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "SPECIAL JACKPOT: 0\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-            foreground="#ff9800",
+            foreground="#f97316",
             font=("Consolas", 12, "bold"),
         )
         self._special_jackpot_label.pack(anchor="w")
@@ -83,7 +83,7 @@ class ActivityLogTab:
             text="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "TARGET SPECIAL JACKPOT: 0\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-            foreground="#4caf50",
+            foreground="#22c55e",
             font=("Consolas", 12, "bold"),
         )
         self._target_special_jackpot_label.pack(anchor="w", pady=(10, 0))
@@ -109,9 +109,12 @@ class ActivityLogTab:
         )
 
         self._messages_text_widget.tag_configure("default", foreground="#d1d5db", font=("Arial", 12))
-        self._messages_text_widget.tag_configure("general", foreground="#22c55e", font=("Arial", 12, "bold"))
-        self._messages_text_widget.tag_configure("info", foreground="#38bdf8", font=("Arial", 12))
+
+        self._messages_text_widget.tag_configure("info", foreground="#38bdf8", font=("Arial", 12, "bold"))
+        self._messages_text_widget.tag_configure("success", foreground="#22c55e", font=("Arial", 12, "bold"))
         self._messages_text_widget.tag_configure("error", foreground="#ef4444", font=("Arial", 12, "bold"))
+        self._messages_text_widget.tag_configure("warning", foreground="#f59e0b", font=("Arial", 12, "bold"))
+
         self._messages_text_widget.tag_configure("jackpot", foreground="#f97316", font=("Arial", 12, "bold"))
         self._messages_text_widget.tag_configure("reward", foreground="#a855f7", font=("Arial", 12, "bold"))
 
