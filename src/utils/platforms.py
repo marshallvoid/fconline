@@ -108,7 +108,7 @@ class PlatformManager:
         return user_data_dir
 
     @classmethod
-    def cleanup_user_data_directory(cls, user_data_dir: str) -> None:
+    def cleanup_user_data_directory(cls, user_data_dir: Optional[str] = None) -> None:
         if not user_data_dir or not os.path.exists(user_data_dir):
             return
 

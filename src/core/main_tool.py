@@ -1,5 +1,4 @@
 import asyncio
-import ssl
 from typing import Callable, Dict, Optional, Tuple
 
 import aiohttp
@@ -13,6 +12,7 @@ from src.core.websocket_handler import WebsocketHandler
 from src.schemas import UserReponse
 from src.utils.methods import should_execute_callback
 from src.utils.platforms import PlatformManager
+from src.utils.requests import RequestManager
 
 
 class MainTool:
@@ -70,9 +70,10 @@ class MainTool:
                 event_config=self.event_config,
                 username=self.username,
                 password=self.password,
+                message_callback=self.message_callback,
             ).run()
 
-            await self._fetch_user_info()
+            await self._get_user_info()
 
             WebsocketHandler.cookies = self.cookies
             WebsocketHandler.headers = self.headers
@@ -85,31 +86,23 @@ class MainTool:
 
         finally:
             await self.close()
-            logger.info("🏁 FC Online automation tool stopped")
+            should_execute_callback(self.message_callback, "info", "FC Online automation tool stopped")
 
     async def close(self) -> None:
-        if not self.session:
+        if not self.page or not self.session:
             return
 
         logger.info("🔒 Closing browser context and cleaning up resources...")
         try:
-            if self.page:
-                await self.page.close()
-
+            await self.page.close()
             await self.session.close()
             logger.success("✅ Browser resources cleaned up successfully")
-
         except Exception as e:
             logger.error(f"❌ Failed to clean up browser resource: {e}")
-
         finally:
+            self.user_data_dir = PlatformManager.cleanup_user_data_directory(user_data_dir=self.user_data_dir)
             self.session = None
             self.page = None
-
-        # Clean up user data directory if it was created
-        if self.user_data_dir:
-            PlatformManager.cleanup_user_data_directory(self.user_data_dir)
-            self.user_data_dir = None
 
     def update_credentials(self, username: str, password: str) -> None:
         old_username = self.username
@@ -189,8 +182,7 @@ class MainTool:
             logger.info("🪟 Applied Windows-specific browser arguments")
 
         # Force Chrome usage for better compatibility with browser automation
-        chrome_path = PlatformManager.get_chrome_executable_path()
-        if not chrome_path:
+        if not (chrome_path := PlatformManager.get_chrome_executable_path()):
             msg = "❌ Chrome/Chromium not found. Please install Chrome or Chromium."
             logger.error(msg)
             raise Exception(msg)
@@ -247,52 +239,34 @@ class MainTool:
         msg = "Failed to setup browser context after all attempts"
         raise Exception(msg)
 
-    async def _fetch_user_info(self) -> None:
+    async def _get_user_info(self) -> None:
         self.cookies = await self._extract_cookies()
-        self.headers = {
-            "x-csrftoken": self.cookies.get("csrftoken", ""),
-            "Cookie": "; ".join([f"{name}={value}" for name, value in self.cookies.items()]),
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            "Referer": self.event_config.base_url,
-            "Origin": self.event_config.base_url,
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "content-type": "application/json",
-            "foo": "bar",
-            "Connection": "keep-alive",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "Priority": "u=0",
-            "TE": "trailers",
-        }
+        self.headers = RequestManager.prepare_headers(cookies=self.cookies, base_url=self.event_config.base_url)
 
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        connector = aiohttp.TCPConnector(ssl=ssl_context)
-
-        async with aiohttp.ClientSession(cookies=self.cookies, headers=self.headers, connector=connector) as session:
+        async with aiohttp.ClientSession(
+            cookies=self.cookies,
+            headers=self.headers,
+            connector=RequestManager.get_connector(),
+        ) as session:
             logger.info("📡 Fetching user information from API...")
             try:
                 async with session.get(self.event_config.user_api_url) as response:
                     if not response.ok:
-                        logger.warning(f"⚠️ API request failed with status: {response.status}")
+                        msg = f"API request failed with status: {response.status}"
+                        should_execute_callback(self.message_callback, "error", msg)
                         return
 
-                    data = await response.json()
-                    self.user_info = UserReponse.model_validate(data)
-
+                    self.user_info = UserReponse.model_validate(await response.json())
                     if not self.user_info.payload.user:
-                        msg = "❌ User information not found"
-                        raise Exception(msg)
+                        msg = "User information not found"
+                        should_execute_callback(self.message_callback, "error", msg)
+                        return
 
-                    logger.success("✅ User information fetched successfully")
+                    should_execute_callback(self.message_callback, "success", "Get user info successfully")
                     should_execute_callback(self.user_panel_callback, self.user_info)
 
             except Exception as e:
-                logger.error(f"❌ Failed to fetch user info: {e}")
+                should_execute_callback(self.message_callback, "error", f"Failed to get user info: {e}")
 
     async def _extract_cookies(self) -> Dict[str, str]:
         cookies: Dict[str, str] = {}

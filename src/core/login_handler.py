@@ -1,10 +1,11 @@
-from typing import Self
+from typing import Callable, Optional, Self
 
 from browser_use.browser.types import Page
 from loguru import logger
 
 from src.core.event_config import EventConfig
 from src.core.websocket_handler import WebsocketHandler
+from src.utils.methods import should_execute_callback
 
 
 class LoginHandler:
@@ -12,13 +13,22 @@ class LoginHandler:
     event_config: EventConfig
     username: str
     password: str
+    message_callback: Optional[Callable[[str, str], None]] = None
 
     @classmethod
-    def setup(cls, page: Page, event_config: EventConfig, username: str, password: str) -> type[Self]:
+    def setup(
+        cls,
+        page: Page,
+        event_config: EventConfig,
+        username: str,
+        password: str,
+        message_callback: Optional[Callable[[str, str], None]] = None,
+    ) -> type[Self]:
         cls.page = page
         cls.event_config = event_config
         cls.username = username
         cls.password = password
+        cls.message_callback = message_callback
 
         return cls
 
@@ -27,10 +37,13 @@ class LoginHandler:
         logger.info("🔍 Checking login status...")
 
         if await cls._is_logged_in():
+            logger.info("🔍 User is already logged in")
+            WebsocketHandler.is_logged_in = True
             return
 
-        logger.info("🔐 User not logged in, attempting login...")
         if await cls._perform_login():
+            should_execute_callback(cls.message_callback, "success", "Login completed successfully")
+            WebsocketHandler.is_logged_in = True
             await cls.page.wait_for_load_state(state="networkidle")
             await cls._redirect_to_base_url()
             return
@@ -43,58 +56,53 @@ class LoginHandler:
         try:
             logout_btn = await cls.page.query_selector(selector=cls.event_config.logout_btn_selector)
             if logout_btn:
-                logger.info("🔍 User is already logged in")
-                WebsocketHandler.is_logged_in = True
                 return True
 
             login_btn = await cls.page.query_selector(selector=cls.event_config.login_btn_selector)
             if login_btn:
-                logger.info("🔍 User is not logged in")
                 return False
 
-            logger.warning("⚠️ Unable to determine login status")
+            should_execute_callback(cls.message_callback, "warning", "Unable to determine login status")
             return False
 
         except Exception as error:
-            logger.warning(f"⚠️ Error checking login status: {error}")
+            should_execute_callback(cls.message_callback, "error", f"Error checking login status: {error}")
             return False
 
     @classmethod
     async def _perform_login(cls) -> bool:
+        logger.info("🔐 User not logged in, attempting login...")
         try:
-            logger.info("🔐 Starting login process...")
-
             login_btn = await cls.page.query_selector(selector=cls.event_config.login_btn_selector)
             if not login_btn:
-                logger.warning("⚠️ Login button not found")
+                should_execute_callback(cls.message_callback, "error", "Login button not found")
                 return False
 
-            logger.info("🔐 Clicking login button...")
             await login_btn.click()
             await cls.page.wait_for_load_state(state="networkidle")
 
             username_input = await cls.page.query_selector(selector=cls.event_config.username_input_selector)
             if not username_input:
-                logger.warning("⚠️ Username input field not found")
+                should_execute_callback(cls.message_callback, "error", "Username input field not found")
                 return False
+
             await username_input.fill(value=cls.username)
-            logger.info(f"🔐 Filled username: {cls.username}")
 
             password_input = await cls.page.query_selector(selector=cls.event_config.password_input_selector)
             if not password_input:
-                logger.warning("⚠️ Password input field not found")
+                should_execute_callback(cls.message_callback, "error", "Password input field not found")
                 return False
+
             await password_input.fill(value=cls.password)
-            logger.info(f"🔐 Filled password: {cls.password}")
 
             submit_btn = await cls.page.query_selector(selector=cls.event_config.submit_btn_selector)
             if not submit_btn:
-                logger.warning("⚠️ Submit button not found")
+                should_execute_callback(cls.message_callback, "error", "Submit button not found")
                 return False
+
             await submit_btn.click()
 
             try:
-                logger.info("⏳ Waiting for login response...")
                 await cls.page.wait_for_function(
                     (
                         f"window.location.href.includes('{cls.event_config.base_url}') || "
@@ -103,22 +111,17 @@ class LoginHandler:
                 )
 
                 if cls.event_config.base_url in cls.page.url:
-                    logger.success("🔐 Login completed successfully - redirected to main page")
-                    WebsocketHandler.is_logged_in = True
                     return True
 
-                logger.info("⏳ Waiting for captcha resolution and redirect...")
                 await cls.page.wait_for_function(f"window.location.href.includes('{cls.event_config.base_url}')")
-                logger.success("🔐 Login completed successfully after captcha resolution")
-                WebsocketHandler.is_logged_in = True
                 return True
 
             except Exception as error:
-                logger.warning(f"⚠️ Login timeout or failed: {error}")
+                should_execute_callback(cls.message_callback, "error", f"Login failed: {error}")
                 return False
 
         except Exception as error:
-            logger.warning(f"⚠️ Error performing login: {error}")
+            should_execute_callback(cls.message_callback, "error", f"Error performing login: {error}")
             return False
 
     @classmethod
