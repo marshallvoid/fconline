@@ -7,7 +7,6 @@ import aiohttp
 from browser_use.browser.types import Page
 from loguru import logger
 from playwright.async_api import WebSocket
-from typing_extensions import deprecated
 
 from src.core.event_config import EventConfig
 from src.schemas.spin import SpinResponse
@@ -218,7 +217,6 @@ class WebsocketHandler:
                 finally:
                     cls._spin_task = None
 
-    @deprecated("Use _auto_spin_api instead")
     @classmethod
     async def _auto_spin_button(cls) -> None:
         """Continuously click the spin selector while jackpot stays above target."""
