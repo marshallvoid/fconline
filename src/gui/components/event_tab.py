@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List
 
 from loguru import logger
 
@@ -14,7 +14,7 @@ class EventTab:
         password_var: tk.StringVar,
         spin_action_var: tk.IntVar,
         target_special_jackpot_var: tk.IntVar,
-        spin_action_labels: Dict[int, Tuple[str, str]],
+        spin_actions: Dict[int, str],
         on_spin_action_changed: Callable[[], None],
     ) -> None:
         self._frame = ttk.Frame(parent)
@@ -23,7 +23,7 @@ class EventTab:
         self._password_var = password_var
         self._spin_action_var = spin_action_var
         self._target_special_jackpot_var = target_special_jackpot_var
-        self._spin_action_labels = spin_action_labels
+        self._spin_actions = spin_actions
         self._on_spin_action_changed = on_spin_action_changed
 
         self._build()
@@ -118,16 +118,16 @@ class EventTab:
         radio_container = ttk.Frame(spin_action_frame)
         radio_container.pack(fill="x")
 
-        radio_label_indexes = list(self._spin_action_labels.keys())
-        radio_label_texts = [text for _, text in self._spin_action_labels.values()]
+        radio_label_values = list(self._spin_actions.keys())
+        radio_label_texts = list(self._spin_actions.values())
 
         self._radio_buttons: List[ttk.Radiobutton] = []
-        for index, text in zip(radio_label_indexes, radio_label_texts, strict=False):
+        for value, text in zip(radio_label_values, radio_label_texts, strict=False):
             radio_btn = ttk.Radiobutton(
                 radio_container,
                 text=text,
                 variable=self._spin_action_var,
-                value=index,
+                value=value,
                 command=self._on_spin_action_changed,
             )
             radio_btn.pack(side="left", padx=(0, 20))

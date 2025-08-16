@@ -176,11 +176,8 @@ class WebsocketHandler:
 
                     try:
                         async with session.post(
-                            cls.event_config.spin_api_url,
-                            json={
-                                "spin_type": cls.spin_action,
-                                "payment_type": 1,
-                            },
+                            url=f"{cls.event_config.base_url}/{cls.event_config.spin_endpoint}",
+                            json={"spin_type": cls.spin_action, "payment_type": 1},
                         ) as response:
                             if not response.ok:
                                 logger.error(f"❌ API request failed with status: {response.status}")
@@ -204,75 +201,6 @@ class WebsocketHandler:
 
         except asyncio.CancelledError:
             logger.info("🌀 Auto-spin API task cancelled")
-            raise
-
-        finally:
-            # Ensure spin task is cleaned up
-            if cls._spin_task and not cls._spin_task.done():
-                cls._spin_task.cancel()
-                try:
-                    await cls._spin_task
-                except asyncio.CancelledError:
-                    pass
-                finally:
-                    cls._spin_task = None
-
-    @classmethod
-    async def _auto_spin_button(cls) -> None:
-        """Continuously click the spin selector while jackpot stays above target."""
-        mapping = cls.event_config.spin_action_selectors
-        selector, display_label = mapping.get(cls.spin_action, next(iter(mapping.values())))
-        spin_count = 0
-
-        try:
-            while True:
-                # Live condition
-                if cls.special_jackpot < cls.target_special_jackpot:
-                    logger.info("✅ Jackpot dropped below target — stopping auto-spin")
-                    break
-
-                if getattr(cls.page, "is_closed", lambda: False)():
-                    logger.warning("🛑 Page is closed; stopping auto-spin")
-                    break
-
-                # Check and close modal if exists
-                modal_el = await cls.page.query_selector(".swal2-container")
-                if modal_el:
-                    logger.info("⚠️ Modal detected — closing it")
-                    try:
-                        await cls.page.evaluate("document.querySelector('.swal2-container').click()")
-                        await asyncio.sleep(0.1)  # Wait a moment after closing
-                    except Exception as e:
-                        logger.error(f"❌ Error closing modal: {e}")
-                    continue  # Skip this loop iteration, retry spin next
-
-                # Click spin
-                el = await cls.page.query_selector(selector=selector)
-                if not el:
-                    logger.warning(f"🔎 Spin element not found by selector: {selector}")
-                    await asyncio.sleep(0.5)
-                    continue
-
-                try:
-                    await cls.page.evaluate(f"document.querySelector('{selector}').click()")
-                    spin_count += 1
-
-                    if spin_count % 10 == 0:
-                        logger.info(f"🎰 Auto-spin progress: {spin_count} spins completed")
-
-                        should_execute_callback(
-                            cls.message_callback,
-                            "info",
-                            f"Completed {spin_count} spins with action {cls.spin_action}",
-                        )
-
-                except Exception as e:
-                    logger.error(f"❌ Auto-spin error on spin #{spin_count}: {e}")
-
-                await asyncio.sleep(0.1)
-
-        except asyncio.CancelledError:
-            logger.info("🌀 Auto-spin task cancelled")
             raise
 
         finally:
