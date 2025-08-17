@@ -35,7 +35,6 @@ class MainWindow:
 
         self._is_running = False
         self._selected_event = "Bi Lắc"
-        self._event_radio_buttons: list[ttk.Radiobutton] = []
 
         self._tool_instance = MainTool(
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
@@ -124,29 +123,24 @@ class MainWindow:
         self._setup_trace_callbacks()
 
     def _setup_event_selection(self) -> None:
-        event_selection_frame = ttk.LabelFrame(self._root, text="Event Selection", padding=10)
+        event_selection_frame = ttk.LabelFrame(self._root, padding=10)
         event_selection_frame.pack(fill="x", padx=10, pady=(10, 5))
 
         self._event_var = tk.StringVar(value=self._selected_event)
 
-        # Create radio buttons in a grid layout, 4 per row
-        row, col = 0, 0
-        for title in EVENT_CONFIGS_MAP.keys():
-            radio_btn = ttk.Radiobutton(
-                event_selection_frame,
-                text=title,
-                variable=self._event_var,
-                value=title,
-                command=self._on_event_changed,
-            )
-            radio_btn.grid(row=row, column=col, padx=(0, 20), pady=2, sticky="w")
+        # Create dropdown menu for event selection
+        event_label = ttk.Label(event_selection_frame, text="Select Event:")
+        event_label.pack(anchor="w", pady=(0, 5))
 
-            self._event_radio_buttons.append(radio_btn)
-
-            col += 1
-            if col >= 4:  # Wrap to next row after 4 buttons
-                col = 0
-                row += 1
+        self._event_combobox = ttk.Combobox(
+            event_selection_frame,
+            textvariable=self._event_var,
+            values=list(EVENT_CONFIGS_MAP.keys()),
+            state="readonly",
+            width=30,
+        )
+        self._event_combobox.pack(anchor="w", fill="x")
+        self._event_combobox.bind("<<ComboboxSelected>>", self._on_event_changed)
 
     def _setup_main_content(self) -> None:
         main_container = ttk.Frame(self._root)
@@ -207,12 +201,9 @@ class MainWindow:
         self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
         self._root.after_idle(_schedule_focus_current_tab)
 
-    def _on_event_changed(self) -> None:
-        # Get the selected event from radio buttons
-        for radio_btn in self._event_radio_buttons:
-            if radio_btn.instate(["selected"]):
-                self._selected_event = radio_btn.cget("text")
-                break
+    def _on_event_changed(self, _event: Optional[tk.Event] = None) -> None:
+        # Get the selected event from combobox
+        self._selected_event = self._event_var.get()
 
         # Update the event tab with new event configuration
         # Instead of recreating the tab, update the existing one
@@ -296,9 +287,8 @@ class MainWindow:
 
         self._status_label.config(text=status_text)
 
-        # Disable/enable event selection radio buttons
-        for radio_btn in self._event_radio_buttons:
-            radio_btn.config(state="disabled" if is_running else "normal")
+        # Disable/enable event selection combobox
+        self._event_combobox.config(state="disabled" if is_running else "readonly")
 
         self._event_tab.set_enabled(enabled=not is_running)
 

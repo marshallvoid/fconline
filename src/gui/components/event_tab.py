@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, Dict, List
+from typing import Callable, List
 
 
 class EventTab:
@@ -12,7 +12,7 @@ class EventTab:
         password_var: tk.StringVar,
         spin_action_var: tk.IntVar,
         target_special_jackpot_var: tk.IntVar,
-        spin_actions: Dict[int, str],
+        spin_actions: List[str],
         on_spin_action_changed: Callable[[], None],
     ) -> None:
         self._frame = ttk.Frame(parent)
@@ -114,16 +114,13 @@ class EventTab:
         radio_container = ttk.Frame(spin_action_frame)
         radio_container.pack(fill="x")
 
-        radio_label_values = list(self._spin_actions.keys())
-        radio_label_texts = list(self._spin_actions.values())
-
         self._radio_buttons: List[ttk.Radiobutton] = []
-        for value, text in zip(radio_label_values, radio_label_texts, strict=False):
+        for index, value in enumerate(self._spin_actions, start=1):
             radio_btn = ttk.Radiobutton(
                 radio_container,
-                text=text,
+                text=value,
                 variable=self._spin_action_var,
-                value=value,
+                value=index,
                 command=self._on_spin_action_changed,
             )
             radio_btn.pack(side="left", padx=(0, 20))

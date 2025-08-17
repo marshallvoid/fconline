@@ -1,13 +1,13 @@
-from dataclasses import dataclass
-from typing import Dict
+from dataclasses import dataclass, field
+from typing import List
 
 
 @dataclass
 class EventConfig:
-    tab_attr_name: str
-    spin_actions: Dict[int, str]
+    tab_attr_name: str = ""
+    spin_actions: List[str] = field(default_factory=list)
 
-    base_url: str
+    base_url: str = ""
     user_endpoint: str = "api/user/get"
     spin_endpoint: str = "api/user/spin"
 

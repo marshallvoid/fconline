@@ -24,59 +24,59 @@ class MainTool:
         spin_action: int = 1,
         target_special_jackpot: int = 10000,
     ) -> None:
-        self.event_config: EventConfig = event_config
-        self.username: str = username
-        self.password: str = password
-        self.spin_action: int = spin_action
-        self.target_special_jackpot: int = target_special_jackpot
+        self._event_config: EventConfig = event_config
+        self._username: str = username
+        self._password: str = password
+        self._spin_action: int = spin_action
+        self._target_special_jackpot: int = target_special_jackpot
 
         self.is_running: bool = False
-        self.special_jackpot: int = 0
-        self.mini_jackpot: int = 0
+        self._special_jackpot: int = 0
+        self._mini_jackpot: int = 0
 
-        self.user_panel_callback: Optional[Callable[[Optional[UserReponse]], None]] = None
-        self.message_callback: Optional[Callable[[str, str], None]] = None
-        self.special_jackpot_callback: Optional[Callable[[int], None]] = None
+        self._user_panel_callback: Optional[Callable[[Optional[UserReponse]], None]] = None
+        self._message_callback: Optional[Callable[[str, str], None]] = None
+        self._special_jackpot_callback: Optional[Callable[[int], None]] = None
 
-        self.session: Optional[BrowserSession] = None
-        self.page: Optional[Page] = None
-        self.user_data_dir: Optional[str] = None
+        self._session: Optional[BrowserSession] = None
+        self._page: Optional[Page] = None
+        self._user_data_dir: Optional[str] = None
 
-        self.cookies: Dict[str, str] = {}
-        self.headers: Dict[str, str] = {}
+        self._cookies: Dict[str, str] = {}
+        self._headers: Dict[str, str] = {}
         self.user_info: Optional[UserReponse] = None
 
     async def run(self) -> None:
-        self.session, self.page = await self._setup_browser()
+        self._session, self._page = await self._setup_browser()
 
         try:
-            logger.info(f"🌐 Navigating to: {self.event_config.base_url}")
-            await self.page.goto(url=self.event_config.base_url)
-            await self.page.wait_for_load_state(state="networkidle")
+            logger.info(f"🌐 Navigating to: {self._event_config.base_url}")
+            await self._page.goto(url=self._event_config.base_url)
+            await self._page.wait_for_load_state(state="networkidle")
 
             WebsocketHandler.setup(
-                page=self.page,
-                event_config=self.event_config,
-                spin_action=self.spin_action,
-                special_jackpot=self.special_jackpot,
-                mini_jackpot=self.mini_jackpot,
-                target_special_jackpot=self.target_special_jackpot,
-                message_callback=self.message_callback,
-                jackpot_callback=self.special_jackpot_callback,
+                page=self._page,
+                event_config=self._event_config,
+                spin_action=self._spin_action,
+                special_jackpot=self._special_jackpot,
+                mini_jackpot=self._mini_jackpot,
+                target_special_jackpot=self._target_special_jackpot,
+                message_callback=self._message_callback,
+                jackpot_callback=self._special_jackpot_callback,
             ).run()
 
             await LoginHandler.setup(
-                page=self.page,
-                event_config=self.event_config,
-                username=self.username,
-                password=self.password,
-                message_callback=self.message_callback,
+                page=self._page,
+                event_config=self._event_config,
+                username=self._username,
+                password=self._password,
+                message_callback=self._message_callback,
             ).run()
 
             await self._get_user_info()
 
-            WebsocketHandler.cookies = self.cookies
-            WebsocketHandler.headers = self.headers
+            WebsocketHandler.cookies = self._cookies
+            WebsocketHandler.headers = self._headers
 
             while self.is_running:
                 await asyncio.sleep(delay=1)
@@ -86,35 +86,35 @@ class MainTool:
 
         finally:
             await self.close()
-            should_execute_callback(self.message_callback, "info", "FC Online automation tool stopped")
+            should_execute_callback(self._message_callback, "info", "FC Online automation tool stopped")
 
     async def close(self) -> None:
-        if not self.page or not self.session:
+        if not self._page or not self._session:
             return
 
         logger.info("🔒 Closing browser context and cleaning up resources...")
         try:
-            await self.page.close()
-            await self.session.close()
+            await self._page.close()
+            await self._session.close()
             logger.success("✅ Browser resources cleaned up successfully")
         except Exception as e:
             logger.error(f"❌ Failed to clean up browser resource: {e}")
         finally:
-            self.user_data_dir = PlatformManager.cleanup_user_data_directory(user_data_dir=self.user_data_dir)
-            self.session = None
-            self.page = None
+            self._user_data_dir = PlatformManager.cleanup_user_data_directory(user_data_dir=self._user_data_dir)
+            self._session = None
+            self._page = None
 
     def update_credentials(self, username: str, password: str) -> None:
-        old_username = self.username
-        old_password = self.password
+        old_username = self._username
+        old_password = self._password
 
         credentials_changed = (old_username != username) or (old_password != password)
         if not credentials_changed:
             return
 
         self.user_info = None
-        self.username = username
-        self.password = password
+        self._username = username
+        self._password = password
 
     def update_configs(
         self,
@@ -129,16 +129,16 @@ class MainTool:
         special_jackpot_callback: Optional[Callable[[int], None]] = None,
     ) -> None:
         self.is_running = is_running or self.is_running
-        self.event_config = event_config or self.event_config
-        self.special_jackpot = special_jackpot or self.special_jackpot
-        self.mini_jackpot = mini_jackpot or self.mini_jackpot
-        self.spin_action = spin_action or self.spin_action
-        self.target_special_jackpot = target_special_jackpot or self.target_special_jackpot
-        self.user_panel_callback = user_panel_callback or self.user_panel_callback
-        self.message_callback = message_callback or self.message_callback
+        self._event_config = event_config or self._event_config
+        self._special_jackpot = special_jackpot or self._special_jackpot
+        self._mini_jackpot = mini_jackpot or self._mini_jackpot
+        self._spin_action = spin_action or self._spin_action
+        self._target_special_jackpot = target_special_jackpot or self._target_special_jackpot
+        self._user_panel_callback = user_panel_callback or self._user_panel_callback
+        self._message_callback = message_callback or self._message_callback
 
         if special_jackpot_callback:
-            self.special_jackpot_callback = special_jackpot_callback
+            self._special_jackpot_callback = special_jackpot_callback
 
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("🌐 Setting up browser context...")
@@ -195,7 +195,7 @@ class MainTool:
                 user_data_dir = None if attempt > 0 else PlatformManager.get_user_data_directory()
                 # Store for cleanup later
                 if user_data_dir:
-                    self.user_data_dir = user_data_dir
+                    self._user_data_dir = user_data_dir
 
                 browser_profile = BrowserProfile(
                     stealth=True,
@@ -240,40 +240,40 @@ class MainTool:
         raise Exception(msg)
 
     async def _get_user_info(self) -> None:
-        self.cookies = await self._extract_cookies()
-        self.headers = RequestManager.headers(cookies=self.cookies, base_url=self.event_config.base_url)
+        self._cookies = await self._extract_cookies()
+        self._headers = RequestManager.headers(cookies=self._cookies, base_url=self._event_config.base_url)
 
         async with aiohttp.ClientSession(
-            cookies=self.cookies,
-            headers=self.headers,
+            cookies=self._cookies,
+            headers=self._headers,
             connector=RequestManager.connector(),
         ) as session:
             logger.info("📡 Fetching user information from API...")
             try:
-                async with session.get(f"{self.event_config.base_url}/{self.event_config.user_endpoint}") as response:
+                async with session.get(f"{self._event_config.base_url}/{self._event_config.user_endpoint}") as response:
                     if not response.ok:
                         msg = f"API request failed with status: {response.status}"
-                        should_execute_callback(self.message_callback, "error", msg)
+                        should_execute_callback(self._message_callback, "error", msg)
                         return
 
                     self.user_info = UserReponse.model_validate(await response.json())
                     if not self.user_info.payload.user:
                         msg = "User information not found"
-                        should_execute_callback(self.message_callback, "error", msg)
+                        should_execute_callback(self._message_callback, "error", msg)
                         return
 
-                    should_execute_callback(self.message_callback, "success", "Get user info successfully")
-                    should_execute_callback(self.user_panel_callback, self.user_info)
+                    should_execute_callback(self._message_callback, "success", "Get user info successfully")
+                    should_execute_callback(self._user_panel_callback, self.user_info)
 
             except Exception as e:
-                should_execute_callback(self.message_callback, "error", f"Failed to get user info: {e}")
+                should_execute_callback(self._message_callback, "error", f"Failed to get user info: {e}")
 
     async def _extract_cookies(self) -> Dict[str, str]:
         cookies: Dict[str, str] = {}
-        if self.page:
+        if self._page:
             try:
                 logger.info("🍪 Extracting cookies from browser session...")
-                for cookie in await self.page.context.cookies():
+                for cookie in await self._page.context.cookies():
                     domain = cookie.get("domain", "")
                     if not domain:
                         continue

@@ -10,12 +10,16 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
 try:
-    import src.infrastructure.logger  # noqa: F401
-    from src.gui.main_window import MainWindow
 
-    if __name__ == "__main__":
+    def main() -> None:
+        import src.infrastructure.logger  # noqa: F401
+        from src.gui.main_window import MainWindow
+
         app = MainWindow()
         app.run()
+
+    if __name__ == "__main__":
+        main()
 
 except ImportError as e:
     error_msg = (
@@ -41,7 +45,11 @@ except Exception as e:
 
     # Also write to file as backup
     try:
-        with open("app_error.log", "w") as f:
+        from src.utils.credentials import UserConfigManager
+
+        config_dir = UserConfigManager._get_config_data_directory()
+        log_file = os.path.join(config_dir, "app_error.log")
+        with open(log_file, "w", encoding="utf-8") as f:
             f.write(traceback.format_exc() + "\n")
             f.write(error_msg)
 
