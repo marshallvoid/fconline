@@ -45,7 +45,7 @@ except Exception as e:
 
     # Also write to file as backup
     try:
-        from src.utils.credentials import UserConfigManager
+        from src.utils.user_config import UserConfigManager
 
         config_dir = UserConfigManager._get_config_data_directory()
         log_file = os.path.join(config_dir, "app_error.log")

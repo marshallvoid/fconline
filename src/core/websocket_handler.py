@@ -114,12 +114,10 @@ class WebsocketHandler:
     def _handle_jackpot(cls, type: str, value: int) -> None:
         match type:
             case "jackpot_value":
-                logger.info(f"Special Jackpot: {value:,}")
                 cls.special_jackpot = value
 
                 if value >= cls.target_special_jackpot:
                     msg = f"Special Jackpot has reached {cls.target_special_jackpot:,}"
-                    logger.success(f"🔌 {msg}")
                     should_execute_callback(cls.message_callback, "jackpot", msg)
 
                 # Start/stop spin task depending on live value
@@ -128,11 +126,12 @@ class WebsocketHandler:
                 should_execute_callback(cls.jackpot_callback, value)
 
             case "mini_jackpot":
-                logger.info(f"Mini Jackpot: {value:,}")
                 cls.mini_jackpot = value
 
+                should_execute_callback(cls.message_callback, "jackpot", f"Mini Jackpot: {value:,}")
+
             case _:
-                should_execute_callback(cls.message_callback, "error", f"Unknown event type: {type}: {value}")
+                should_execute_callback(cls.message_callback, "error", f"Unknown event type: {type}")
 
     @classmethod
     async def _ensure_spin_state(cls) -> None:
@@ -170,7 +169,7 @@ class WebsocketHandler:
                         logger.info("✅ Jackpot dropped below target — stopping auto-spin API")
                         break
 
-                    if getattr(cls.page, "is_closed", lambda: False)():
+                    if cls.page.is_closed():
                         logger.warning("🛑 Page is closed; stopping auto-spin API")
                         break
 

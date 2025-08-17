@@ -105,7 +105,7 @@ class MainTool:
         logger.info("🔒 Closing browser context and cleaning up resources...")
         try:
             await self._page.close()
-            await self._session.close()
+            await self._session.stop()
             logger.success("✅ Browser resources cleaned up successfully")
         except Exception as e:
             logger.error(f"❌ Failed to clean up browser resource: {e}")
