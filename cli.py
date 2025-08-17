@@ -63,8 +63,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _resolve_credential(arg_value: Optional[str], env_key: str, prompt: str, *, is_password: bool = False) -> str:
-    """Resolve a credential from CLI arg, then ENV, then interactive input."""
+def _resolve_input(arg_value: Optional[str], env_key: str, prompt: str, *, is_password: bool = False) -> str:
+    """Resolve a input from CLI arg, then ENV, then interactive input."""
     if arg_value:
         return arg_value
 
@@ -84,14 +84,12 @@ async def _run_main(args: argparse.Namespace) -> None:
     # Initialize tool
     tool: MainTool = MainTool(
         event_config=EventConfig(
-            tab_attr_name="",
-            spin_actions={},
-            base_url=str(args.base_url).rstrip("/"),
+            base_url=_resolve_input(args.base_url, "FC_BASE_URL", "Base URL: ").rstrip("/"),
             user_endpoint=str(args.user_endpoint).lstrip("/"),
             spin_endpoint=str(args.spin_endpoint).lstrip("/"),
         ),
-        username=_resolve_credential(args.username, "FC_USERNAME", "Username: "),
-        password=_resolve_credential(args.password, "FC_PASSWORD", "Password: ", is_password=True),
+        username=_resolve_input(args.username, "FC_USERNAME", "Username: "),
+        password=_resolve_input(args.password, "FC_PASSWORD", "Password: ", is_password=True),
         spin_action=int(args.spin_action),
         target_special_jackpot=int(args.target_special_jackpot),
     )
