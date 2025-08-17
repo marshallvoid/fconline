@@ -78,6 +78,16 @@ class MainTool:
             WebsocketHandler.cookies = self._cookies
             WebsocketHandler.headers = self._headers
 
+            spin_action_name = self._event_config.spin_actions[self._spin_action - 1]
+            should_execute_callback(
+                self._message_callback,
+                "info",
+                (
+                    f"Using spin action '{spin_action_name}' to auto spin when target "
+                    f"{self._target_special_jackpot} is reached at {self._event_config.base_url}"
+                ),
+            )
+
             while self.is_running:
                 await asyncio.sleep(delay=1)
 
