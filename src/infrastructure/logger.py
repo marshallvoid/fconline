@@ -1,9 +1,13 @@
 import logging
+import os
 import sys
 from types import FrameType
 from typing import Optional, cast
 
+from dotenv import load_dotenv
 from loguru import logger
+
+load_dotenv()
 
 LOGURU_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
@@ -55,7 +59,7 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
         return
 
     # Check if running as exe (production build)
-    is_production = getattr(sys, "frozen", False)
+    is_production = os.environ.get("ENV", "dev").lower() == "prod"
 
     # In production builds, force debug=False to reduce logging
     if is_production:
@@ -113,4 +117,4 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
 
 
 # Auto-initialize logger on module import with default settings
-init_logger()
+init_logger(debug=os.environ.get("DEBUG", "false").lower() == "true")

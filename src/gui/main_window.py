@@ -12,7 +12,7 @@ from src.gui.components.activity_log_tab import ActivityLogTab
 from src.gui.components.event_tab import EventTab
 from src.schemas.user_config import UserConfig
 from src.utils.contants import EVENT_CONFIGS_MAP
-from src.utils.credentials import UserConfigManager
+from src.utils.user_config import UserConfigManager
 
 if TYPE_CHECKING:
     from src.schemas.user_response import UserReponse
@@ -34,7 +34,7 @@ class MainWindow:
         self._target_special_jackpot_var = tk.IntVar(value=saved_configs.target_special_jackpot)
 
         self._is_running = False
-        self._selected_event = "Bi Lắc"
+        self._selected_event = saved_configs.event or "Bi Lắc"
 
         self._tool_instance = MainTool(
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
@@ -201,6 +201,17 @@ class MainWindow:
         self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
         self._root.after_idle(_schedule_focus_current_tab)
 
+    def _save_configs(self) -> None:
+        UserConfigManager.save_configs(
+            config=UserConfig(
+                event=self._selected_event,
+                username=self._username_var.get(),
+                password=self._password_var.get(),
+                spin_action=self._spin_action_var.get(),
+                target_special_jackpot=self._target_special_jackpot_var.get(),
+            )
+        )
+
     def _on_event_changed(self, _event: Optional[tk.Event] = None) -> None:
         # Get the selected event from combobox
         self._selected_event = self._event_var.get()
@@ -229,26 +240,18 @@ class MainWindow:
         if not self._is_running:
             self._tool_instance.update_configs(event_config=EVENT_CONFIGS_MAP[self._selected_event])
 
-    def _setup_trace_callbacks(self) -> None:
-        def _save_configs() -> None:
-            UserConfigManager.save_configs(
-                config=UserConfig(
-                    username=self._username_var.get(),
-                    password=self._password_var.get(),
-                    spin_action=self._spin_action_var.get(),
-                    target_special_jackpot=self._target_special_jackpot_var.get(),
-                )
-            )
+        self._save_configs()
 
+    def _setup_trace_callbacks(self) -> None:
         def _on_credentials_changed() -> None:
             if not self._is_running:
                 self._tool_instance.update_credentials(self._username_var.get(), self._password_var.get())
-                _save_configs()
+                self._save_configs()
 
         self._username_var.trace_add("write", lambda *args: _on_credentials_changed())
         self._password_var.trace_add("write", lambda *args: _on_credentials_changed())
-        self._spin_action_var.trace_add("write", lambda *args: _save_configs())
-        self._target_special_jackpot_var.trace_add("write", lambda *args: _save_configs())
+        self._spin_action_var.trace_add("write", lambda *args: self._save_configs())
+        self._target_special_jackpot_var.trace_add("write", lambda *args: self._save_configs())
 
     def _update_user_panel(self, user_info: Optional["UserReponse"]) -> None:
         info_text = (
