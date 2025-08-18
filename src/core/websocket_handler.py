@@ -13,6 +13,7 @@ from src.schemas.enums.message_tag import MessageTag
 from src.schemas.spin_response import SpinResponse
 from src.schemas.user_response import UserReponse
 from src.utils import methods as md
+from src.utils import sounds
 from src.utils.requests import RequestManager
 
 
@@ -122,24 +123,11 @@ class WebsocketHandler:
 
     @classmethod
     async def _handle_jackpot(cls, type: str, value: int | str, nickname: str = "") -> None:
+        is_me = False
+        if cls.user_info and cls.user_info.payload.user:
+            is_me = nickname.lower() == cls.user_info.payload.user.nickname.lower()
+
         match type:
-            case "jackpot":
-                if not nickname:
-                    return
-
-                is_me = False
-                if cls.user_info and cls.user_info.payload.user:
-                    is_me = nickname.lower() == cls.user_info.payload.user.nickname.lower()
-
-                if is_me:
-                    md.should_execute_callback(cls._notification_callback, nickname, value)
-
-                md.should_execute_callback(
-                    cls._message_callback,
-                    MessageTag.WINNER.name if is_me else MessageTag.INFO.name,
-                    f"You won jackpot: {value}" if is_me else f"User '{nickname}' won jackpot: {value}",
-                )
-
             case "jackpot_value":
                 value = int(value)
                 cls._special_jackpot = value
@@ -155,11 +143,21 @@ class WebsocketHandler:
 
                 md.should_execute_callback(cls._jackpot_callback, value)
 
-            case "mini_jackpot":
-                value = int(value)
-                cls._mini_jackpot = value
+            case "jackpot":
+                if not nickname:
+                    return
 
-                md.should_execute_callback(cls._message_callback, MessageTag.JACKPOT.name, f"Mini Jackpot: {value:,}")
+                msg = f"You won jackpot: {value}" if is_me else f"User '{nickname}' won jackpot: {value}"
+                tag = MessageTag.WINNER.name if is_me else MessageTag.INFO.name
+
+                md.should_execute_callback(cls._notification_callback, nickname, value) if is_me else None
+                md.should_execute_callback(cls._message_callback, tag, msg)
+                sounds.send_notification(msg, audio_name="coin_flip" if is_me else "game_bonus")
+
+            case "mini_jackpot":
+                msg = f"You won mini jackpot: {value}" if is_me else f"User '{nickname}' won mini jackpot: {value}"
+                tag = MessageTag.WINNER.name if is_me else MessageTag.INFO.name
+                md.should_execute_callback(cls._message_callback, tag, msg)
 
             case _:
                 md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Unknown event type: {type}")
