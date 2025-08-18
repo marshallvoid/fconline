@@ -149,7 +149,7 @@ class WebsocketHandler:
 
                 md.should_execute_callback(cls._notification_callback, nickname, value) if is_me else None
                 md.should_execute_callback(cls._message_callback, tag, msg)
-                sounds.send_notification(msg, audio_name="coin_flip" if is_me else "game_bonus")
+                sounds.send_notification(msg, audio_name="coin-1") if is_me else None
 
             case "mini_jackpot":
                 msg = f"You won mini jackpot: {value}" if is_me else f"User '{nickname}' won mini jackpot: {value}"
@@ -162,6 +162,9 @@ class WebsocketHandler:
 
     @classmethod
     async def _execute_single_spin(cls) -> None:
+        if cls._special_jackpot < cls._target_special_jackpot:
+            return
+
         cookies, headers, connector = cls.cookies, cls.headers, RequestManager.connector()
         url = f"{cls._event_config.base_url}/{cls._event_config.spin_endpoint}"
         payload = {"spin_type": cls._spin_action, "payment_type": 1}
