@@ -11,7 +11,7 @@ _notification = Notify(
 )
 
 
-def send_notification(message: str, audio_name: str = "coin_flip", loop_count: int = 1, loop_interval: int = 1) -> None:
+def send_notification(message: str, audio_name: str, loop_count: int = 1, loop_interval: int = 1) -> None:
     _notification.message = message
     _notification.audio = files.resource_path(f"assets/sounds/{audio_name}.wav")
 
