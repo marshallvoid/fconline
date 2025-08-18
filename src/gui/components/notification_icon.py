@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk
 from typing import List, Optional, Tuple
 
+from src.utils.user_config import UserConfigManager
+
 
 class NotificationIcon:
     def __init__(self, parent: tk.Misc) -> None:
@@ -10,19 +12,52 @@ class NotificationIcon:
         self._notifications: List[Tuple[str, str, str]] = []  # List of (nickname, jackpot_value, timestamp) tuples
         self._menu_window: Optional[tk.Toplevel] = None
 
+        # Load existing notifications from config
+        self._load_notifications_from_config()
+
         self._build()
 
     @property
     def frame(self) -> ttk.Frame:
         return self._frame
 
+    @property
+    def notifications_count(self) -> int:
+        return len(self._notifications)
+
+    @property
+    def notifications(self) -> List[Tuple[str, str, str]]:
+        """Get a copy of all notifications."""
+        return self._notifications.copy()
+
     def add_notification(self, nickname: str, jackpot_value: str, timestamp: str) -> None:
         self._notifications.append((nickname, jackpot_value, timestamp))
         self._update_icon()
+        self._save_notifications_to_config()
 
     def clear_notifications(self) -> None:
         self._notifications.clear()
         self._update_icon()
+        self._save_notifications_to_config()
+
+    def refresh_notifications_from_config(self) -> None:
+        self._load_notifications_from_config()
+        self._update_icon()
+
+    def _load_notifications_from_config(self) -> None:
+        try:
+            config = UserConfigManager.load_configs()
+            self._notifications = config.notifications
+        except Exception:
+            self._notifications = []
+
+    def _save_notifications_to_config(self) -> None:
+        try:
+            config = UserConfigManager.load_configs()
+            config.notifications = self._notifications
+            UserConfigManager.save_configs(config)
+        except Exception:
+            pass
 
     def _build(self) -> None:
         self._frame: ttk.Frame = ttk.Frame(self._parent)
@@ -50,6 +85,9 @@ class NotificationIcon:
 
         # Initially hidden
         self._count_label.pack_forget()
+
+        # Update icon to reflect loaded notifications
+        self._update_icon()
 
     def _on_icon_click(self) -> None:
         # Close existing menu if any
@@ -224,6 +262,7 @@ class NotificationIcon:
     def _clear_all_notifications(self) -> None:
         self._notifications.clear()
         self._update_icon()
+        self._save_notifications_to_config()
 
         if self._menu_window:
             self._menu_window.destroy()

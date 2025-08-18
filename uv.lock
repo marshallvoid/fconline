@@ -381,6 +381,15 @@ wheels = [
 ]
 
 [[package]]
+name = "chime"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/bc/918e3769666d918904b70f1fbdabfc3fbc3fbe97240a2a610b98b9b3fe0e/chime-0.7.0.tar.gz", hash = "sha256:ba4af8934ec8bd9a89a340b4433b2e500097b979823386432be7128e0b201f0d", size = 3923153, upload-time = "2023-02-20T10:05:40.199Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/84/e4/9d2a6bbfcb11dff0bda0cd886fbf20f669260610e413c1be1537dbb4a5c1/chime-0.7.0-py3-none-any.whl", hash = "sha256:9626f8151cb008b1e0ffb7de6d1834b7013ba5fc4c4e3c9ba6e29dc9bf5feac6", size = 3907551, upload-time = "2023-02-20T10:05:16.484Z" },
+]
+
+[[package]]
 name = "click"
 version = "8.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -919,6 +928,15 @@ wheels = [
 ]
 
 [[package]]
+name = "jeepney"
+version = "0.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7b/6f/357efd7602486741aa73ffc0617fb310a29b588ed0fd69c2399acbb85b0c/jeepney-0.9.0.tar.gz", hash = "sha256:cf0e9e845622b81e4a28df94c40345400256ec608d0e55bb8a3feaa9163f5732", size = 106758, upload-time = "2025-02-27T18:51:01.684Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b2/a3/e137168c9c44d18eff0376253da9f1e9234d0239e0ee230d2fee6cea8e55/jeepney-0.9.0-py3-none-any.whl", hash = "sha256:97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb182683", size = 49010, upload-time = "2025-02-27T18:51:00.104Z" },
+]
+
+[[package]]
 name = "jiter"
 version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1207,6 +1225,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/43/16/fc88b08840de0e0a72a2f9d8c6bae36be573e475a6326ae854bcc549fc45/nodeenv-1.9.1.tar.gz", hash = "sha256:6ec12890a2dab7946721edbfbcd91f3319c6ccc9aec47be7c7e6b7011ee6645f", size = 47437, upload-time = "2024-06-04T18:44:11.171Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d2/1d/1b658dbd2b9fa9c4c9f32accbfc0205d532c8c6194dc0f2a4c0428e7128a/nodeenv-1.9.1-py2.py3-none-any.whl", hash = "sha256:ba11c9782d29c27c70ffbdda2d7415098754709be8a7056d79a737cd901155c9", size = 22314, upload-time = "2024-06-04T18:44:08.352Z" },
+]
+
+[[package]]
+name = "notify-py"
+version = "0.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jeepney", marker = "sys_platform == 'linux'" },
+    { name = "loguru" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/91/81806bcf65c834f0f5469c6b1a7b593d1c4898d5f5ea00273a0fe7e6cda3/notify_py-0.3.2.tar.gz", hash = "sha256:016b54d20dff55713dce5428d6f6314d3a7e3e6d7d00a57c45ce813534e34a4e", size = 647706, upload-time = "2021-05-05T18:21:01.193Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ed/44/1f4abc7755b4b75dce32a1a184c43bf0580b92f27b035198f885b18d5d1d/notify_py-0.3.2-py3-none-any.whl", hash = "sha256:bcf4a15582a61cab9b7eb6cb1b76c1a395e8eac6e34216d8612df68ef21c886b", size = 649922, upload-time = "2021-05-05T18:20:59.094Z" },
 ]
 
 [[package]]
@@ -4704,9 +4735,11 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "browser-use" },
+    { name = "chime" },
     { name = "cryptography" },
     { name = "darkdetect" },
     { name = "loguru" },
+    { name = "notify-py" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "shortuuid" },
@@ -4738,9 +4771,11 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.12.15" },
     { name = "browser-use", specifier = ">=0.5.11" },
+    { name = "chime", specifier = ">=0.7.0" },
     { name = "cryptography", specifier = ">=45.0.6" },
     { name = "darkdetect", specifier = ">=0.8.0" },
     { name = "loguru", specifier = ">=0.7.3" },
+    { name = "notify-py", specifier = ">=0.3.2" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "shortuuid", specifier = ">=1.0.13" },

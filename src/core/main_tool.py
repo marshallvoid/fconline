@@ -11,7 +11,7 @@ from src.core.login_handler import LoginHandler
 from src.core.websocket_handler import WebsocketHandler
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
-from src.utils.methods import should_execute_callback
+from src.utils import methods as md
 from src.utils.platforms import PlatformManager
 from src.utils.requests import RequestManager
 
@@ -97,7 +97,9 @@ class MainTool:
 
         finally:
             await self.close()
-            should_execute_callback(self._message_callback, MessageTag.INFO.name, "FC Online automation tool stopped")
+            md.should_execute_callback(
+                self._message_callback, MessageTag.INFO.name, "FC Online automation tool stopped"
+            )  # noqa: E501
 
     async def close(self) -> None:
         if not self._page or not self._session:
@@ -272,17 +274,17 @@ class MainTool:
                 async with session.get(f"{self._event_config.base_url}/{self._event_config.user_endpoint}") as response:
                     if not response.ok:
                         msg = f"API request failed with status: {response.status}"
-                        should_execute_callback(self._message_callback, MessageTag.ERROR.name, msg)
+                        md.should_execute_callback(self._message_callback, MessageTag.ERROR.name, msg)
                         return
 
                     self.user_info = UserReponse.model_validate(await response.json())
                     if not self.user_info.payload.user:
                         msg = "User information not found"
-                        should_execute_callback(self._message_callback, MessageTag.ERROR.name, msg)
+                        md.should_execute_callback(self._message_callback, MessageTag.ERROR.name, msg)
                         return
 
-                    should_execute_callback(self._user_info_callback, self.user_info)
-                    should_execute_callback(
+                    md.should_execute_callback(self._user_info_callback, self.user_info)
+                    md.should_execute_callback(
                         self._message_callback,
                         MessageTag.SUCCESS.name,
                         "Get user info successfully",
@@ -290,7 +292,9 @@ class MainTool:
                     logger.success(f"👤 Fetch user info successfully: {self.user_info.payload.user.nickname}")
 
             except Exception as e:
-                should_execute_callback(self._message_callback, MessageTag.ERROR.name, f"Failed to get user info: {e}")
+                md.should_execute_callback(
+                    self._message_callback, MessageTag.ERROR.name, f"Failed to get user info: {e}"
+                )
 
     async def _extract_cookies(self) -> Dict[str, str]:
         cookies: Dict[str, str] = {}
