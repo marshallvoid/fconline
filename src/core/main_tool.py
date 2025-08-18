@@ -9,6 +9,7 @@ from loguru import logger
 from src.core.event_config import EventConfig
 from src.core.login_handler import LoginHandler
 from src.core.websocket_handler import WebsocketHandler
+from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
 from src.utils.methods import should_execute_callback
 from src.utils.platforms import PlatformManager
@@ -18,30 +19,38 @@ from src.utils.requests import RequestManager
 class MainTool:
     def __init__(
         self,
+        screen_width: int,
         event_config: EventConfig,
         username: str,
         password: str,
         spin_action: int = 1,
         target_special_jackpot: int = 10000,
     ) -> None:
+        # Configs
+        self._screen_width: int = screen_width
         self._event_config: EventConfig = event_config
         self._username: str = username
         self._password: str = password
         self._spin_action: int = spin_action
         self._target_special_jackpot: int = target_special_jackpot
 
+        # State
         self.is_running: bool = False
         self._special_jackpot: int = 0
         self._mini_jackpot: int = 0
 
-        self._user_panel_callback: Optional[Callable[[Optional[UserReponse]], None]] = None
+        # Callbacks
+        self._user_info_callback: Optional[Callable[[Optional[UserReponse]], None]] = None
         self._message_callback: Optional[Callable[[str, str], None]] = None
         self._special_jackpot_callback: Optional[Callable[[int], None]] = None
+        self._notification_callback: Optional[Callable[[str, str], None]] = None
 
+        # Browser
         self._session: Optional[BrowserSession] = None
         self._page: Optional[Page] = None
         self._user_data_dir: Optional[str] = None
 
+        # User Info
         self._cookies: Dict[str, str] = {}
         self._headers: Dict[str, str] = {}
         self.user_info: Optional[UserReponse] = None
@@ -63,6 +72,7 @@ class MainTool:
                 target_special_jackpot=self._target_special_jackpot,
                 message_callback=self._message_callback,
                 jackpot_callback=self._special_jackpot_callback,
+                jackpot_billboard_callback=self._notification_callback,
             ).run()
 
             await LoginHandler.setup(
@@ -77,16 +87,7 @@ class MainTool:
 
             WebsocketHandler.cookies = self._cookies
             WebsocketHandler.headers = self._headers
-
-            spin_action_name = self._event_config.spin_actions[self._spin_action - 1]
-            should_execute_callback(
-                self._message_callback,
-                "info",
-                (
-                    f"Using spin action '{spin_action_name}' to auto spin when target "
-                    f"{self._target_special_jackpot} is reached at {self._event_config.base_url}"
-                ),
-            )
+            WebsocketHandler.user_info = self.user_info
 
             while self.is_running:
                 await asyncio.sleep(delay=1)
@@ -96,7 +97,7 @@ class MainTool:
 
         finally:
             await self.close()
-            should_execute_callback(self._message_callback, "info", "FC Online automation tool stopped")
+            should_execute_callback(self._message_callback, MessageTag.INFO.name, "FC Online automation tool stopped")
 
     async def close(self) -> None:
         if not self._page or not self._session:
@@ -105,7 +106,7 @@ class MainTool:
         logger.info("🔒 Closing browser context and cleaning up resources...")
         try:
             await self._page.close()
-            await self._session.stop()
+            await self._session.kill()
             logger.success("✅ Browser resources cleaned up successfully")
         except Exception as e:
             logger.error(f"❌ Failed to clean up browser resource: {e}")
@@ -134,21 +135,29 @@ class MainTool:
         mini_jackpot: Optional[int] = None,
         spin_action: Optional[int] = None,
         target_special_jackpot: Optional[int] = None,
-        user_panel_callback: Optional[Callable[[Optional[UserReponse]], None]] = None,
+        user_info_callback: Optional[Callable[[Optional[UserReponse]], None]] = None,
         message_callback: Optional[Callable[[str, str], None]] = None,
         special_jackpot_callback: Optional[Callable[[int], None]] = None,
+        jackpot_billboard_callback: Optional[Callable[[str, str], None]] = None,
     ) -> None:
-        self.is_running = is_running or self.is_running
+        self.is_running = is_running if is_running is not None else self.is_running
         self._event_config = event_config or self._event_config
         self._special_jackpot = special_jackpot or self._special_jackpot
         self._mini_jackpot = mini_jackpot or self._mini_jackpot
         self._spin_action = spin_action or self._spin_action
         self._target_special_jackpot = target_special_jackpot or self._target_special_jackpot
-        self._user_panel_callback = user_panel_callback or self._user_panel_callback
-        self._message_callback = message_callback or self._message_callback
+
+        if user_info_callback:
+            self._user_info_callback = user_info_callback
+
+        if message_callback:
+            self._message_callback = message_callback
 
         if special_jackpot_callback:
             self._special_jackpot_callback = special_jackpot_callback
+
+        if jackpot_billboard_callback:
+            self._notification_callback = jackpot_billboard_callback
 
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("🌐 Setting up browser context...")
@@ -214,9 +223,9 @@ class MainTool:
                     default_timeout=60000 * 3,
                     default_navigation_timeout=60000 * 3,
                     args=extra_chromium_args,
-                    viewport={"width": 1920, "height": 1080},
                     user_data_dir=user_data_dir,
                     executable_path=chrome_path,
+                    window_size={"width": self._screen_width - 756, "height": 768},
                     user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
                 )
 
@@ -263,20 +272,25 @@ class MainTool:
                 async with session.get(f"{self._event_config.base_url}/{self._event_config.user_endpoint}") as response:
                     if not response.ok:
                         msg = f"API request failed with status: {response.status}"
-                        should_execute_callback(self._message_callback, "error", msg)
+                        should_execute_callback(self._message_callback, MessageTag.ERROR.name, msg)
                         return
 
                     self.user_info = UserReponse.model_validate(await response.json())
                     if not self.user_info.payload.user:
                         msg = "User information not found"
-                        should_execute_callback(self._message_callback, "error", msg)
+                        should_execute_callback(self._message_callback, MessageTag.ERROR.name, msg)
                         return
 
-                    should_execute_callback(self._message_callback, "success", "Get user info successfully")
-                    should_execute_callback(self._user_panel_callback, self.user_info)
+                    should_execute_callback(self._user_info_callback, self.user_info)
+                    should_execute_callback(
+                        self._message_callback,
+                        MessageTag.SUCCESS.name,
+                        "Get user info successfully",
+                    )
+                    logger.success(f"👤 Fetch user info successfully: {self.user_info.payload.user.nickname}")
 
             except Exception as e:
-                should_execute_callback(self._message_callback, "error", f"Failed to get user info: {e}")
+                should_execute_callback(self._message_callback, MessageTag.ERROR.name, f"Failed to get user info: {e}")
 
     async def _extract_cookies(self) -> Dict[str, str]:
         cookies: Dict[str, str] = {}

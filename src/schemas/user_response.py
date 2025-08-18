@@ -5,6 +5,11 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+class JackpotBillboard(BaseModel):
+    value: str
+    nickname: str
+
+
 class UserDetail(BaseModel):
     id: int
     uid: str
@@ -16,6 +21,7 @@ class UserDetail(BaseModel):
 
 class UserPayload(BaseModel):
     user: Optional[UserDetail] = None
+    jackpot_billboard: Optional[JackpotBillboard] = None
 
 
 class UserReponse(BaseModel):
