@@ -1,3 +1,5 @@
+import time
+
 from notifypy import Notify
 
 from src.utils import files
@@ -11,6 +13,9 @@ _notification = Notify(
 )
 
 
-def send_notification(message: str) -> None:
+def send_notification(message: str, loop_count: int = 1, loop_interval: int = 1) -> None:
     _notification.message = message
-    _notification.send()
+
+    for _ in range(loop_count):
+        _notification.send(False)
+        time.sleep(loop_interval)
