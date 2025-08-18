@@ -17,6 +17,7 @@ a = Analysis(
         'tkinter.messagebox',
         'sv_ttk',
         'darkdetect',
+        'notify-py',
 
         # Networking and automation
         'aiohttp',
