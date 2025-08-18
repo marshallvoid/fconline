@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import tkinter as tk
+from datetime import datetime
 from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -10,6 +11,8 @@ import sv_ttk
 from src.core.main_tool import MainTool
 from src.gui.components.activity_log_tab import ActivityLogTab
 from src.gui.components.event_tab import EventTab
+from src.gui.components.notification_icon import NotificationIcon
+from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_config import UserConfig
 from src.utils.contants import EVENT_CONFIGS_MAP
 from src.utils.user_config import UserConfigManager
@@ -22,9 +25,12 @@ class MainWindow:
     def __init__(self) -> None:
         self._root = tk.Tk()
         self._root.title(string="FC Online Automation Tool")
-        self._root.geometry(newGeometry="700x700")
         self._root.resizable(width=True, height=True)
         self._root.minsize(width=700, height=650)
+
+        # Position window at top-right corner of screen
+        self._screen_width = self._root.winfo_screenwidth()
+        self._root.geometry(f"700x700+{self._screen_width - 700}+0")  # x=screen_width-700, y=0 (top-right corner)
 
         saved_configs = UserConfigManager.load_configs()
 
@@ -37,6 +43,7 @@ class MainWindow:
         self._selected_event = saved_configs.event or "Bi Lắc"
 
         self._tool_instance = MainTool(
+            screen_width=self._screen_width,
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
             username=self._username_var.get(),
             password=self._password_var.get(),
@@ -96,6 +103,26 @@ class MainWindow:
         self._root.mainloop()
 
     def _setup_ui(self) -> None:
+        self._setup_notification_icon()
+        self._setup_control_frame()
+        self._setup_event_selection()
+        self._setup_main_content()
+
+        self._setup_trace_callbacks()
+
+    def _setup_notification_icon(self) -> None:
+        notification_frame = ttk.Frame(self._root)
+        notification_frame.pack(side="top", fill="x", padx=10, pady=(10, 0))
+
+        # Spacer to push icon to right
+        spacer = ttk.Frame(notification_frame)
+        spacer.pack(side="left", fill="x", expand=True)
+
+        # Notification icon
+        self._notification_icon = NotificationIcon(notification_frame)
+        self._notification_icon.frame.pack(side="right")
+
+    def _setup_control_frame(self) -> None:
         control_frame = ttk.Frame(self._root)
         control_frame.pack(side="bottom", fill="x", padx=10, pady=(5, 10))
 
@@ -117,10 +144,6 @@ class MainWindow:
 
         self._status_label = ttk.Label(control_frame, text="Status: Ready")
         self._status_label.pack(side="right")
-
-        self._setup_event_selection()
-        self._setup_main_content()
-        self._setup_trace_callbacks()
 
     def _setup_event_selection(self) -> None:
         event_selection_frame = ttk.LabelFrame(self._root, padding=10)
@@ -323,8 +346,17 @@ class MainWindow:
         self._activity_log_tab.update_special_jackpot(0)
         self._activity_log_tab.update_target_special_jackpot(target_value)
 
+        spin_action_name = EVENT_CONFIGS_MAP[self._selected_event].spin_actions[self._spin_action_var.get() - 1]
+        self._activity_log_tab.add_message(
+            tag=MessageTag.INFO.name,
+            message=(
+                f"Using spin action '{spin_action_name}' to auto spin when target "
+                f"'{target_value:,}' is reached at '{EVENT_CONFIGS_MAP[self._selected_event].base_url}'"
+            ),
+        )
+
         # Update configs of tool instance and callbacks
-        def user_panel_callback(user_info: Optional["UserReponse"]) -> None:
+        def user_info_callback(user_info: Optional["UserReponse"]) -> None:
             self._root.after(0, lambda: self._update_user_panel(user_info=user_info))
 
         def message_callback(tag: str, message: str) -> None:
@@ -333,6 +365,16 @@ class MainWindow:
         def special_jackpot_callback(special_jackpot: int) -> None:
             self._root.after(0, lambda: self._activity_log_tab.update_special_jackpot(special_jackpot=special_jackpot))
 
+        def _notification_callback(nickname: str, jackpot_value: str) -> None:
+            self._root.after(
+                0,
+                lambda: self._notification_icon.add_notification(
+                    nickname=nickname,
+                    jackpot_value=jackpot_value,
+                    timestamp=datetime.now().strftime("%H:%M:%S"),
+                ),
+            )
+
         self._tool_instance.update_configs(
             is_running=True,
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
@@ -340,9 +382,10 @@ class MainWindow:
             mini_jackpot=0,
             spin_action=self._spin_action_var.get(),
             target_special_jackpot=target_value,
-            user_panel_callback=user_panel_callback,
+            user_info_callback=user_info_callback,
             message_callback=message_callback,
             special_jackpot_callback=special_jackpot_callback,
+            jackpot_billboard_callback=_notification_callback,
         )
 
         # Start tool in a new thread
@@ -365,6 +408,7 @@ class MainWindow:
 
         # Update UI
         self._update_running_status(is_running=False)
+        self._notebook.select(0)
         self._root.after(0, lambda: self._update_user_panel(user_info=self._tool_instance.user_info))
 
         # Update configs of tool instance
