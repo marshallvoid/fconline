@@ -38,6 +38,9 @@ class WebsocketHandler:
     _spin_task: Optional[asyncio.Task] = None
     _spin_lock = asyncio.Lock()
 
+    _jackpot_epoch: int = 0
+    _last_jackpot_value: int = 0
+
     @classmethod
     def setup(
         cls,
@@ -127,41 +130,72 @@ class WebsocketHandler:
         if cls.user_info and cls.user_info.payload.user:
             is_me = nickname.lower() == cls.user_info.payload.user.nickname.lower()
 
-        match type:
-            case "jackpot_value":
-                value = int(value)
-                cls._special_jackpot = value
+        try:
+            match type:
+                case "jackpot_value":
+                    value = int(value)
 
-                if value >= cls._target_special_jackpot:
-                    msg = f"Special Jackpot has reached {cls._target_special_jackpot:,}"
-                    md.should_execute_callback(cls._message_callback, MessageTag.JACKPOT.name, msg)
+                    # Detect reset/drop -> increase epoch & cancel pending spin task
+                    if value < cls._special_jackpot:
+                        cls._jackpot_epoch += 1
+                        cls._cancel_spin_task()
 
-                    # Trigger immediate spin when target is reached
-                    if not cls._spin_task or cls._spin_task.done():
-                        logger.info("🎯 Target jackpot reached - triggering immediate spin")
-                        cls._spin_task = asyncio.create_task(cls._execute_single_spin())
+                    cls._special_jackpot = value
+                    cls._last_jackpot_value = value
 
-                md.should_execute_callback(cls._jackpot_callback, value)
+                    if value >= cls._target_special_jackpot:
+                        md.should_execute_callback(
+                            cls._message_callback,
+                            MessageTag.JACKPOT.name,
+                            f"Special Jackpot has reached {cls._target_special_jackpot:,}",
+                        )
 
-            case "jackpot":
-                msg = f"You won jackpot: {value}" if is_me else f"User '{nickname}' won jackpot: {value}"
-                tag = MessageTag.WINNER.name if is_me else MessageTag.INFO.name
+                        # Trigger immediate spin when target is reached
+                        if not cls._spin_task or cls._spin_task.done():
+                            epoch_snapshot = cls._jackpot_epoch
+                            logger.info("🎯 Target jackpot reached - triggering immediate spin")
+                            cls._spin_task = asyncio.create_task(cls._execute_single_spin(epoch_snapshot))
 
-                md.should_execute_callback(cls._notification_callback, nickname, value) if is_me else None
-                md.should_execute_callback(cls._message_callback, tag, msg)
-                sounds.send_notification(msg, audio_name="coin-1") if is_me else None
+                    md.should_execute_callback(cls._jackpot_callback, value)
 
-            case "mini_jackpot":
-                msg = f"You won mini jackpot: {value}" if is_me else f"User '{nickname}' won mini jackpot: {value}"
-                tag = MessageTag.WINNER.name if is_me else MessageTag.INFO.name
+                case "jackpot":
+                    msg = f"You won jackpot: {value}" if is_me else f"User '{nickname}' won jackpot: {value}"
+                    tag = MessageTag.WINNER.name if is_me else MessageTag.INFO.name
 
-                md.should_execute_callback(cls._message_callback, tag, msg)
+                    # Jackpot payout ⇒ reset epoch & cancel pending spin task
+                    cls._jackpot_epoch += 1
+                    cls._cancel_spin_task()
+                    cls._special_jackpot = 0
+                    cls._last_jackpot_value = 0
 
-            case _:
-                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Unknown event type: {type}")
+                    if is_me:
+                        md.should_execute_callback(cls._notification_callback, nickname, value)
+                        sounds.send_notification(msg, audio_name="coin-1")
+                    md.should_execute_callback(cls._message_callback, tag, msg)
+
+                case "mini_jackpot":
+                    msg = f"You won mini jackpot: {value}" if is_me else f"User '{nickname}' won mini jackpot: {value}"
+                    tag = MessageTag.WINNER.name if is_me else MessageTag.INFO.name
+
+                    md.should_execute_callback(cls._message_callback, tag, msg)
+
+                case _:
+                    md.should_execute_callback(
+                        cls._message_callback, MessageTag.ERROR.name, f"Unknown event type: {type}"
+                    )
+
+        except asyncio.CancelledError:
+            msg = "Spin aborted: jackpot reset/drop"
+            logger.info(f"🛑 {msg}")
+            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
+
+        except Exception as e:
+            msg = f"Spin API error: {e}"
+            logger.error(f"❌ {msg}")
+            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
 
     @classmethod
-    async def _execute_single_spin(cls) -> None:
+    async def _execute_single_spin(cls, epoch_snapshot: int) -> None:
         if cls._special_jackpot < cls._target_special_jackpot:
             return
 
@@ -170,37 +204,58 @@ class WebsocketHandler:
         payload = {"spin_type": cls._spin_action, "payment_type": 1}
 
         try:
-            async with aiohttp.ClientSession(cookies=cookies, headers=headers, connector=connector) as session:
-                async with session.post(url=url, json=payload) as response:
-                    if not response.ok:
-                        logger.error(f"❌ Spin API request failed with status: {response.status}")
+            async with cls._spin_lock:
+                # 1) Epoch must still match (not reset)
+                if epoch_snapshot != cls._jackpot_epoch:
+                    logger.info(f"⛔ Spin aborted: epoch changed (was {epoch_snapshot}, now {cls._jackpot_epoch})")
+                    return
+
+                # 2) Current value must still be >= target
+                if cls._special_jackpot < cls._target_special_jackpot:
+                    logger.info(f"⛔ Spin aborted: jackpot dropped to {cls._special_jackpot}")
+                    return
+
+                async with aiohttp.ClientSession(cookies=cookies, headers=headers, connector=connector) as session:
+                    async with session.post(url=url, json=payload) as response:
+                        if not response.ok:
+                            msg = f"Spin API request failed with status: {response.status}"
+                            logger.error(f"❌ {msg}")
+                            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
+                            return
+
+                        spin_response = SpinResponse.model_validate(await response.json())
+                        if not spin_response.payload or not spin_response.is_successful or spin_response.error_code:
+                            msg = f"Spin failed: {spin_response.error_code or 'Unknown error'}"
+                            logger.error(f"❌ {msg}")
+                            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
+                            return
+
                         md.should_execute_callback(
                             cls._message_callback,
-                            MessageTag.ERROR.name,
-                            f"Spin API failed: HTTP {response.status}",
+                            MessageTag.REWARD.name,
+                            md.format_spin_block_compact(
+                                spin_results=spin_response.payload.spin_results,
+                                jackpot_value=spin_response.payload.jackpot_value,
+                            ),
                         )
-                        return
+                        logger.info("✅ Single spin executed successfully")
 
-                    spin_response = SpinResponse.model_validate(await response.json())
-                    if not spin_response.payload or not spin_response.is_successful or spin_response.error_code:
-                        msg = f"Spin failed: {spin_response.error_code or 'Unknown error'}"
-                        logger.error(f"❌ {msg}")
-                        md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
-                        return
-
-                    md.should_execute_callback(
-                        cls._message_callback,
-                        MessageTag.REWARD.name,
-                        md.format_spin_block_compact(
-                            spin_results=spin_response.payload.spin_results,
-                            jackpot_value=spin_response.payload.jackpot_value,
-                        ),
-                    )
-                    logger.info("✅ Single spin executed successfully")
+        except asyncio.CancelledError:
+            msg = "Spin aborted: jackpot reset/drop"
+            logger.info(f"🛑 {msg}")
+            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
 
         except Exception as e:
-            logger.error(f"❌ Spin API error: {e}")
-            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Spin API error: {e}")
+            msg = f"Spin API error: {e}"
+            logger.error(f"❌ {msg}")
+            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
 
         finally:
             cls._spin_task = None
+
+    @classmethod
+    def _cancel_spin_task(cls) -> None:
+        if cls._spin_task and not cls._spin_task.done():
+            logger.info("🧹 Jackpot reset/dropped — cancelling pending spin task")
+            cls._spin_task.cancel()
+        cls._spin_task = None
