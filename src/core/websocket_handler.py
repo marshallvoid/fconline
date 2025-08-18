@@ -27,8 +27,7 @@ class WebsocketHandler:
 
     _event_config: EventConfig
     _spin_action: int
-    _special_jackpot: int
-    _mini_jackpot: int
+    _current_jackpot: int
     _target_special_jackpot: int
 
     _message_callback: Optional[Callable[[str, str], None]] = None
@@ -39,7 +38,6 @@ class WebsocketHandler:
     _spin_lock = asyncio.Lock()
 
     _jackpot_epoch: int = 0
-    _last_jackpot_value: int = 0
 
     @classmethod
     def setup(
@@ -47,8 +45,7 @@ class WebsocketHandler:
         page: Page,
         event_config: EventConfig,
         spin_action: int,
-        special_jackpot: int,
-        mini_jackpot: int,
+        current_jackpot: int,
         target_special_jackpot: int,
         message_callback: Optional[Callable[[str, str], None]] = None,
         jackpot_callback: Optional[Callable[[int], None]] = None,
@@ -57,8 +54,7 @@ class WebsocketHandler:
         cls._page = page
         cls._event_config = event_config
         cls._spin_action = spin_action
-        cls._special_jackpot = special_jackpot
-        cls._mini_jackpot = mini_jackpot
+        cls._current_jackpot = current_jackpot
         cls._target_special_jackpot = target_special_jackpot
         cls._message_callback = message_callback
         cls._jackpot_callback = jackpot_callback
@@ -136,13 +132,11 @@ class WebsocketHandler:
                     value = int(value)
 
                     # Detect reset/drop -> increase epoch & cancel pending spin task
-                    if value < cls._special_jackpot:
+                    if value < cls._current_jackpot:
                         cls._jackpot_epoch += 1
                         cls._cancel_spin_task()
 
-                    cls._special_jackpot = value
-                    cls._last_jackpot_value = value
-
+                    cls._current_jackpot = value
                     if value >= cls._target_special_jackpot:
                         md.should_execute_callback(
                             cls._message_callback,
@@ -165,8 +159,7 @@ class WebsocketHandler:
                     # Jackpot payout ⇒ reset epoch & cancel pending spin task
                     cls._jackpot_epoch += 1
                     cls._cancel_spin_task()
-                    cls._special_jackpot = 0
-                    cls._last_jackpot_value = 0
+                    cls._current_jackpot = 0
 
                     if is_me:
                         md.should_execute_callback(cls._notification_callback, nickname, value)
@@ -196,7 +189,7 @@ class WebsocketHandler:
 
     @classmethod
     async def _execute_single_spin(cls, epoch_snapshot: int) -> None:
-        if cls._special_jackpot < cls._target_special_jackpot:
+        if cls._current_jackpot < cls._target_special_jackpot:
             return
 
         cookies, headers, connector = cls.cookies, cls.headers, RequestManager.connector()
@@ -211,8 +204,8 @@ class WebsocketHandler:
                     return
 
                 # 2) Current value must still be >= target
-                if cls._special_jackpot < cls._target_special_jackpot:
-                    logger.info(f"⛔ Spin aborted: jackpot dropped to {cls._special_jackpot}")
+                if cls._current_jackpot < cls._target_special_jackpot:
+                    logger.info(f"⛔ Spin aborted: jackpot dropped to {cls._current_jackpot}")
                     return
 
                 async with aiohttp.ClientSession(cookies=cookies, headers=headers, connector=connector) as session:

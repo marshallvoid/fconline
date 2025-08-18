@@ -36,13 +36,12 @@ class MainTool:
 
         # State
         self.is_running: bool = False
-        self._special_jackpot: int = 0
-        self._mini_jackpot: int = 0
+        self._current_jackpot: int = 0
 
         # Callbacks
         self._user_info_callback: Optional[Callable[[Optional[UserReponse]], None]] = None
         self._message_callback: Optional[Callable[[str, str], None]] = None
-        self._special_jackpot_callback: Optional[Callable[[int], None]] = None
+        self._current_jackpot_callback: Optional[Callable[[int], None]] = None
         self._notification_callback: Optional[Callable[[str, str], None]] = None
 
         # Browser
@@ -67,11 +66,10 @@ class MainTool:
                 page=self._page,
                 event_config=self._event_config,
                 spin_action=self._spin_action,
-                special_jackpot=self._special_jackpot,
-                mini_jackpot=self._mini_jackpot,
+                current_jackpot=self._current_jackpot,
                 target_special_jackpot=self._target_special_jackpot,
                 message_callback=self._message_callback,
-                jackpot_callback=self._special_jackpot_callback,
+                jackpot_callback=self._current_jackpot_callback,
                 jackpot_billboard_callback=self._notification_callback,
             ).run()
 
@@ -133,19 +131,17 @@ class MainTool:
         self,
         is_running: Optional[bool] = None,
         event_config: Optional[EventConfig] = None,
-        special_jackpot: Optional[int] = None,
-        mini_jackpot: Optional[int] = None,
+        current_jackpot: Optional[int] = None,
         spin_action: Optional[int] = None,
         target_special_jackpot: Optional[int] = None,
         user_info_callback: Optional[Callable[[Optional[UserReponse]], None]] = None,
         message_callback: Optional[Callable[[str, str], None]] = None,
-        special_jackpot_callback: Optional[Callable[[int], None]] = None,
+        current_jackpot_callback: Optional[Callable[[int], None]] = None,
         jackpot_billboard_callback: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self.is_running = is_running if is_running is not None else self.is_running
         self._event_config = event_config or self._event_config
-        self._special_jackpot = special_jackpot or self._special_jackpot
-        self._mini_jackpot = mini_jackpot or self._mini_jackpot
+        self._current_jackpot = current_jackpot or self._current_jackpot
         self._spin_action = spin_action or self._spin_action
         self._target_special_jackpot = target_special_jackpot or self._target_special_jackpot
 
@@ -155,8 +151,8 @@ class MainTool:
         if message_callback:
             self._message_callback = message_callback
 
-        if special_jackpot_callback:
-            self._special_jackpot_callback = special_jackpot_callback
+        if current_jackpot_callback:
+            self._current_jackpot_callback = current_jackpot_callback
 
         if jackpot_billboard_callback:
             self._notification_callback = jackpot_billboard_callback

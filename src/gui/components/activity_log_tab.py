@@ -40,13 +40,13 @@ class ActivityLogTab:
         self._messages_text_widget.delete("1.0", tk.END)
         self._messages_text_widget.config(state="disabled")
 
-    def update_special_jackpot(self, special_jackpot: int) -> None:
+    def update_current_jackpot(self, current_jackpot: int) -> None:
         jackpot_text = (
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"SPECIAL JACKPOT: {special_jackpot:,}\n"
+            f"SPECIAL JACKPOT: {current_jackpot:,}\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         )
-        self._special_jackpot_label.config(text=jackpot_text)
+        self._current_jackpot_label.config(text=jackpot_text)
 
     def update_target_special_jackpot(self, value: int) -> None:
         target_text = (
@@ -70,7 +70,7 @@ class ActivityLogTab:
         jackpot_container = ttk.Frame(jackpot_frame)
         jackpot_container.pack(fill="x")
 
-        self._special_jackpot_label = ttk.Label(
+        self._current_jackpot_label = ttk.Label(
             jackpot_container,
             text="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "SPECIAL JACKPOT: 0\n"
@@ -78,7 +78,7 @@ class ActivityLogTab:
             foreground="#f97316",
             font=("Consolas", 12, "bold"),
         )
-        self._special_jackpot_label.pack(anchor="w")
+        self._current_jackpot_label.pack(anchor="w")
 
         # Target Jackpot Display
         self._target_special_jackpot_label = ttk.Label(

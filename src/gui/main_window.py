@@ -359,7 +359,7 @@ class MainWindow:
         self._update_running_status(is_running=True)
         self._notebook.select(self._notebook.index("end") - 1)
         self._activity_log_tab.clear_messages()
-        self._activity_log_tab.update_special_jackpot(0)
+        self._activity_log_tab.update_current_jackpot(0)
         self._activity_log_tab.update_target_special_jackpot(target_value)
 
         spin_action_name = EVENT_CONFIGS_MAP[self._selected_event].spin_actions[self._spin_action_var.get() - 1]
@@ -378,8 +378,8 @@ class MainWindow:
         def message_callback(tag: str, message: str) -> None:
             self._root.after(0, lambda: self._activity_log_tab.add_message(tag=tag, message=message))
 
-        def special_jackpot_callback(special_jackpot: int) -> None:
-            self._root.after(0, lambda: self._activity_log_tab.update_special_jackpot(special_jackpot=special_jackpot))
+        def current_jackpot_callback(current_jackpot: int) -> None:
+            self._root.after(0, lambda: self._activity_log_tab.update_current_jackpot(current_jackpot=current_jackpot))
 
         def _notification_callback(nickname: str, jackpot_value: str) -> None:
             self._root.after(
@@ -394,13 +394,12 @@ class MainWindow:
         self._tool_instance.update_configs(
             is_running=True,
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
-            special_jackpot=0,
-            mini_jackpot=0,
+            current_jackpot=0,
             spin_action=self._spin_action_var.get(),
             target_special_jackpot=target_value,
             user_info_callback=user_info_callback,
             message_callback=message_callback,
-            special_jackpot_callback=special_jackpot_callback,
+            current_jackpot_callback=current_jackpot_callback,
             jackpot_billboard_callback=_notification_callback,
         )
 

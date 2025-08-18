@@ -65,7 +65,11 @@ class LoginHandler:
             if login_btn:
                 return False
 
-            md.should_execute_callback(cls._message_callback, MessageTag.WARNING.name, "Unable to determine login status")  # noqa: E501
+            md.should_execute_callback(
+                cls._message_callback,
+                MessageTag.WARNING.name,
+                "Unable to determine login status",
+            )
             return False
 
         except Exception as error:
@@ -90,14 +94,22 @@ class LoginHandler:
 
             username_input = await cls._page.query_selector(selector=cls._event_config.username_input_selector)
             if not username_input:
-                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Username input field not found")  # noqa: E501
+                md.should_execute_callback(
+                    cls._message_callback,
+                    MessageTag.ERROR.name,
+                    "Username input field not found",
+                )
                 return False
 
             await username_input.fill(value=cls._username)
 
             password_input = await cls._page.query_selector(selector=cls._event_config.password_input_selector)
             if not password_input:
-                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Password input field not found")  # noqa: E501
+                md.should_execute_callback(
+                    cls._message_callback,
+                    MessageTag.ERROR.name,
+                    "Password input field not found",
+                )
                 return False
 
             await password_input.fill(value=cls._password)
