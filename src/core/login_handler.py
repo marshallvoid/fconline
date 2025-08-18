@@ -6,7 +6,7 @@ from loguru import logger
 from src.core.event_config import EventConfig
 from src.core.websocket_handler import WebsocketHandler
 from src.schemas.enums.message_tag import MessageTag
-from src.utils.methods import should_execute_callback
+from src.utils import methods as md
 
 
 class LoginHandler:
@@ -45,7 +45,7 @@ class LoginHandler:
             return
 
         if await cls._perform_login():
-            should_execute_callback(cls._message_callback, MessageTag.SUCCESS.name, "Login completed successfully")
+            md.should_execute_callback(cls._message_callback, MessageTag.SUCCESS.name, "Login completed successfully")
             WebsocketHandler.is_logged_in = True
             await cls._page.wait_for_load_state(state="networkidle")
             await cls._redirect_to_base_url()
@@ -65,11 +65,11 @@ class LoginHandler:
             if login_btn:
                 return False
 
-            should_execute_callback(cls._message_callback, MessageTag.WARNING.name, "Unable to determine login status")
+            md.should_execute_callback(cls._message_callback, MessageTag.WARNING.name, "Unable to determine login status")  # noqa: E501
             return False
 
         except Exception as error:
-            should_execute_callback(
+            md.should_execute_callback(
                 cls._message_callback,
                 MessageTag.ERROR.name,
                 f"Error checking login status: {error}",
@@ -82,7 +82,7 @@ class LoginHandler:
         try:
             login_btn = await cls._page.query_selector(selector=cls._event_config.login_btn_selector)
             if not login_btn:
-                should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Login button not found")
+                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Login button not found")
                 return False
 
             await login_btn.click()
@@ -90,21 +90,21 @@ class LoginHandler:
 
             username_input = await cls._page.query_selector(selector=cls._event_config.username_input_selector)
             if not username_input:
-                should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Username input field not found")
+                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Username input field not found")  # noqa: E501
                 return False
 
             await username_input.fill(value=cls._username)
 
             password_input = await cls._page.query_selector(selector=cls._event_config.password_input_selector)
             if not password_input:
-                should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Password input field not found")
+                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Password input field not found")  # noqa: E501
                 return False
 
             await password_input.fill(value=cls._password)
 
             submit_btn = await cls._page.query_selector(selector=cls._event_config.submit_btn_selector)
             if not submit_btn:
-                should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Submit button not found")
+                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Submit button not found")
                 return False
 
             await submit_btn.click()
@@ -124,11 +124,11 @@ class LoginHandler:
                 return True
 
             except Exception as error:
-                should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Login failed: {error}")
+                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Login failed: {error}")
                 return False
 
         except Exception as error:
-            should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Error performing login: {error}")
+            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Error performing login: {error}")
             return False
 
     @classmethod

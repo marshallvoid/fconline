@@ -14,7 +14,9 @@ from src.gui.components.event_tab import EventTab
 from src.gui.components.notification_icon import NotificationIcon
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_config import UserConfig
+from src.utils import files, sounds
 from src.utils.contants import EVENT_CONFIGS_MAP
+from src.utils.platforms import PlatformManager
 from src.utils.user_config import UserConfigManager
 
 if TYPE_CHECKING:
@@ -23,35 +25,49 @@ if TYPE_CHECKING:
 
 class MainWindow:
     def __init__(self) -> None:
-        self._root = tk.Tk()
-        self._root.title(string="FC Online Automation Tool")
-        self._root.resizable(width=True, height=True)
-        self._root.minsize(width=700, height=650)
+         self._root = tk.Tk()
+         self._root.title(string="FC Online Automation Tool")
+         self._root.resizable(width=True, height=True)
+         self._root.minsize(width=700, height=650)
 
-        # Position window at top-right corner of screen
-        self._screen_width = self._root.winfo_screenwidth()
-        self._root.geometry(f"700x700+{self._screen_width - 700}+0")  # x=screen_width-700, y=0 (top-right corner)
+         try:
+            png_path = files.resource_path("assets/icon.png")
+            icon = tk.PhotoImage(file=png_path)
+            self._root.iconphoto(True, icon)
+         except Exception:
+            pass
 
-        saved_configs = UserConfigManager.load_configs()
+         if PlatformManager.is_windows():
+            try:
+                  ico_path = files.resource_path("assets/icon.ico")
+                  self._root.iconbitmap(ico_path)
+            except Exception:
+                  pass
 
-        self._username_var = tk.StringVar(value=saved_configs.username)
-        self._password_var = tk.StringVar(value=saved_configs.password)
-        self._spin_action_var = tk.IntVar(value=saved_configs.spin_action)
-        self._target_special_jackpot_var = tk.IntVar(value=saved_configs.target_special_jackpot)
+         # Position window at top-right corner of screen
+         self._screen_width = self._root.winfo_screenwidth()
+         self._root.geometry(f"700x700+{self._screen_width - 700}+0")  # x=screen_width-700, y=0 (top-right corner)
 
-        self._is_running = False
-        self._selected_event = saved_configs.event or "Bi Lắc"
+         saved_configs = UserConfigManager.load_configs()
 
-        self._tool_instance = MainTool(
-            screen_width=self._screen_width,
-            event_config=EVENT_CONFIGS_MAP[self._selected_event],
-            username=self._username_var.get(),
-            password=self._password_var.get(),
-            spin_action=self._spin_action_var.get(),
-            target_special_jackpot=self._target_special_jackpot_var.get(),
-        )
+         self._username_var = tk.StringVar(value=saved_configs.username)
+         self._password_var = tk.StringVar(value=saved_configs.password)
+         self._spin_action_var = tk.IntVar(value=saved_configs.spin_action)
+         self._target_special_jackpot_var = tk.IntVar(value=saved_configs.target_special_jackpot)
 
-        self._setup_ui()
+         self._is_running = False
+         self._selected_event = saved_configs.event or "Bi Lắc"
+
+         self._tool_instance = MainTool(
+               screen_width=self._screen_width,
+               event_config=EVENT_CONFIGS_MAP[self._selected_event],
+               username=self._username_var.get(),
+               password=self._password_var.get(),
+               spin_action=self._spin_action_var.get(),
+               target_special_jackpot=self._target_special_jackpot_var.get(),
+         )
+
+         self._setup_ui()
 
     def run(self) -> None:
         def on_close() -> None:
@@ -374,6 +390,8 @@ class MainWindow:
                     timestamp=datetime.now().strftime("%H:%M:%S"),
                 ),
             )
+
+            sounds.send_notification(f"User {nickname} has won jackpot: {jackpot_value}")
 
         self._tool_instance.update_configs(
             is_running=True,

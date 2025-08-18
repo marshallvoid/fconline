@@ -12,7 +12,7 @@ from src.core.event_config import EventConfig
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.spin_response import SpinResponse
 from src.schemas.user_response import UserReponse
-from src.utils.methods import format_spin_block_compact, should_execute_callback
+from src.utils import methods as md
 from src.utils.requests import RequestManager
 
 
@@ -132,9 +132,9 @@ class WebsocketHandler:
                     is_me = nickname.lower() == cls.user_info.payload.user.nickname.lower()
 
                 if is_me:
-                    should_execute_callback(cls._notification_callback, nickname, value)
+                    md.should_execute_callback(cls._notification_callback, nickname, value)
 
-                should_execute_callback(
+                md.should_execute_callback(
                     cls._message_callback,
                     MessageTag.WINNER.name if is_me else MessageTag.INFO.name,
                     f"You won jackpot: {value}" if is_me else f"User '{nickname}' won jackpot: {value}",
@@ -146,23 +146,23 @@ class WebsocketHandler:
 
                 if value >= cls._target_special_jackpot:
                     msg = f"Special Jackpot has reached {cls._target_special_jackpot:,}"
-                    should_execute_callback(cls._message_callback, MessageTag.JACKPOT.name, msg)
+                    md.should_execute_callback(cls._message_callback, MessageTag.JACKPOT.name, msg)
 
                     # Trigger immediate spin when target is reached
                     if not cls._spin_task or cls._spin_task.done():
                         logger.info("🎯 Target jackpot reached - triggering immediate spin")
                         cls._spin_task = asyncio.create_task(cls._execute_single_spin())
 
-                should_execute_callback(cls._jackpot_callback, value)
+                md.should_execute_callback(cls._jackpot_callback, value)
 
             case "mini_jackpot":
                 value = int(value)
                 cls._mini_jackpot = value
 
-                should_execute_callback(cls._message_callback, MessageTag.JACKPOT.name, f"Mini Jackpot: {value:,}")
+                md.should_execute_callback(cls._message_callback, MessageTag.JACKPOT.name, f"Mini Jackpot: {value:,}")
 
             case _:
-                should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Unknown event type: {type}")
+                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Unknown event type: {type}")
 
     @classmethod
     async def _execute_single_spin(cls) -> None:
@@ -175,7 +175,7 @@ class WebsocketHandler:
                 async with session.post(url=url, json=payload) as response:
                     if not response.ok:
                         logger.error(f"❌ Spin API request failed with status: {response.status}")
-                        should_execute_callback(
+                        md.should_execute_callback(
                             cls._message_callback,
                             MessageTag.ERROR.name,
                             f"Spin API failed: HTTP {response.status}",
@@ -186,13 +186,13 @@ class WebsocketHandler:
                     if not spin_response.payload or not spin_response.is_successful or spin_response.error_code:
                         msg = f"Spin failed: {spin_response.error_code or 'Unknown error'}"
                         logger.error(f"❌ {msg}")
-                        should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
+                        md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
                         return
 
-                    should_execute_callback(
+                    md.should_execute_callback(
                         cls._message_callback,
                         MessageTag.REWARD.name,
-                        format_spin_block_compact(
+                        md.format_spin_block_compact(
                             spin_results=spin_response.payload.spin_results,
                             jackpot_value=spin_response.payload.jackpot_value,
                         ),
@@ -201,7 +201,7 @@ class WebsocketHandler:
 
         except Exception as e:
             logger.error(f"❌ Spin API error: {e}")
-            should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Spin API error: {e}")
+            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Spin API error: {e}")
 
         finally:
             cls._spin_task = None
