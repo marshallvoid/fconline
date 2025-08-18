@@ -144,9 +144,6 @@ class WebsocketHandler:
                 md.should_execute_callback(cls._jackpot_callback, value)
 
             case "jackpot":
-                if not nickname:
-                    return
-
                 msg = f"You won jackpot: {value}" if is_me else f"User '{nickname}' won jackpot: {value}"
                 tag = MessageTag.WINNER.name if is_me else MessageTag.INFO.name
 
@@ -157,6 +154,7 @@ class WebsocketHandler:
             case "mini_jackpot":
                 msg = f"You won mini jackpot: {value}" if is_me else f"User '{nickname}' won mini jackpot: {value}"
                 tag = MessageTag.WINNER.name if is_me else MessageTag.INFO.name
+
                 md.should_execute_callback(cls._message_callback, tag, msg)
 
             case _:
