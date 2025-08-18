@@ -14,7 +14,7 @@ from src.gui.components.event_tab import EventTab
 from src.gui.components.notification_icon import NotificationIcon
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_config import UserConfig
-from src.utils import files, sounds
+from src.utils import files
 from src.utils.contants import EVENT_CONFIGS_MAP
 from src.utils.platforms import PlatformManager
 from src.utils.user_config import UserConfigManager
@@ -390,8 +390,6 @@ class MainWindow:
                     timestamp=datetime.now().strftime("%H:%M:%S"),
                 ),
             )
-
-            sounds.send_notification(f"User {nickname} has won jackpot: {jackpot_value}", loop_count=3)
 
         self._tool_instance.update_configs(
             is_running=True,
