@@ -8,6 +8,7 @@ try:
     from watchdog.observers import Observer
 
     WATCHDOG_AVAILABLE = True
+
 except ImportError:
     WATCHDOG_AVAILABLE = False
 
@@ -52,6 +53,7 @@ class AutoReloadHandler(FileSystemEventHandler):
                 print(f"🔄 File changed: {file_path}")  # noqa: T201
                 time.sleep(0.1)  # Small delay to ensure file is fully written
                 self.callback()
+
         except OSError:
             pass  # File might be temporarily unavailable
 

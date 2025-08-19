@@ -1,7 +1,6 @@
 import asyncio
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Optional, Tuple
 
-import aiohttp
 from browser_use import BrowserProfile, BrowserSession
 from browser_use.browser.types import Page
 from loguru import logger
@@ -9,41 +8,45 @@ from loguru import logger
 from src.core.event_config import EventConfig
 from src.core.login_handler import LoginHandler
 from src.core.websocket_handler import WebsocketHandler
+from src.infrastructure.clients.fconline_api import FCOnlineClient
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
 from src.utils import methods as md
 from src.utils.contants import PROGRAM_NAME
 from src.utils.platforms import PlatformManager
-from src.utils.requests import RequestManager
 
 
 class MainTool:
     def __init__(
         self,
-        screen_width: int,
         event_config: EventConfig,
         username: str,
         password: str,
         spin_action: int = 1,
-        target_special_jackpot: int = 10000,
+        target_special_jackpot: int = 19000,
+        target_mini_jackpot: int = 12000,
+        close_when_jackpot_won: bool = True,
+        close_when_mini_jackpot_won: bool = False,
     ) -> None:
         # Configs
-        self._screen_width: int = screen_width
         self._event_config: EventConfig = event_config
         self._username: str = username
         self._password: str = password
         self._spin_action: int = spin_action
         self._target_special_jackpot: int = target_special_jackpot
+        self._target_mini_jackpot: int = target_mini_jackpot
+        self._close_when_jackpot_won: bool = close_when_jackpot_won
+        self._close_when_mini_jackpot_won: bool = close_when_mini_jackpot_won
 
         # State
-        self.is_running: bool = False
+        self._is_running: bool = False
         self._current_jackpot: int = 0
 
         # Callbacks
         self._add_message: Optional[Callable[[str, str], None]] = None
         self._add_notification: Optional[Callable[[str, str], None]] = None
-        self._update_user_info: Optional[Callable[[Optional[UserReponse]], None]] = None
         self._update_current_jackpot: Optional[Callable[[int], None]] = None
+        self._close_browser: Optional[Callable[[], None]] = None
 
         # Browser
         self._session: Optional[BrowserSession] = None
@@ -51,58 +54,85 @@ class MainTool:
         self._user_data_dir: Optional[str] = None
 
         # User Info
-        self._cookies: Dict[str, str] = {}
-        self._headers: Dict[str, str] = {}
-        self.user_info: Optional[UserReponse] = None
+        self._user_info: Optional[UserReponse] = None
+
+    @property
+    def is_running(self) -> bool:
+        return self._is_running
+
+    @is_running.setter
+    def is_running(self, is_running: bool) -> None:
+        self._is_running = is_running
+
+    @property
+    def user_info(self) -> Optional[UserReponse]:
+        return self._user_info
+
+    @user_info.setter
+    def user_info(self, user_info: Optional[UserReponse]) -> None:
+        self._user_info = user_info
 
     async def run(self) -> None:
-        self._session, self._page = await self._setup_browser()
-
         try:
+            self._session, self._page = await self._setup_browser()
+
             logger.info(f"🌐 Navigating to: {self._event_config.base_url}")
             await self._page.goto(url=self._event_config.base_url)
             await self._page.wait_for_load_state(state="networkidle")
 
             # Setup websocket handler
-            ws_handler = WebsocketHandler.setup(
+            websocket_handler = WebsocketHandler(
                 page=self._page,
                 event_config=self._event_config,
                 spin_action=self._spin_action,
                 current_jackpot=self._current_jackpot,
                 target_special_jackpot=self._target_special_jackpot,
+                target_mini_jackpot=self._target_mini_jackpot,
+                close_when_jackpot_won=self._close_when_jackpot_won,
+                close_when_mini_jackpot_won=self._close_when_mini_jackpot_won,
                 add_message=self._add_message,
                 add_notification=self._add_notification,
                 update_current_jackpot=self._update_current_jackpot,
+                close_browser=self._close_browser,
             )
-            ws_handler.run()
+            websocket_handler.setup_websocket()
 
             # Check login status and perform login if needed
-            login_handler = LoginHandler.setup(
+            login_handler = LoginHandler(
                 page=self._page,
                 event_config=self._event_config,
                 username=self._username,
                 password=self._password,
                 add_message=self._add_message,
             )
-            await login_handler.run()
+            login_handler.websocket_handler = websocket_handler
+            await login_handler.ensure_logged_in()
 
             # Get user info
-            await self._get_user_info()
+            fconline_client = FCOnlineClient(
+                page=self._page,
+                base_url=self._event_config.base_url,
+                user_endpoint=self._event_config.user_endpoint,
+                spin_endpoint=self._event_config.spin_endpoint,
+                add_message=self._add_message,
+            )
+            await fconline_client.prepare_resources()
+            self._user_info = await fconline_client.lookup(username=self._username)
 
             # Update websocket's configs
-            WebsocketHandler.cookies = self._cookies
-            WebsocketHandler.headers = self._headers
-            WebsocketHandler.user_info = self.user_info
+            websocket_handler.fconline_client = fconline_client
+            websocket_handler.user_info = self._user_info
 
-            while self.is_running:
-                await asyncio.sleep(delay=1)
+            while self._is_running:
+                await asyncio.sleep(delay=0.1)
 
         except Exception as e:
-            logger.error(f"❌ Unexpected error during execution: {e}")
+            logger.error(f"❌ Error during execution: {e}")
+            raise e
 
         finally:
             await self.close()
-            md.should_execute_callback(self._add_message, MessageTag.INFO.name, f"{PROGRAM_NAME} stopped")
+            md.should_execute_callback(self._add_message, MessageTag.INFO, f"{PROGRAM_NAME} stopped")
 
     async def close(self) -> None:
         if not self._page or not self._session:
@@ -122,35 +152,39 @@ class MainTool:
             self._session = None
             self._page = None
 
-    def update_credentials(self, username: str, password: str) -> None:
-        old_username = self._username
-        old_password = self._password
-
-        credentials_changed = (old_username != username) or (old_password != password)
-        if not credentials_changed:
-            return
-
-        self.user_info = None
-        self._username = username
-        self._password = password
-
     def update_configs(
         self,
         is_running: Optional[bool] = None,
         event_config: Optional[EventConfig] = None,
-        current_jackpot: Optional[int] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
         spin_action: Optional[int] = None,
         target_special_jackpot: Optional[int] = None,
+        target_mini_jackpot: Optional[int] = None,
+        close_when_jackpot_won: Optional[bool] = None,
+        close_when_mini_jackpot_won: Optional[bool] = None,
+        current_jackpot: Optional[int] = None,
         add_message: Optional[Callable[[str, str], None]] = None,
         add_notification: Optional[Callable[[str, str], None]] = None,
-        update_user_info: Optional[Callable[[Optional[UserReponse]], None]] = None,
         update_current_jackpot: Optional[Callable[[int], None]] = None,
+        close_browser: Optional[Callable[[], None]] = None,
     ) -> None:
-        self.is_running = is_running if is_running is not None else self.is_running
+        self._is_running = is_running if is_running is not None else self._is_running
         self._event_config = event_config or self._event_config
-        self._current_jackpot = current_jackpot or self._current_jackpot
+        self._username = username or self._username
+        self._password = password or self._password
         self._spin_action = spin_action or self._spin_action
         self._target_special_jackpot = target_special_jackpot or self._target_special_jackpot
+        self._target_mini_jackpot = target_mini_jackpot or self._target_mini_jackpot
+        self._close_when_jackpot_won = (
+            close_when_jackpot_won if close_when_jackpot_won is not None else self._close_when_jackpot_won
+        )
+        self._close_when_mini_jackpot_won = (
+            close_when_mini_jackpot_won
+            if close_when_mini_jackpot_won is not None
+            else self._close_when_mini_jackpot_won
+        )
+        self._current_jackpot = current_jackpot or self._current_jackpot
 
         if add_message:
             self._add_message = add_message
@@ -158,11 +192,11 @@ class MainTool:
         if add_notification:
             self._add_notification = add_notification
 
-        if update_user_info:
-            self._update_user_info = update_user_info
-
         if update_current_jackpot:
             self._update_current_jackpot = update_current_jackpot
+
+        if close_browser:
+            self._close_browser = close_browser
 
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("🌐 Setting up browser context...")
@@ -207,8 +241,7 @@ class MainTool:
 
         # Force Chrome usage for better compatibility with browser automation
         if not (chrome_path := PlatformManager.get_chrome_executable_path()):
-            msg = "❌ Chrome/Chromium not found. Please install Chrome or Chromium."
-            logger.error(msg)
+            msg = "Chrome/Chromium not found. Please install Chrome or Chromium."
             raise Exception(msg)
 
         logger.info(f"🌐 Using Chrome browser: {chrome_path}")
@@ -230,7 +263,6 @@ class MainTool:
                     args=extra_chromium_args,
                     user_data_dir=user_data_dir,
                     executable_path=chrome_path,
-                    window_size={"width": self._screen_width - 756, "height": 768},
                     user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
                 )
 
@@ -243,72 +275,14 @@ class MainTool:
 
             except asyncio.TimeoutError:
                 logger.warning(f"⚠️ Browser startup timeout on attempt {attempt + 1}/3")
-                if attempt > 1:
-                    logger.error("❌ Browser startup failed after 3 attempts")
-                    raise
-
                 await asyncio.sleep(2)  # Wait before retry
                 continue
 
             except Exception as e:
                 logger.warning(f"⚠️ Browser setup failed on attempt {attempt + 1}/3: {e}")
-                if attempt > 1:
-                    logger.error("❌ Browser setup failed after 3 attempts")
-                    raise
-
                 await asyncio.sleep(2)  # Wait before retry
                 continue
 
         # This should never be reached due to the raise statements above
         msg = "Failed to setup browser context after all attempts"
         raise Exception(msg)
-
-    async def _get_user_info(self) -> None:
-        self._cookies = await self._extract_cookies()
-        self._headers = RequestManager.headers(cookies=self._cookies, base_url=self._event_config.base_url)
-
-        async with aiohttp.ClientSession(
-            cookies=self._cookies,
-            headers=self._headers,
-            connector=RequestManager.connector(),
-        ) as session:
-            try:
-                async with session.get(f"{self._event_config.base_url}/{self._event_config.user_endpoint}") as response:
-                    if not response.ok:
-                        md.should_execute_callback(
-                            self._add_message,
-                            MessageTag.ERROR.name,
-                            f"API request failed with status: {response.status}",
-                        )
-                        return
-
-                    self.user_info = UserReponse.model_validate(await response.json())
-                    if not self.user_info.payload.user:
-                        md.should_execute_callback(self._add_message, MessageTag.ERROR.name, "User not found")
-                        return
-
-                    md.should_execute_callback(self._update_user_info, self.user_info)
-                    md.should_execute_callback(self._add_message, MessageTag.SUCCESS.name, "Get user info successfully")
-
-            except Exception as e:
-                md.should_execute_callback(self._add_message, MessageTag.ERROR.name, f"Failed to get user info: {e}")
-
-    async def _extract_cookies(self) -> Dict[str, str]:
-        cookies: Dict[str, str] = {}
-        if self._page:
-            try:
-                for cookie in await self._page.context.cookies():
-                    domain = cookie.get("domain", "")
-                    if not domain:
-                        continue
-
-                    name, value = cookie.get("name", ""), cookie.get("value", "")
-                    if not name or not value:
-                        continue
-
-                    cookies[name] = value
-
-            except Exception as e:
-                logger.error(f"❌ Failed to extract cookies: {e}")
-
-        return cookies

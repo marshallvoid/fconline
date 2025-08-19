@@ -35,6 +35,7 @@ class UserConfigManager:
             f = Fernet(cls._get_encryption_key())
             encrypted_data = f.encrypt(value.encode())
             return base64.urlsafe_b64encode(encrypted_data).decode()
+
         except Exception:
             # Fallback to simple base64 encoding if encryption fails
             return base64.urlsafe_b64encode(value.encode()).decode()
@@ -71,6 +72,7 @@ class UserConfigManager:
             f = Fernet(cls._get_encryption_key())
             decrypted_data = f.decrypt(base64.urlsafe_b64decode(value.encode()))
             return decrypted_data.decode()
+
         except Exception:
             # Fallback to simple base64 decoding if decryption fails
             return base64.urlsafe_b64decode(value.encode()).decode()

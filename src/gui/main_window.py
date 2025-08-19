@@ -3,30 +3,27 @@ import threading
 import tkinter as tk
 from datetime import datetime
 from tkinter import messagebox, ttk
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 import darkdetect
 import sv_ttk
 
 from src.core.main_tool import MainTool
-from src.gui.components.activity_log_tab import ActivityLogTab
-from src.gui.components.event_tab import EventTab
-from src.gui.components.notification_icon import NotificationIcon
+from src.gui.activity_log_tab import ActivityLogTab
+from src.gui.event_tab import EventTab
+from src.gui.notification_icon import NotificationIcon
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_config import UserConfig
 from src.utils import files
-from src.utils.contants import EVENT_CONFIGS_MAP
+from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME
 from src.utils.platforms import PlatformManager
 from src.utils.user_config import UserConfigManager
-
-if TYPE_CHECKING:
-    from src.schemas.user_response import UserReponse
 
 
 class MainWindow:
     def __init__(self) -> None:
         self._root = tk.Tk()
-        self._root.title(string="FC Online Automation Tool")
+        self._root.title(string=PROGRAM_NAME)
         self._root.resizable(width=True, height=True)
         self._root.minsize(width=700, height=650)
 
@@ -34,6 +31,7 @@ class MainWindow:
             png_path = files.resource_path("assets/icon.png")
             icon = tk.PhotoImage(file=png_path)
             self._root.iconphoto(True, icon)
+
         except Exception:
             pass
 
@@ -41,12 +39,9 @@ class MainWindow:
             try:
                 ico_path = files.resource_path("assets/icon.ico")
                 self._root.iconbitmap(ico_path)
+
             except Exception:
                 pass
-
-        # Position window at top-right corner of screen
-        self._screen_width = self._root.winfo_screenwidth()
-        self._root.geometry(f"700x700+{self._screen_width - 700}+0")  # x=screen_width-700, y=0 (top-right corner)
 
         saved_configs = UserConfigManager.load_configs()
 
@@ -54,17 +49,22 @@ class MainWindow:
         self._password_var = tk.StringVar(value=saved_configs.password)
         self._spin_action_var = tk.IntVar(value=saved_configs.spin_action)
         self._target_special_jackpot_var = tk.IntVar(value=saved_configs.target_special_jackpot)
+        self._target_mini_jackpot_var = tk.IntVar(value=saved_configs.target_mini_jackpot)
+        self._close_when_jackpot_won_var = tk.BooleanVar(value=saved_configs.close_when_jackpot_won)
+        self._close_when_mini_jackpot_won_var = tk.BooleanVar(value=saved_configs.close_when_mini_jackpot_won)
 
         self._is_running = False
-        self._selected_event = saved_configs.event or "Bi Lắc"
+        self._selected_event = saved_configs.event or list(EVENT_CONFIGS_MAP.keys())[0]
 
         self._tool_instance = MainTool(
-            screen_width=self._screen_width,
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
             username=self._username_var.get(),
             password=self._password_var.get(),
             spin_action=self._spin_action_var.get(),
             target_special_jackpot=self._target_special_jackpot_var.get(),
+            target_mini_jackpot=self._target_mini_jackpot_var.get(),
+            close_when_jackpot_won=self._close_when_jackpot_won_var.get(),
+            close_when_mini_jackpot_won=self._close_when_mini_jackpot_won_var.get(),
         )
 
         self._setup_ui()
@@ -73,6 +73,7 @@ class MainWindow:
         def on_close() -> None:
             if self._is_running:
                 self._tool_instance.is_running = False
+                self._tool_instance.close()
 
             self._root.destroy()
 
@@ -120,11 +121,11 @@ class MainWindow:
 
     def _setup_ui(self) -> None:
         self._setup_notification_icon()
-        self._setup_control_frame()
         self._setup_event_selection()
+        self._setup_control_frame()
         self._setup_main_content()
-
         self._setup_trace_callbacks()
+        self._adjust_window_position()
 
     def _setup_notification_icon(self) -> None:
         notification_frame = ttk.Frame(self._root)
@@ -137,6 +138,60 @@ class MainWindow:
         # Notification icon
         self._notification_icon = NotificationIcon(notification_frame)
         self._notification_icon.frame.pack(side="right")
+
+    def _setup_event_selection(self) -> None:
+        event_selection_frame = ttk.LabelFrame(self._root, padding=10)
+        event_selection_frame.pack(fill="x", padx=10, pady=(10, 5))
+
+        self._event_var = tk.StringVar(value=self._selected_event)
+
+        # Create dropdown menu for event selection
+        event_label = ttk.Label(event_selection_frame, text="Select Event:")
+        event_label.pack(anchor="w", pady=(0, 5))
+
+        self._event_combobox = ttk.Combobox(
+            event_selection_frame,
+            textvariable=self._event_var,
+            values=list(EVENT_CONFIGS_MAP.keys()),
+            state="readonly",
+            width=30,
+        )
+        self._event_combobox.pack(anchor="w", fill="x")
+
+        def on_event_changed(_event: Optional[tk.Event] = None) -> None:
+            # Get the selected event from combobox
+            self._selected_event = self._event_var.get()
+
+            # Update the event tab with new event configuration
+            # Instead of recreating the tab, update the existing one
+            self._event_tab = EventTab(
+                parent=self._notebook,
+                title=self._selected_event,
+                username_var=self._username_var,
+                password_var=self._password_var,
+                spin_action_var=self._spin_action_var,
+                target_special_jackpot_var=self._target_special_jackpot_var,
+                target_mini_jackpot_var=self._target_mini_jackpot_var,
+                close_when_jackpot_won_var=self._close_when_jackpot_won_var,
+                close_when_mini_jackpot_won_var=self._close_when_mini_jackpot_won_var,
+                spin_actions=EVENT_CONFIGS_MAP[self._selected_event].spin_actions,
+                on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
+            )
+
+            # Replace the content of the first tab without changing tab selection
+            self._notebook.forget(0)
+            self._notebook.insert(0, self._event_tab.frame, text="User Settings")
+
+            # Force the notebook to stay on the current tab
+            self._notebook.select(0)
+
+            # Update tool instance with new event config
+            if not self._is_running:
+                self._tool_instance.update_configs(event_config=EVENT_CONFIGS_MAP[self._selected_event])
+
+            self._save_configs()
+
+        self._event_combobox.bind("<<ComboboxSelected>>", on_event_changed)
 
     def _setup_control_frame(self) -> None:
         control_frame = ttk.Frame(self._root)
@@ -161,26 +216,6 @@ class MainWindow:
         self._status_label = ttk.Label(control_frame, text="Status: Ready")
         self._status_label.pack(side="right")
 
-    def _setup_event_selection(self) -> None:
-        event_selection_frame = ttk.LabelFrame(self._root, padding=10)
-        event_selection_frame.pack(fill="x", padx=10, pady=(10, 5))
-
-        self._event_var = tk.StringVar(value=self._selected_event)
-
-        # Create dropdown menu for event selection
-        event_label = ttk.Label(event_selection_frame, text="Select Event:")
-        event_label.pack(anchor="w", pady=(0, 5))
-
-        self._event_combobox = ttk.Combobox(
-            event_selection_frame,
-            textvariable=self._event_var,
-            values=list(EVENT_CONFIGS_MAP.keys()),
-            state="readonly",
-            width=30,
-        )
-        self._event_combobox.pack(anchor="w", fill="x")
-        self._event_combobox.bind("<<ComboboxSelected>>", self._on_event_changed)
-
     def _setup_main_content(self) -> None:
         main_container = ttk.Frame(self._root)
         main_container.pack(fill="both", expand=True, padx=10, pady=5)
@@ -197,6 +232,9 @@ class MainWindow:
             password_var=self._password_var,
             spin_action_var=self._spin_action_var,
             target_special_jackpot_var=self._target_special_jackpot_var,
+            target_mini_jackpot_var=self._target_mini_jackpot_var,
+            close_when_jackpot_won_var=self._close_when_jackpot_won_var,
+            close_when_mini_jackpot_won_var=self._close_when_mini_jackpot_won_var,
             spin_actions=EVENT_CONFIGS_MAP[self._selected_event].spin_actions,
             on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
         )
@@ -213,14 +251,17 @@ class MainWindow:
                     current = self._notebook.nametowidget(self._notebook.select())
                     if current and isinstance(current, (tk.Frame, ttk.Frame)):
                         current.focus_set()
+
                 except Exception:
                     pass
 
             if self._focus_after_id:
                 try:
                     self._root.after_cancel(self._focus_after_id)
+
                 except Exception:
                     pass
+
                 finally:
                     self._focus_after_id = None
 
@@ -231,6 +272,7 @@ class MainWindow:
                 current = self._notebook.nametowidget(self._notebook.select())
                 if current and isinstance(current, (tk.Frame, ttk.Frame)):
                     current.focus_set()
+
             except Exception:
                 pass
 
@@ -240,82 +282,124 @@ class MainWindow:
         self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
         self._root.after_idle(_schedule_focus_current_tab)
 
-    def _save_configs(self) -> None:
-        UserConfigManager.save_configs(
-            config=UserConfig(
-                event=self._selected_event,
-                username=self._username_var.get(),
-                password=self._password_var.get(),
-                spin_action=self._spin_action_var.get(),
-                target_special_jackpot=self._target_special_jackpot_var.get(),
-            )
-        )
-
-    def _on_event_changed(self, _event: Optional[tk.Event] = None) -> None:
-        # Get the selected event from combobox
-        self._selected_event = self._event_var.get()
-
-        # Update the event tab with new event configuration
-        # Instead of recreating the tab, update the existing one
-        self._event_tab = EventTab(
-            parent=self._notebook,
-            title=self._selected_event,
-            username_var=self._username_var,
-            password_var=self._password_var,
-            spin_action_var=self._spin_action_var,
-            target_special_jackpot_var=self._target_special_jackpot_var,
-            spin_actions=EVENT_CONFIGS_MAP[self._selected_event].spin_actions,
-            on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
-        )
-
-        # Replace the content of the first tab without changing tab selection
-        self._notebook.forget(0)
-        self._notebook.insert(0, self._event_tab.frame, text="User Settings")
-
-        # Force the notebook to stay on the current tab
-        self._notebook.select(0)
-
-        # Update tool instance with new event config
-        if not self._is_running:
-            self._tool_instance.update_configs(event_config=EVENT_CONFIGS_MAP[self._selected_event])
-
-        self._save_configs()
-
     def _setup_trace_callbacks(self) -> None:
-        def _on_credentials_changed() -> None:
-            if not self._is_running:
-                self._tool_instance.update_credentials(self._username_var.get(), self._password_var.get())
-                self._save_configs()
-
-        self._username_var.trace_add("write", lambda *args: _on_credentials_changed())
-        self._password_var.trace_add("write", lambda *args: _on_credentials_changed())
+        self._username_var.trace_add("write", lambda *args: self._save_configs())
+        self._password_var.trace_add("write", lambda *args: self._save_configs())
         self._spin_action_var.trace_add("write", lambda *args: self._save_configs())
         self._target_special_jackpot_var.trace_add("write", lambda *args: self._save_configs())
+        self._target_mini_jackpot_var.trace_add("write", lambda *args: self._save_configs())
+        self._close_when_jackpot_won_var.trace_add("write", lambda *args: self._save_configs())
+        self._close_when_mini_jackpot_won_var.trace_add("write", lambda *args: self._save_configs())
 
-    def _update_user_panel(self, user_info: Optional["UserReponse"]) -> None:
-        info_text = (
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "NOT LOGGED IN\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Please enter your credentials and start the tool"
+    def _adjust_window_position(self) -> None:
+        self._root.update_idletasks()
+        width, height = self._root.winfo_reqwidth(), self._root.winfo_reqheight()
+        x, y = self._root.winfo_screenwidth() - width, 0
+        self._root.geometry(f"{width}x{height}+{x}+{y}")
+
+    def _handle_click_start(self) -> None:
+        if not self._username_var.get().strip():
+            messagebox.showerror("❌ Error", "Username is required!")
+            return
+
+        if not self._password_var.get().strip():
+            messagebox.showerror("❌ Error", "Password is required!")
+            return
+
+        target_special_jackpot = self._target_special_jackpot_var.get()
+        if target_special_jackpot <= 0:
+            messagebox.showerror("❌ Error", "Target Jackpot must be a positive number!")
+            return
+
+        # Update UI
+        self._notebook.select(self._notebook.index("end") - 1)
+        self._update_running_status(is_running=True)
+
+        self._activity_log_tab.clear_messages()
+        self._activity_log_tab.update_current_jackpot(value=0)
+        self._activity_log_tab.update_target_special_jackpot(value=target_special_jackpot)
+        spin_action_name = EVENT_CONFIGS_MAP[self._selected_event].spin_actions[self._spin_action_var.get() - 1]
+        self._activity_log_tab.add_message(
+            tag=MessageTag.INFO,
+            message=(
+                f"Using spin action '{spin_action_name}' to auto spin when target "
+                f"'{target_special_jackpot:,}' is reached at '{EVENT_CONFIGS_MAP[self._selected_event].base_url}'"
+            ),
         )
 
-        if user_info and user_info.payload.user:
-            info_text = (
-                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"ACCOUNT INFORMATION\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"User ID    : {user_info.payload.user.uid}\n"
-                f"Username   : {user_info.payload.user.nickname}\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"CURRENCY & RESOURCES\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"FC Points  : {user_info.payload.user.fc:,}\n"
-                f"MC Points  : {user_info.payload.user.mc:,}\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        # Update configs of tool instance and callbacks
+        def add_message(tag: MessageTag, message: str) -> None:
+            self._root.after(0, lambda: self._activity_log_tab.add_message(tag=tag, message=message))
+
+        def add_notification(nickname: str, jackpot_value: str) -> None:
+            self._root.after(
+                0,
+                lambda: self._notification_icon.add_notification(
+                    nickname=nickname,
+                    jackpot_value=jackpot_value,
+                    timestamp=datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                ),
             )
 
-        self._event_tab.update_user_info_text(info_text, foreground="#22c55e")
+        def update_current_jackpot(value: int) -> None:
+            self._root.after(0, lambda: self._activity_log_tab.update_current_jackpot(value=value))
+
+        def close_browser() -> None:
+            self._root.after(0, self._handle_click_stop)
+
+        self._tool_instance.update_configs(
+            is_running=True,
+            event_config=EVENT_CONFIGS_MAP[self._selected_event],
+            username=self._username_var.get(),
+            password=self._password_var.get(),
+            spin_action=self._spin_action_var.get(),
+            target_special_jackpot=target_special_jackpot,
+            target_mini_jackpot=self._target_mini_jackpot_var.get(),
+            close_when_jackpot_won=self._close_when_jackpot_won_var.get(),
+            close_when_mini_jackpot_won=self._close_when_mini_jackpot_won_var.get(),
+            current_jackpot=0,
+            add_message=add_message,
+            add_notification=add_notification,
+            update_current_jackpot=update_current_jackpot,
+            close_browser=close_browser,
+        )
+
+        # Start tool in a new thread
+        def handle_start_task() -> None:
+            try:
+                self._root.after(0, lambda: self._status_label.config(text="Status: Running..."))
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self._tool_instance.run())
+
+            except Exception as error:
+                self._update_running_status(is_running=False, is_error=True)
+                self._root.after(0, messagebox.showerror, "❌ Error", str(error))
+
+        threading.Thread(target=handle_start_task, daemon=True).start()
+
+    def _handle_click_stop(self) -> None:
+        # Update UI
+        self._notebook.select(0)
+        self._update_running_status(is_running=False)
+
+        # Update configs of tool instance
+        self._tool_instance.update_configs(is_running=False)
+
+        # Stop tool in a new thread
+        def handle_stop_task() -> None:
+            try:
+                self._root.after(0, lambda: self._status_label.config(text="Status: Ready"))
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self._tool_instance.close())
+                loop.close()
+
+            except Exception as error:
+                self._update_running_status(is_running=True, is_error=True)
+                self._root.after(0, messagebox.showerror, "❌ Error", str(error))
+
+        threading.Thread(target=handle_stop_task, daemon=True).start()
 
     def _update_running_status(self, is_running: bool, is_error: bool = False) -> None:
         self._is_running = is_running
@@ -333,113 +417,16 @@ class MainWindow:
 
         self._event_tab.set_enabled(enabled=not is_running)
 
-    def _handle_click_start(self) -> None:
-        if self._is_running:
-            messagebox.showerror("❌ Error", "Tool is already running!")
-            return
-
-        if not self._username_var.get().strip():
-            messagebox.showerror("❌ Error", "Username is required!")
-            return
-
-        if not self._password_var.get().strip():
-            messagebox.showerror("❌ Error", "Password is required!")
-            return
-
-        try:
-            target_value = self._target_special_jackpot_var.get()
-            if target_value <= 0:
-                raise ValueError("Target Jackpot must be a positive number!")  # noqa: EM101
-        except ValueError as error:
-            messagebox.showerror("❌ Error", str(error))
-            return
-
-        # Update UI
-        self._update_running_status(is_running=True)
-        self._notebook.select(self._notebook.index("end") - 1)
-        self._activity_log_tab.clear_messages()
-        self._activity_log_tab.update_current_jackpot(0)
-        self._activity_log_tab.update_target_special_jackpot(target_value)
-
-        spin_action_name = EVENT_CONFIGS_MAP[self._selected_event].spin_actions[self._spin_action_var.get() - 1]
-        self._activity_log_tab.add_message(
-            tag=MessageTag.INFO.name,
-            message=(
-                f"Using spin action '{spin_action_name}' to auto spin when target "
-                f"'{target_value:,}' is reached at '{EVENT_CONFIGS_MAP[self._selected_event].base_url}'"
-            ),
-        )
-
-        # Update configs of tool instance and callbacks
-        def update_user_info(user_info: Optional["UserReponse"]) -> None:
-            self._root.after(0, lambda: self._update_user_panel(user_info=user_info))
-
-        def add_message(tag: str, message: str) -> None:
-            self._root.after(0, lambda: self._activity_log_tab.add_message(tag=tag, message=message))
-
-        def update_current_jackpot(current_jackpot: int) -> None:
-            self._root.after(0, lambda: self._activity_log_tab.update_current_jackpot(current_jackpot=current_jackpot))
-
-        def add_notification(nickname: str, jackpot_value: str) -> None:
-            self._root.after(
-                0,
-                lambda: self._notification_icon.add_notification(
-                    nickname=nickname,
-                    jackpot_value=jackpot_value,
-                    timestamp=datetime.now().strftime("%H:%M:%S"),
-                ),
+    def _save_configs(self) -> None:
+        UserConfigManager.save_configs(
+            config=UserConfig(
+                event=self._selected_event,
+                username=self._username_var.get(),
+                password=self._password_var.get(),
+                spin_action=self._spin_action_var.get(),
+                target_special_jackpot=self._target_special_jackpot_var.get(),
+                target_mini_jackpot=self._target_mini_jackpot_var.get(),
+                close_when_jackpot_won=self._close_when_jackpot_won_var.get(),
+                close_when_mini_jackpot_won=self._close_when_mini_jackpot_won_var.get(),
             )
-
-        self._tool_instance.update_configs(
-            is_running=True,
-            event_config=EVENT_CONFIGS_MAP[self._selected_event],
-            current_jackpot=0,
-            spin_action=self._spin_action_var.get(),
-            target_special_jackpot=target_value,
-            add_message=add_message,
-            add_notification=add_notification,
-            update_user_info=update_user_info,
-            update_current_jackpot=update_current_jackpot,
         )
-
-        # Start tool in a new thread
-        def _handle_start_task() -> None:
-            try:
-                self._root.after(0, lambda: self._status_label.config(text="Status: Running..."))
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(self._tool_instance.run())
-
-            except Exception as error:
-                self._root.after(0, messagebox.showerror, "❌ Error", str(error))
-                self._update_running_status(is_running=False, is_error=True)
-                self._root.after(0, lambda: self._update_user_panel(user_info=self._tool_instance.user_info))
-
-        threading.Thread(target=_handle_start_task, daemon=True).start()
-
-    def _handle_click_stop(self) -> None:
-        if not self._is_running:
-            return
-
-        # Update UI
-        self._update_running_status(is_running=False)
-        self._notebook.select(0)
-        self._root.after(0, lambda: self._update_user_panel(user_info=self._tool_instance.user_info))
-
-        # Update configs of tool instance
-        self._tool_instance.update_configs(is_running=False)
-
-        # Stop tool in a new thread
-        def _handle_stop_task() -> None:
-            try:
-                self._root.after(0, lambda: self._status_label.config(text="Status: Ready"))
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(self._tool_instance.close())
-                loop.close()
-
-            except Exception as error:
-                self._root.after(0, messagebox.showerror, "❌ Error", str(error))
-                self._update_running_status(is_running=True, is_error=True)
-
-        threading.Thread(target=_handle_stop_task, daemon=True).start()

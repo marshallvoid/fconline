@@ -106,6 +106,7 @@ async def _run_main(args: argparse.Namespace) -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
             loop.add_signal_handler(sig, _cancel_handler)
+
         except NotImplementedError:
             # Some platforms (notably Windows) may not support this fully
             pass
@@ -116,8 +117,10 @@ async def _run_main(args: argparse.Namespace) -> None:
     async def _guard_run() -> None:
         try:
             await tool.run()
+
         except Exception as e:  # noqa: BLE001
             logger.error(f"❌ Tool crashed: {e}")
+
         finally:
             await tool.close()
             stop_event.set()
@@ -128,8 +131,10 @@ async def _run_main(args: argparse.Namespace) -> None:
     if args.duration and int(args.duration) > 0:
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=float(args.duration))
+
         except asyncio.TimeoutError:
             logger.info(f"⏰ Duration {args.duration}s elapsed — stopping the tool.")
+
         finally:
             tool.is_running = False
             await tool.close()
@@ -150,8 +155,10 @@ def main() -> None:
 
     try:
         asyncio.run(_run_main(args))
+
     except KeyboardInterrupt:
         logger.warning("🛑 Stopped by user.")
+
     except Exception as e:  # noqa: BLE001
         logger.error(f"❌ Unexpected error: {e}")
 
