@@ -35,8 +35,10 @@ class InterceptHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover
         try:
             level = logger.level(record.levelname).name
+
         except ValueError:
             level = str(record.levelno)
+
         except AttributeError:
             level = self.loglevel_mapping[record.levelno]
 

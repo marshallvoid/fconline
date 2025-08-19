@@ -9,11 +9,16 @@ class NotificationIcon:
     def __init__(self, parent: tk.Misc) -> None:
         self._parent: tk.Misc = parent
 
-        self._notifications: List[Tuple[str, str, str]] = []  # List of (nickname, jackpot_value, timestamp) tuples
+        # List of (nickname, jackpot_value, timestamp, is_seen) tuples
+        self._notifications: List[Tuple[str, str, str, bool]] = []
         self._menu_window: Optional[tk.Toplevel] = None
 
-        # Load existing notifications from config
-        self._load_notifications_from_config()
+        try:
+            config = UserConfigManager.load_configs()
+            self._notifications = config.notifications
+
+        except Exception:
+            self._notifications = []
 
         self._build()
 
@@ -21,17 +26,8 @@ class NotificationIcon:
     def frame(self) -> ttk.Frame:
         return self._frame
 
-    @property
-    def notifications_count(self) -> int:
-        return len(self._notifications)
-
-    @property
-    def notifications(self) -> List[Tuple[str, str, str]]:
-        """Get a copy of all notifications."""
-        return self._notifications.copy()
-
     def add_notification(self, nickname: str, jackpot_value: str, timestamp: str) -> None:
-        self._notifications.append((nickname, jackpot_value, timestamp))
+        self._notifications.append((nickname, jackpot_value, timestamp, False))
         self._update_icon()
         self._save_notifications_to_config()
 
@@ -40,22 +36,12 @@ class NotificationIcon:
         self._update_icon()
         self._save_notifications_to_config()
 
-    def refresh_notifications_from_config(self) -> None:
-        self._load_notifications_from_config()
-        self._update_icon()
-
-    def _load_notifications_from_config(self) -> None:
-        try:
-            config = UserConfigManager.load_configs()
-            self._notifications = config.notifications
-        except Exception:
-            self._notifications = []
-
     def _save_notifications_to_config(self) -> None:
         try:
             config = UserConfigManager.load_configs()
             config.notifications = self._notifications
             UserConfigManager.save_configs(config)
+
         except Exception:
             pass
 
@@ -94,9 +80,11 @@ class NotificationIcon:
         if self._menu_window:
             try:
                 self._menu_window.destroy()
+
             except tk.TclError:
                 pass
 
+        self._mark_all_as_seen()
         if self._count_label.winfo_exists():
             self._count_label.pack_forget()
 
@@ -183,15 +171,11 @@ class NotificationIcon:
 
             canvas.bind("<Configure>", _update_scroll_region)
 
-            # Sort notifications by timestamp in descending order (newest first)
-            sorted_notifications: List[Tuple[str, str, str]] = sorted(
-                self._notifications,
-                key=lambda x: x[2],
-                reverse=True,
-            )
+            # Sort notifications: unseen first, then by timestamp in descending order (newest first)
+            sorted_notifications = sorted(self._notifications, key=lambda x: (x[3], x[2]), reverse=True)
 
             # Add each notification
-            for nickname, jackpot_value, timestamp in sorted_notifications:
+            for nickname, jackpot_value, timestamp, _ in sorted_notifications:
                 notification_frame: ttk.Frame = ttk.Frame(scrollable_frame)
                 notification_frame.pack(fill="x", pady=(0, 10))
 
@@ -241,8 +225,14 @@ class NotificationIcon:
         close_btn: ttk.Button = ttk.Button(button_frame, text="Close", command=self._menu_window.destroy)
         close_btn.pack(side="right")
 
+    def _mark_all_as_seen(self) -> None:
+        for i in range(len(self._notifications)):
+            nickname, jackpot_value, timestamp, _ = self._notifications[i]
+            self._notifications[i] = (nickname, jackpot_value, timestamp, True)
+        self._save_notifications_to_config()
+
     def _update_icon(self) -> None:
-        unread_count: int = len(self._notifications)
+        unread_count: int = sum(1 for _, _, _, is_seen in self._notifications if not is_seen)
 
         if unread_count == 0:
             self._icon_label.config(text="🔔", foreground="#6b7280", font=("Arial", 16))

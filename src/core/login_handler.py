@@ -1,4 +1,5 @@
-from typing import Callable, Optional, Self
+import asyncio
+from typing import Callable, Optional
 
 from browser_use.browser.types import Page
 from loguru import logger
@@ -10,131 +11,129 @@ from src.utils import methods as md
 
 
 class LoginHandler:
-    _page: Page
-
-    _event_config: EventConfig
-    _username: str
-    _password: str
-
-    _add_message: Optional[Callable[[str, str], None]] = None
-
-    @classmethod
-    def setup(
-        cls,
+    def __init__(
+        self,
         page: Page,
         event_config: EventConfig,
         username: str,
         password: str,
         add_message: Optional[Callable[[str, str], None]] = None,
-    ) -> type[Self]:
-        cls._page = page
-        cls._event_config = event_config
-        cls._username = username
-        cls._password = password
-        cls._add_message = add_message
+    ) -> None:
+        self._page = page
+        self._event_config = event_config
+        self._username = username
+        self._password = password
+        self._add_message = add_message
 
-        return cls
+        self._websocket_handler: Optional[WebsocketHandler] = None
 
-    @classmethod
-    async def run(cls) -> None:
-        logger.info("🔍 Checking login status...")
+    @property
+    def websocket_handler(self) -> Optional[WebsocketHandler]:
+        return self._websocket_handler
 
-        if await cls._is_logged_in():
-            logger.info("🔍 User is already logged in")
-            WebsocketHandler.is_logged_in = True
+    @websocket_handler.setter
+    def websocket_handler(self, websocket_handler: WebsocketHandler) -> None:
+        self._websocket_handler = websocket_handler
+
+    async def ensure_logged_in(self) -> None:
+        md.should_execute_callback(self._add_message, MessageTag.INFO, "Checking login status")
+
+        if await self._detect_login_status():
+            md.should_execute_callback(self._add_message, MessageTag.SUCCESS, "Already logged in")
+            self._websocket_handler.is_logged_in = True
             return
 
-        if await cls._perform_login():
-            md.should_execute_callback(cls._add_message, MessageTag.SUCCESS.name, "Login completed successfully")
-            WebsocketHandler.is_logged_in = True
-            await cls._page.wait_for_load_state(state="networkidle")
-            await cls._redirect_to_base_url()
-            return
+        md.should_execute_callback(self._add_message, MessageTag.WARNING, "Not logged in → performing login")
+        if not await self._perform_login():
+            msg = "Login failed! Exiting..."
+            raise Exception(msg)
+
+        self._websocket_handler.is_logged_in = True
+        await self._ensure_base_url()
+        md.should_execute_callback(self._add_message, MessageTag.SUCCESS, "Login completed successfully")
+
+    async def _detect_login_status(self) -> bool:
+        if await self._is_visible(selector=self._event_config.logout_btn_selector):
+            return True
+
+        if await self._is_visible(selector=self._event_config.login_btn_selector):
+            return False
 
         msg = "Login failed! Exiting..."
         raise Exception(msg)
 
-    @classmethod
-    async def _is_logged_in(cls) -> bool:
+    async def _perform_login(self) -> bool:
         try:
-            logout_btn = await cls._page.query_selector(selector=cls._event_config.logout_btn_selector)
-            if logout_btn:
-                return True
-
-            login_btn = await cls._page.query_selector(selector=cls._event_config.login_btn_selector)
-            if login_btn:
+            # Open login form
+            if not await self._click_if_present(self._event_config.login_btn_selector):
+                md.should_execute_callback(self._add_message, MessageTag.ERROR, "Login button not found")
                 return False
+            await self._page.wait_for_load_state("networkidle")
 
-            md.should_execute_callback(cls._add_message, MessageTag.WARNING.name, "Unable to determine login status")
-            return False
-
-        except Exception as error:
-            md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, f"Error checking login status: {error}")
-            return False
-
-    @classmethod
-    async def _perform_login(cls) -> bool:
-        logger.info("🔐 User not logged in, attempting login...")
-        try:
-            login_btn = await cls._page.query_selector(selector=cls._event_config.login_btn_selector)
-            if not login_btn:
-                md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, "Login button not found")
+            # Fill username
+            user_loc = self._page.locator(self._event_config.username_input_selector).first
+            if await user_loc.count() == 0:
+                md.should_execute_callback(self._add_message, MessageTag.ERROR, "Username input field not found")
                 return False
+            await user_loc.fill(self._username)
 
-            await login_btn.click()
-            await cls._page.wait_for_load_state(state="networkidle")
-
-            username_input = await cls._page.query_selector(selector=cls._event_config.username_input_selector)
-            if not username_input:
-                md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, "Username input field not found")
+            # Fill password
+            pass_loc = self._page.locator(self._event_config.password_input_selector).first
+            if await pass_loc.count() == 0:
+                md.should_execute_callback(self._add_message, MessageTag.ERROR, "Password input field not found")
                 return False
+            await pass_loc.fill(self._password)
 
-            await username_input.fill(value=cls._username)
-
-            password_input = await cls._page.query_selector(selector=cls._event_config.password_input_selector)
-            if not password_input:
-                md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, "Password input field not found")
+            # Submit
+            submit_loc = self._page.locator(self._event_config.submit_btn_selector).first
+            if await submit_loc.count() == 0:
+                md.should_execute_callback(self._add_message, MessageTag.ERROR, "Submit button not found")
                 return False
+            await submit_loc.click()
 
-            await password_input.fill(value=cls._password)
-
-            submit_btn = await cls._page.query_selector(selector=cls._event_config.submit_btn_selector)
-            if not submit_btn:
-                md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, "Submit button not found")
-                return False
-
-            await submit_btn.click()
-
-            try:
-                await cls._page.wait_for_function(
-                    (
-                        f"window.location.href.includes('{cls._event_config.base_url}') || "
-                        "document.querySelector('.captcha') || document.querySelector('.error')"
-                    ),
-                )
-
-                if cls._event_config.base_url in cls._page.url:
+            base = self._event_config.base_url
+            while True:
+                if base in self._page.url:
                     return True
 
-                await cls._page.wait_for_function(f"window.location.href.includes('{cls._event_config.base_url}')")
-                return True
+                if self._page.is_closed():
+                    md.should_execute_callback(self._add_message, MessageTag.ERROR, "Page closed during login")
+                    return False
 
-            except Exception as error:
-                md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, f"Login failed: {error}")
-                return False
+                await asyncio.sleep(0.5)
 
-        except Exception as error:
-            md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, f"Error performing login: {error}")
+        except Exception as e:
+            md.should_execute_callback(self._add_message, MessageTag.ERROR, f"Error performing login: {e}")
             return False
 
-    @classmethod
-    async def _redirect_to_base_url(cls) -> None:
+    async def _ensure_base_url(self) -> None:
         try:
-            if cls._event_config.base_url not in cls._page.url:
-                logger.warning(f"⚠️ Redirected to unexpected URL: {cls._page.url}")
-                logger.info(f"🔄 Redirecting to: {cls._event_config.base_url}")
-                await cls._page.goto(url=cls._event_config.base_url)
-                await cls._page.wait_for_load_state(state="networkidle")
+            base = self._event_config.base_url
+            if base not in self._page.url:
+                logger.warning(f"⚠️ Unexpected URL after login: {self._page.url}")
+                logger.info(f"🔄 Redirecting to: {base}")
+                await self._page.goto(base)
+                await self._page.wait_for_load_state("networkidle")
 
-        except Exception as error:
-            logger.warning(f"⚠️ Error redirecting to base URL: {error}")
+        except Exception as e:
+            logger.warning(f"⚠️ Error redirecting to base URL: {e}")
+
+    async def _is_visible(self, selector: str) -> bool:
+        loc = self._page.locator(selector).first
+        try:
+            return await loc.is_visible()
+
+        except Exception:
+            return False
+
+    async def _click_if_present(self, selector: str) -> bool:
+        loc = self._page.locator(selector).first
+        try:
+            if await loc.count() > 0:
+                await loc.click()
+                return True
+
+        except Exception as e:
+            logger.error(f"Click failed on {selector}: {e}")
+
+        return False

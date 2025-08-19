@@ -12,6 +12,9 @@ class EventTab:
         password_var: tk.StringVar,
         spin_action_var: tk.IntVar,
         target_special_jackpot_var: tk.IntVar,
+        target_mini_jackpot_var: tk.IntVar,
+        close_when_jackpot_won_var: tk.BooleanVar,
+        close_when_mini_jackpot_won_var: tk.BooleanVar,
         spin_actions: List[str],
         on_spin_action_changed: Callable[[], None],
     ) -> None:
@@ -21,6 +24,9 @@ class EventTab:
         self._password_var = password_var
         self._spin_action_var = spin_action_var
         self._target_special_jackpot_var = target_special_jackpot_var
+        self._target_mini_jackpot_var = target_mini_jackpot_var
+        self._close_when_jackpot_won_var = close_when_jackpot_won_var
+        self._close_when_mini_jackpot_won_var = close_when_mini_jackpot_won_var
         self._spin_actions = spin_actions
         self._on_spin_action_changed = on_spin_action_changed
 
@@ -40,12 +46,31 @@ class EventTab:
         self._username_entry.config(state=state)
         self._password_entry.config(state=state)
         self._target_special_jackpot_entry.config(state=state)
+        self._target_mini_jackpot_entry.config(state=state)
 
         for radio_btn in self._radio_buttons:
             radio_btn.config(state=state)
 
-    def update_user_info_text(self, text: str, foreground: str = "#22c55e") -> None:
-        self._user_info_label.config(text=text, foreground=foreground)
+        # Handle checkbox states
+        if enabled:
+            # Re-apply the mini jackpot logic
+            self._on_mini_jackpot_changed()
+        else:
+            # Disable both checkboxes when UI is disabled
+            self._close_when_jackpot_won_checkbox.config(state="disabled")
+            self._close_when_mini_jackpot_won_checkbox.config(state="disabled")
+
+    def _on_mini_jackpot_changed(self) -> None:
+        if self._close_when_mini_jackpot_won_var.get():
+            self._close_when_jackpot_won_var.set(True)
+            self._close_when_jackpot_won_checkbox.config(state="disabled")
+            # Enable target mini jackpot input
+            self._target_mini_jackpot_entry.config(state="normal")
+        else:
+            self._close_when_jackpot_won_checkbox.config(state="normal")
+            # Disable and clear target mini jackpot input
+            self._target_mini_jackpot_entry.config(state="disabled")
+            self._target_mini_jackpot_var.set(0)
 
     def _build(self) -> None:
         title_label = ttk.Label(self._frame, text="User Settings", font=("Arial", 14, "bold"))
@@ -86,26 +111,42 @@ class EventTab:
         )
         self._target_special_jackpot_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
-        # User info display
-        user_info_frame = ttk.LabelFrame(container, text="User Information", padding=10)
-        user_info_frame.pack(fill="x", pady=(0, 10))
-
-        user_info_container = ttk.Frame(user_info_frame)
-        user_info_container.pack(fill="x")
-
-        info_text = (
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "NOT LOGGED IN\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "   Please enter your credentials and start the tool"
+        # Target Mini Jackpot
+        target_mini_frame = ttk.Frame(container)
+        target_mini_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(target_mini_frame, text="Target Mini Jackpot:", width=20, font=("Arial", 12)).pack(side="left")
+        self._target_mini_jackpot_entry = ttk.Entry(
+            target_mini_frame,
+            textvariable=self._target_mini_jackpot_var,
+            width=30,
+            font=("Arial", 12),
         )
-        self._user_info_label = ttk.Label(
-            user_info_container,
-            text=info_text,
-            foreground="#757575",
-            font=("Consolas", 12),
+        self._target_mini_jackpot_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
+
+        # Close when won checkboxes
+        close_options_frame = ttk.LabelFrame(container, text="Auto Close Options", padding=10)
+        close_options_frame.pack(fill="x", pady=(0, 10))
+
+        # Close when jackpot won checkbox
+        close_jackpot_frame = ttk.Frame(close_options_frame)
+        close_jackpot_frame.pack(fill="x", pady=(0, 5))
+        self._close_when_jackpot_won_checkbox = ttk.Checkbutton(
+            close_jackpot_frame,
+            text="Close when won Ultimate Prize",
+            variable=self._close_when_jackpot_won_var,
         )
-        self._user_info_label.pack(anchor="w")
+        self._close_when_jackpot_won_checkbox.pack(anchor="w")
+
+        # Close when mini jackpot won checkbox
+        close_mini_frame = ttk.Frame(close_options_frame)
+        close_mini_frame.pack(fill="x", pady=(0, 5))
+        self._close_when_mini_jackpot_won_checkbox = ttk.Checkbutton(
+            close_mini_frame,
+            text="Close when won Mini Prize",
+            variable=self._close_when_mini_jackpot_won_var,
+            command=self._on_mini_jackpot_changed,
+        )
+        self._close_when_mini_jackpot_won_checkbox.pack(anchor="w")
 
         # Spin Action
         spin_action_frame = ttk.LabelFrame(container, text="Spin Action", padding=10)
@@ -125,3 +166,6 @@ class EventTab:
             )
             radio_btn.pack(side="left", padx=(0, 20))
             self._radio_buttons.append(radio_btn)
+
+        # Initialize the checkbox states based on current values
+        self._on_mini_jackpot_changed()
