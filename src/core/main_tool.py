@@ -12,6 +12,7 @@ from src.core.websocket_handler import WebsocketHandler
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
 from src.utils import methods as md
+from src.utils.contants import PROGRAM_NAME
 from src.utils.platforms import PlatformManager
 from src.utils.requests import RequestManager
 
@@ -39,10 +40,10 @@ class MainTool:
         self._current_jackpot: int = 0
 
         # Callbacks
-        self._user_info_callback: Optional[Callable[[Optional[UserReponse]], None]] = None
-        self._message_callback: Optional[Callable[[str, str], None]] = None
-        self._current_jackpot_callback: Optional[Callable[[int], None]] = None
-        self._notification_callback: Optional[Callable[[str, str], None]] = None
+        self._add_message: Optional[Callable[[str, str], None]] = None
+        self._add_notification: Optional[Callable[[str, str], None]] = None
+        self._update_user_info: Optional[Callable[[Optional[UserReponse]], None]] = None
+        self._update_current_jackpot: Optional[Callable[[int], None]] = None
 
         # Browser
         self._session: Optional[BrowserSession] = None
@@ -62,27 +63,33 @@ class MainTool:
             await self._page.goto(url=self._event_config.base_url)
             await self._page.wait_for_load_state(state="networkidle")
 
-            WebsocketHandler.setup(
+            # Setup websocket handler
+            ws_handler = WebsocketHandler.setup(
                 page=self._page,
                 event_config=self._event_config,
                 spin_action=self._spin_action,
                 current_jackpot=self._current_jackpot,
                 target_special_jackpot=self._target_special_jackpot,
-                message_callback=self._message_callback,
-                jackpot_callback=self._current_jackpot_callback,
-                jackpot_billboard_callback=self._notification_callback,
-            ).run()
+                add_message=self._add_message,
+                add_notification=self._add_notification,
+                update_current_jackpot=self._update_current_jackpot,
+            )
+            ws_handler.run()
 
-            await LoginHandler.setup(
+            # Check login status and perform login if needed
+            login_handler = LoginHandler.setup(
                 page=self._page,
                 event_config=self._event_config,
                 username=self._username,
                 password=self._password,
-                message_callback=self._message_callback,
-            ).run()
+                add_message=self._add_message,
+            )
+            await login_handler.run()
 
+            # Get user info
             await self._get_user_info()
 
+            # Update websocket's configs
             WebsocketHandler.cookies = self._cookies
             WebsocketHandler.headers = self._headers
             WebsocketHandler.user_info = self.user_info
@@ -95,9 +102,7 @@ class MainTool:
 
         finally:
             await self.close()
-            md.should_execute_callback(
-                self._message_callback, MessageTag.INFO.name, "FC Online automation tool stopped"
-            )  # noqa: E501
+            md.should_execute_callback(self._add_message, MessageTag.INFO.name, f"{PROGRAM_NAME} stopped")
 
     async def close(self) -> None:
         if not self._page or not self._session:
@@ -108,8 +113,10 @@ class MainTool:
             await self._page.close()
             await self._session.kill()
             logger.success("✅ Browser resources cleaned up successfully")
+
         except Exception as e:
             logger.error(f"❌ Failed to clean up browser resource: {e}")
+
         finally:
             self._user_data_dir = PlatformManager.cleanup_user_data_directory(user_data_dir=self._user_data_dir)
             self._session = None
@@ -134,10 +141,10 @@ class MainTool:
         current_jackpot: Optional[int] = None,
         spin_action: Optional[int] = None,
         target_special_jackpot: Optional[int] = None,
-        user_info_callback: Optional[Callable[[Optional[UserReponse]], None]] = None,
-        message_callback: Optional[Callable[[str, str], None]] = None,
-        current_jackpot_callback: Optional[Callable[[int], None]] = None,
-        jackpot_billboard_callback: Optional[Callable[[str, str], None]] = None,
+        add_message: Optional[Callable[[str, str], None]] = None,
+        add_notification: Optional[Callable[[str, str], None]] = None,
+        update_user_info: Optional[Callable[[Optional[UserReponse]], None]] = None,
+        update_current_jackpot: Optional[Callable[[int], None]] = None,
     ) -> None:
         self.is_running = is_running if is_running is not None else self.is_running
         self._event_config = event_config or self._event_config
@@ -145,17 +152,17 @@ class MainTool:
         self._spin_action = spin_action or self._spin_action
         self._target_special_jackpot = target_special_jackpot or self._target_special_jackpot
 
-        if user_info_callback:
-            self._user_info_callback = user_info_callback
+        if add_message:
+            self._add_message = add_message
 
-        if message_callback:
-            self._message_callback = message_callback
+        if add_notification:
+            self._add_notification = add_notification
 
-        if current_jackpot_callback:
-            self._current_jackpot_callback = current_jackpot_callback
+        if update_user_info:
+            self._update_user_info = update_user_info
 
-        if jackpot_billboard_callback:
-            self._notification_callback = jackpot_billboard_callback
+        if update_current_jackpot:
+            self._update_current_jackpot = update_current_jackpot
 
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("🌐 Setting up browser context...")
@@ -265,38 +272,31 @@ class MainTool:
             headers=self._headers,
             connector=RequestManager.connector(),
         ) as session:
-            logger.info("📡 Fetching user information from API...")
             try:
                 async with session.get(f"{self._event_config.base_url}/{self._event_config.user_endpoint}") as response:
                     if not response.ok:
-                        msg = f"API request failed with status: {response.status}"
-                        md.should_execute_callback(self._message_callback, MessageTag.ERROR.name, msg)
+                        md.should_execute_callback(
+                            self._add_message,
+                            MessageTag.ERROR.name,
+                            f"API request failed with status: {response.status}",
+                        )
                         return
 
                     self.user_info = UserReponse.model_validate(await response.json())
                     if not self.user_info.payload.user:
-                        msg = "User information not found"
-                        md.should_execute_callback(self._message_callback, MessageTag.ERROR.name, msg)
+                        md.should_execute_callback(self._add_message, MessageTag.ERROR.name, "User not found")
                         return
 
-                    md.should_execute_callback(self._user_info_callback, self.user_info)
-                    md.should_execute_callback(
-                        self._message_callback,
-                        MessageTag.SUCCESS.name,
-                        "Get user info successfully",
-                    )
-                    logger.success(f"👤 Fetch user info successfully: {self.user_info.payload.user.nickname}")
+                    md.should_execute_callback(self._update_user_info, self.user_info)
+                    md.should_execute_callback(self._add_message, MessageTag.SUCCESS.name, "Get user info successfully")
 
             except Exception as e:
-                md.should_execute_callback(
-                    self._message_callback, MessageTag.ERROR.name, f"Failed to get user info: {e}"
-                )
+                md.should_execute_callback(self._add_message, MessageTag.ERROR.name, f"Failed to get user info: {e}")
 
     async def _extract_cookies(self) -> Dict[str, str]:
         cookies: Dict[str, str] = {}
         if self._page:
             try:
-                logger.info("🍪 Extracting cookies from browser session...")
                 for cookie in await self._page.context.cookies():
                     domain = cookie.get("domain", "")
                     if not domain:
@@ -307,8 +307,6 @@ class MainTool:
                         continue
 
                     cookies[name] = value
-
-                logger.success(f"🍪 Successfully extracted {len(cookies)} cookies")
 
             except Exception as e:
                 logger.error(f"❌ Failed to extract cookies: {e}")

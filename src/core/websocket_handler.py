@@ -30,9 +30,9 @@ class WebsocketHandler:
     _current_jackpot: int
     _target_special_jackpot: int
 
-    _message_callback: Optional[Callable[[str, str], None]] = None
-    _jackpot_callback: Optional[Callable[[int], None]] = None
-    _notification_callback: Optional[Callable[[str, str], None]] = None
+    _add_message: Optional[Callable[[str, str], None]] = None
+    _add_notification: Optional[Callable[[str, str], None]] = None
+    _update_current_jackpot: Optional[Callable[[int], None]] = None
 
     _spin_task: Optional[asyncio.Task] = None
     _spin_lock = asyncio.Lock()
@@ -47,18 +47,18 @@ class WebsocketHandler:
         spin_action: int,
         current_jackpot: int,
         target_special_jackpot: int,
-        message_callback: Optional[Callable[[str, str], None]] = None,
-        jackpot_callback: Optional[Callable[[int], None]] = None,
-        jackpot_billboard_callback: Optional[Callable[[str, str], None]] = None,
+        add_message: Optional[Callable[[str, str], None]] = None,
+        add_notification: Optional[Callable[[str, str], None]] = None,
+        update_current_jackpot: Optional[Callable[[int], None]] = None,
     ) -> type[Self]:
         cls._page = page
         cls._event_config = event_config
         cls._spin_action = spin_action
         cls._current_jackpot = current_jackpot
         cls._target_special_jackpot = target_special_jackpot
-        cls._message_callback = message_callback
-        cls._jackpot_callback = jackpot_callback
-        cls._notification_callback = jackpot_billboard_callback
+        cls._add_message = add_message
+        cls._add_notification = add_notification
+        cls._update_current_jackpot = update_current_jackpot
 
         cls._spin_task = None
 
@@ -139,7 +139,7 @@ class WebsocketHandler:
                     cls._current_jackpot = value
                     if value >= cls._target_special_jackpot:
                         md.should_execute_callback(
-                            cls._message_callback,
+                            cls._add_message,
                             MessageTag.JACKPOT.name,
                             f"Special Jackpot has reached {cls._target_special_jackpot:,}",
                         )
@@ -150,7 +150,7 @@ class WebsocketHandler:
                             logger.info("🎯 Target jackpot reached - triggering immediate spin")
                             cls._spin_task = asyncio.create_task(cls._execute_single_spin(epoch_snapshot))
 
-                    md.should_execute_callback(cls._jackpot_callback, value)
+                    md.should_execute_callback(cls._update_current_jackpot, value)
 
                 case "jackpot":
                     msg = f"You won jackpot: {value}" if is_me else f"User '{nickname}' won jackpot: {value}"
@@ -162,36 +162,35 @@ class WebsocketHandler:
                     cls._current_jackpot = 0
 
                     if is_me:
-                        md.should_execute_callback(cls._notification_callback, nickname, value)
+                        md.should_execute_callback(cls._add_notification, nickname, value)
                         sounds.send_notification(msg, audio_name="coin-1")
-                    md.should_execute_callback(cls._message_callback, tag, msg)
+                    md.should_execute_callback(cls._add_message, tag, msg)
 
                 case "mini_jackpot":
                     msg = f"You won mini jackpot: {value}" if is_me else f"User '{nickname}' won mini jackpot: {value}"
                     tag = MessageTag.WINNER.name if is_me else MessageTag.INFO.name
 
-                    md.should_execute_callback(cls._message_callback, tag, msg)
+                    md.should_execute_callback(cls._add_message, tag, msg)
 
                 case _:
                     md.should_execute_callback(
-                        cls._message_callback, MessageTag.ERROR.name, f"Unknown event type: {type}"
+                        cls._add_message,
+                        MessageTag.ERROR.name,
+                        f"Unknown event type: {type}",
                     )
 
         except asyncio.CancelledError:
             msg = "Spin aborted: jackpot reset/drop"
-            logger.info(f"🛑 {msg}")
-            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
+            logger.error(f"🛑 {msg}")
+            md.should_execute_callback(cls._add_message, MessageTag.WARNING.name, msg)
 
         except Exception as e:
             msg = f"Spin API error: {e}"
             logger.error(f"❌ {msg}")
-            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
+            md.should_execute_callback(cls._add_message, MessageTag.WARNING.name, msg)
 
     @classmethod
     async def _execute_single_spin(cls, epoch_snapshot: int) -> None:
-        if cls._current_jackpot < cls._target_special_jackpot:
-            return
-
         cookies, headers, connector = cls.cookies, cls.headers, RequestManager.connector()
         url = f"{cls._event_config.base_url}/{cls._event_config.spin_endpoint}"
         payload = {"spin_type": cls._spin_action, "payment_type": 1}
@@ -213,18 +212,18 @@ class WebsocketHandler:
                         if not response.ok:
                             msg = f"Spin API request failed with status: {response.status}"
                             logger.error(f"❌ {msg}")
-                            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
+                            md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, msg)
                             return
 
                         spin_response = SpinResponse.model_validate(await response.json())
                         if not spin_response.payload or not spin_response.is_successful or spin_response.error_code:
                             msg = f"Spin failed: {spin_response.error_code or 'Unknown error'}"
                             logger.error(f"❌ {msg}")
-                            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
+                            md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, msg)
                             return
 
                         md.should_execute_callback(
-                            cls._message_callback,
+                            cls._add_message,
                             MessageTag.REWARD.name,
                             md.format_spin_block_compact(
                                 spin_results=spin_response.payload.spin_results,
@@ -235,13 +234,13 @@ class WebsocketHandler:
 
         except asyncio.CancelledError:
             msg = "Spin aborted: jackpot reset/drop"
-            logger.info(f"🛑 {msg}")
-            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
+            logger.error(f"🛑 {msg}")
+            md.should_execute_callback(cls._add_message, MessageTag.WARNING.name, msg)
 
         except Exception as e:
             msg = f"Spin API error: {e}"
             logger.error(f"❌ {msg}")
-            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, msg)
+            md.should_execute_callback(cls._add_message, MessageTag.WARNING.name, msg)
 
         finally:
             cls._spin_task = None

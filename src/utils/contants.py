@@ -2,6 +2,8 @@ from typing import Dict
 
 from src.core.event_config import EventConfig
 
+PROGRAM_NAME = "FC Online Automation Tool"
+
 EVENT_CONFIGS_MAP: Dict[str, EventConfig] = {
     "Bi Lắc": EventConfig(
         tab_attr_name="_bilac_tab",
