@@ -297,7 +297,7 @@ class MainWindow:
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "NOT LOGGED IN\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "   Please enter your credentials and start the tool"
+            "Please enter your credentials and start the tool"
         )
 
         if user_info and user_info.payload.user:
@@ -310,7 +310,6 @@ class MainWindow:
                 f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"CURRENCY & RESOURCES\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"Free Spins : {user_info.payload.user.free_spin:,}\n"
                 f"FC Points  : {user_info.payload.user.fc:,}\n"
                 f"MC Points  : {user_info.payload.user.mc:,}\n"
                 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -372,16 +371,16 @@ class MainWindow:
         )
 
         # Update configs of tool instance and callbacks
-        def user_info_callback(user_info: Optional["UserReponse"]) -> None:
+        def update_user_info(user_info: Optional["UserReponse"]) -> None:
             self._root.after(0, lambda: self._update_user_panel(user_info=user_info))
 
-        def message_callback(tag: str, message: str) -> None:
+        def add_message(tag: str, message: str) -> None:
             self._root.after(0, lambda: self._activity_log_tab.add_message(tag=tag, message=message))
 
-        def current_jackpot_callback(current_jackpot: int) -> None:
+        def update_current_jackpot(current_jackpot: int) -> None:
             self._root.after(0, lambda: self._activity_log_tab.update_current_jackpot(current_jackpot=current_jackpot))
 
-        def _notification_callback(nickname: str, jackpot_value: str) -> None:
+        def add_notification(nickname: str, jackpot_value: str) -> None:
             self._root.after(
                 0,
                 lambda: self._notification_icon.add_notification(
@@ -397,10 +396,10 @@ class MainWindow:
             current_jackpot=0,
             spin_action=self._spin_action_var.get(),
             target_special_jackpot=target_value,
-            user_info_callback=user_info_callback,
-            message_callback=message_callback,
-            current_jackpot_callback=current_jackpot_callback,
-            jackpot_billboard_callback=_notification_callback,
+            add_message=add_message,
+            add_notification=add_notification,
+            update_user_info=update_user_info,
+            update_current_jackpot=update_current_jackpot,
         )
 
         # Start tool in a new thread
@@ -410,6 +409,7 @@ class MainWindow:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 loop.run_until_complete(self._tool_instance.run())
+
             except Exception as error:
                 self._root.after(0, messagebox.showerror, "❌ Error", str(error))
                 self._update_running_status(is_running=False, is_error=True)
@@ -437,6 +437,7 @@ class MainWindow:
                 asyncio.set_event_loop(loop)
                 loop.run_until_complete(self._tool_instance.close())
                 loop.close()
+
             except Exception as error:
                 self._root.after(0, messagebox.showerror, "❌ Error", str(error))
                 self._update_running_status(is_running=True, is_error=True)

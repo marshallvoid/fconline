@@ -16,7 +16,7 @@ class LoginHandler:
     _username: str
     _password: str
 
-    _message_callback: Optional[Callable[[str, str], None]] = None
+    _add_message: Optional[Callable[[str, str], None]] = None
 
     @classmethod
     def setup(
@@ -25,13 +25,13 @@ class LoginHandler:
         event_config: EventConfig,
         username: str,
         password: str,
-        message_callback: Optional[Callable[[str, str], None]] = None,
+        add_message: Optional[Callable[[str, str], None]] = None,
     ) -> type[Self]:
         cls._page = page
         cls._event_config = event_config
         cls._username = username
         cls._password = password
-        cls._message_callback = message_callback
+        cls._add_message = add_message
 
         return cls
 
@@ -45,7 +45,7 @@ class LoginHandler:
             return
 
         if await cls._perform_login():
-            md.should_execute_callback(cls._message_callback, MessageTag.SUCCESS.name, "Login completed successfully")
+            md.should_execute_callback(cls._add_message, MessageTag.SUCCESS.name, "Login completed successfully")
             WebsocketHandler.is_logged_in = True
             await cls._page.wait_for_load_state(state="networkidle")
             await cls._redirect_to_base_url()
@@ -65,19 +65,11 @@ class LoginHandler:
             if login_btn:
                 return False
 
-            md.should_execute_callback(
-                cls._message_callback,
-                MessageTag.WARNING.name,
-                "Unable to determine login status",
-            )
+            md.should_execute_callback(cls._add_message, MessageTag.WARNING.name, "Unable to determine login status")
             return False
 
         except Exception as error:
-            md.should_execute_callback(
-                cls._message_callback,
-                MessageTag.ERROR.name,
-                f"Error checking login status: {error}",
-            )
+            md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, f"Error checking login status: {error}")
             return False
 
     @classmethod
@@ -86,7 +78,7 @@ class LoginHandler:
         try:
             login_btn = await cls._page.query_selector(selector=cls._event_config.login_btn_selector)
             if not login_btn:
-                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Login button not found")
+                md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, "Login button not found")
                 return False
 
             await login_btn.click()
@@ -94,29 +86,21 @@ class LoginHandler:
 
             username_input = await cls._page.query_selector(selector=cls._event_config.username_input_selector)
             if not username_input:
-                md.should_execute_callback(
-                    cls._message_callback,
-                    MessageTag.ERROR.name,
-                    "Username input field not found",
-                )
+                md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, "Username input field not found")
                 return False
 
             await username_input.fill(value=cls._username)
 
             password_input = await cls._page.query_selector(selector=cls._event_config.password_input_selector)
             if not password_input:
-                md.should_execute_callback(
-                    cls._message_callback,
-                    MessageTag.ERROR.name,
-                    "Password input field not found",
-                )
+                md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, "Password input field not found")
                 return False
 
             await password_input.fill(value=cls._password)
 
             submit_btn = await cls._page.query_selector(selector=cls._event_config.submit_btn_selector)
             if not submit_btn:
-                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, "Submit button not found")
+                md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, "Submit button not found")
                 return False
 
             await submit_btn.click()
@@ -136,11 +120,11 @@ class LoginHandler:
                 return True
 
             except Exception as error:
-                md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Login failed: {error}")
+                md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, f"Login failed: {error}")
                 return False
 
         except Exception as error:
-            md.should_execute_callback(cls._message_callback, MessageTag.ERROR.name, f"Error performing login: {error}")
+            md.should_execute_callback(cls._add_message, MessageTag.ERROR.name, f"Error performing login: {error}")
             return False
 
     @classmethod
