@@ -1,42 +1,47 @@
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: detect-private-key
-      - id: check-added-large-files
-  - repo: https://github.com/psf/black
-    rev: 25.1.0
-    hooks:
-      - id: black
-        args:
-          - --line-length=120
-          - --skip-string-normalization
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.7
-    hooks:
-      - id: ruff-format
-      - id: ruff
-  - repo: https://github.com/ninoseki/uv-sort
-    rev: v0.6.1
-    hooks:
-      - id: uv-sort
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.15.0
-    hooks:
-      - id: mypy
-        files: ^src/
-        additional_dependencies:
-          - alembic
-          - types-redis
-          - types-toml
-          - pydantic
-          - sqlalchemy-utils
-          - types-sqlalchemy-utils
-          - sqlalchemy[mypy]
-          - types-python-slugify
-          - types-aiofiles
-          - types-requests
-          - mypy-boto3
+   - repo: https://github.com/ninoseki/uv-sort
+     rev: v0.6.1
+     hooks:
+        - id: uv-sort
+   - repo: https://github.com/fpgmaas/deptry.git
+     rev: v0.23.0
+     hooks:
+        - id: deptry
+          args: ['--ignore', 'DEP001']
+   - repo: https://github.com/pre-commit/pre-commit-hooks
+     rev: v5.0.0
+     hooks:
+        - id: trailing-whitespace
+        - id: end-of-file-fixer
+        - id: check-yaml
+        - id: detect-private-key
+        - id: check-added-large-files
+   - repo: https://github.com/psf/black
+     rev: 25.1.0
+     hooks:
+        - id: black
+          args:
+             - --line-length=120
+             - --skip-string-normalization
+   - repo: https://github.com/astral-sh/ruff-pre-commit
+     rev: v0.11.7
+     hooks:
+        - id: ruff-format
+        - id: ruff
+   - repo: https://github.com/pre-commit/mirrors-mypy
+     rev: v1.15.0
+     hooks:
+        - id: mypy
+          files: ^src/
+          additional_dependencies:
+             - alembic
+             - types-redis
+             - types-toml
+             - pydantic
+             - sqlalchemy-utils
+             - types-sqlalchemy-utils
+             - sqlalchemy[mypy]
+             - types-python-slugify
+             - types-aiofiles
+             - types-requests
+             - mypy-boto3

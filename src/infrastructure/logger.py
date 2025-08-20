@@ -4,10 +4,7 @@ import sys
 from types import FrameType
 from typing import Optional, cast
 
-from dotenv import load_dotenv
 from loguru import logger
-
-load_dotenv()
 
 LOGURU_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
@@ -56,14 +53,14 @@ class InterceptHandler(logging.Handler):
 def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMAT) -> None:
     global _logger_initialized
 
-    # Check if logger has already been initialized
+    # Prevent multiple logger initializations
     if _logger_initialized:
         return
 
-    # Check if running as exe (production build)
-    is_production = os.environ.get("ENV", "dev").lower() == "prod"
+    # Detect production environment (e.g., when running as executable)
+    is_production = getattr(sys, "frozen", False)
 
-    # In production builds, force debug=False to reduce logging
+    # Reduce logging verbosity in production for performance
     if is_production:
         debug = False
 

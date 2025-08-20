@@ -43,6 +43,7 @@ class PlatformManager:
     def get_chrome_executable_path(cls) -> Optional[str]:
         match cls.platform():
             case "windows":
+                # Common Chrome installation paths on Windows
                 chrome_paths = [
                     os.path.expandvars(r"%PROGRAMFILES%\Google\Chrome\Application\chrome.exe"),
                     os.path.expandvars(r"%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe"),
@@ -52,6 +53,7 @@ class PlatformManager:
                 ]
 
             case "darwin":  # macOS
+                # Common Chrome installation paths on macOS
                 chrome_paths = [
                     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
                     "/Applications/Chromium.app/Contents/MacOS/Chromium",
@@ -59,6 +61,7 @@ class PlatformManager:
                 ]
 
             case "linux":
+                # Common Chrome installation paths on Linux
                 chrome_paths = [
                     "/usr/bin/google-chrome",
                     "/usr/bin/google-chrome-stable",
@@ -71,6 +74,7 @@ class PlatformManager:
             case _:
                 chrome_paths = []
 
+        # Return first existing Chrome path found
         return next((p for p in chrome_paths if os.path.exists(p)), None)
 
     @classmethod

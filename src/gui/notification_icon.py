@@ -9,7 +9,7 @@ class NotificationIcon:
     def __init__(self, parent: tk.Misc) -> None:
         self._parent: tk.Misc = parent
 
-        # List of (nickname, jackpot_value, timestamp, is_seen) tuples
+        # Store notification data: (nickname, jackpot_value, timestamp, is_seen)
         self._notifications: List[Tuple[str, str, str, bool]] = []
         self._menu_window: Optional[tk.Toplevel] = None
 

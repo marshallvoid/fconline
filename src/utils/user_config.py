@@ -13,12 +13,14 @@ class UserConfigManager:
     @classmethod
     def save_configs(cls, config: UserConfig) -> None:
         try:
+            # Encrypt sensitive fields and combine with other config data
             encrypted_config = {
                 "username": cls._encrypt_data(value=config.username),
                 "password": cls._encrypt_data(value=config.password),
                 **config.model_dump(exclude={"username", "password"}),
             }
 
+            # Write encrypted config to JSON file
             config_file = os.path.join(cls._get_config_data_directory(), "configs.json")
             with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(encrypted_config, f, indent=2, ensure_ascii=False)
@@ -32,6 +34,7 @@ class UserConfigManager:
             return ""
 
         try:
+            # Use Fernet symmetric encryption for sensitive data
             f = Fernet(cls._get_encryption_key())
             encrypted_data = f.encrypt(value.encode())
             return base64.urlsafe_b64encode(encrypted_data).decode()

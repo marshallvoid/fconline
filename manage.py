@@ -12,9 +12,11 @@ sys.path.insert(0, project_root)
 try:
 
     def main() -> None:
+        # Initialize logging infrastructure first
         import src.infrastructure.logger  # noqa: F401
         from src.gui.main_window import MainWindow
 
+        # Create and run main application window
         app = MainWindow()
         app.run()
 

@@ -7,6 +7,7 @@ from src.schemas.enums.message_tag import MessageTag
 
 
 class ActivityLogTab:
+    # Available tab categories for organizing different types of messages
     TAB_NAMES = ["All", "Game Events", "Rewards", "System", "Websocket"]
     CURRENT_JACKPOT_LABEL_TEXT = "CURRENT JACKPOT: {value:,}"
     TARGET_SPECIAL_JACKPOT_LABEL_TEXT = "TARGET SPECIAL JACKPOT: {value:,}"
@@ -14,6 +15,7 @@ class ActivityLogTab:
     def __init__(self, parent: tk.Misc) -> None:
         self._frame = ttk.Frame(parent)
 
+        # Message storage and tab management
         self._message_tabs: Dict[str, Dict[str, tk.Text]] = {}
         self._current_tab: Optional[str] = None
         self._messages_by_tab: Dict[str, List[str]] = {tab_name: [] for tab_name in self.TAB_NAMES}
@@ -28,10 +30,11 @@ class ActivityLogTab:
         if not message.strip():
             return
 
+        # Add timestamp to message for logging purposes
         timestamp = datetime.now().strftime("%H:%M:%S")
         timestamped_message = f"[{timestamp}] {message.strip()}"
 
-        # Add message to all relevant tabs
+        # Distribute message to relevant tabs based on message type
         self._add_message_to_tab(tab_name="All", tag=tag.name, message=timestamped_message)
         self._add_message_to_tab(tab_name=tag.tab_name, tag=tag.name, message=timestamped_message)
 
@@ -112,7 +115,7 @@ class ActivityLogTab:
             self._create_message_tab(tab_name=tab_name, display_name=tab_name)
 
         # Set default tab
-        self._notebook.select(self.TAB_NAMES.index("Game Events"))
+        self._notebook.select(0)
 
         # Setup focus handling to prevent text selection issues
         self._setup_focus_handling()

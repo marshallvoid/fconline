@@ -1,6 +1,11 @@
 from pydantic import BaseModel
 
 
+class Billboard(BaseModel):
+    value: str
+    nickname: str
+
+
 class UserDetail(BaseModel):
     id: int
     uid: str
@@ -12,6 +17,8 @@ class UserDetail(BaseModel):
 
 class UserPayload(BaseModel):
     user: UserDetail
+    jackpot_billboard: Billboard
+    mini_jackpot_billboard: Billboard
 
 
 class UserReponse(BaseModel):
