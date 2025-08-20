@@ -21,9 +21,6 @@ from src.utils.user_config import UserConfigManager
 
 
 class MainWindow:
-    # Minimum threshold for mini jackpot target to prevent invalid configurations
-    MINIMUN_TARGET_MINI_JACKPOT = 12000
-
     def __init__(self) -> None:
         # Initialize main window with basic properties
         self._root = tk.Tk()
@@ -53,9 +50,7 @@ class MainWindow:
         self._password_var = tk.StringVar(value=saved_configs.password)
         self._spin_action_var = tk.IntVar(value=saved_configs.spin_action)
         self._target_special_jackpot_var = tk.IntVar(value=saved_configs.target_special_jackpot)
-        self._target_mini_jackpot_var = tk.IntVar(value=saved_configs.target_mini_jackpot)
         self._close_when_jackpot_won_var = tk.BooleanVar(value=saved_configs.close_when_jackpot_won)
-        self._close_when_mini_jackpot_won_var = tk.BooleanVar(value=saved_configs.close_when_mini_jackpot_won)
 
         self._is_running = False
         self._selected_event = saved_configs.event or list(EVENT_CONFIGS_MAP.keys())[0]
@@ -66,9 +61,7 @@ class MainWindow:
             password=self._password_var.get(),
             spin_action=self._spin_action_var.get(),
             target_special_jackpot=self._target_special_jackpot_var.get(),
-            target_mini_jackpot=self._target_mini_jackpot_var.get(),
             close_when_jackpot_won=self._close_when_jackpot_won_var.get(),
-            close_when_mini_jackpot_won=self._close_when_mini_jackpot_won_var.get(),
         )
 
         self._setup_ui()
@@ -77,7 +70,7 @@ class MainWindow:
         def on_close() -> None:
             if self._is_running:
                 self._tool_instance.is_running = False
-                self._tool_instance.close()
+                asyncio.run(self._tool_instance.close())
 
             self._root.destroy()
 
@@ -175,9 +168,7 @@ class MainWindow:
                 password_var=self._password_var,
                 spin_action_var=self._spin_action_var,
                 target_special_jackpot_var=self._target_special_jackpot_var,
-                target_mini_jackpot_var=self._target_mini_jackpot_var,
                 close_when_jackpot_won_var=self._close_when_jackpot_won_var,
-                close_when_mini_jackpot_won_var=self._close_when_mini_jackpot_won_var,
                 spin_actions=EVENT_CONFIGS_MAP[self._selected_event].spin_actions,
                 on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
             )
@@ -236,9 +227,7 @@ class MainWindow:
             password_var=self._password_var,
             spin_action_var=self._spin_action_var,
             target_special_jackpot_var=self._target_special_jackpot_var,
-            target_mini_jackpot_var=self._target_mini_jackpot_var,
             close_when_jackpot_won_var=self._close_when_jackpot_won_var,
-            close_when_mini_jackpot_won_var=self._close_when_mini_jackpot_won_var,
             spin_actions=EVENT_CONFIGS_MAP[self._selected_event].spin_actions,
             on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
         )
@@ -283,17 +272,15 @@ class MainWindow:
             _schedule_focus_current_tab()
 
         self._notebook.bind("<<NotebookTabChanged>>", _on_tab_changed)
-        self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
+        self._notebook.bind("<ButtonRelease-1>", lambda _: _schedule_focus_current_tab())
         self._root.after_idle(_schedule_focus_current_tab)
 
     def _setup_trace_callbacks(self) -> None:
-        self._username_var.trace_add("write", lambda *args: self._save_configs())
-        self._password_var.trace_add("write", lambda *args: self._save_configs())
-        self._spin_action_var.trace_add("write", lambda *args: self._save_configs())
-        self._target_special_jackpot_var.trace_add("write", lambda *args: self._save_configs())
-        self._target_mini_jackpot_var.trace_add("write", lambda *args: self._save_configs())
-        self._close_when_jackpot_won_var.trace_add("write", lambda *args: self._save_configs())
-        self._close_when_mini_jackpot_won_var.trace_add("write", lambda *args: self._save_configs())
+        self._username_var.trace_add("write", lambda *_: self._save_configs())
+        self._password_var.trace_add("write", lambda *_: self._save_configs())
+        self._spin_action_var.trace_add("write", lambda *_: self._save_configs())
+        self._target_special_jackpot_var.trace_add("write", lambda *_: self._save_configs())
+        self._close_when_jackpot_won_var.trace_add("write", lambda *_: self._save_configs())
 
     def _adjust_window_position(self) -> None:
         self._root.update_idletasks()
@@ -314,18 +301,8 @@ class MainWindow:
 
         # Validate special jackpot target is positive
         target_special_jackpot = self._target_special_jackpot_var.get()
-        if target_special_jackpot <= 0:
-            messagebox.showerror("❌ Error", "Target Jackpot must be a positive number!")
-            return
-
-        # Validate mini jackpot target meets minimum threshold
-        target_mini_jackpot = self._target_mini_jackpot_var.get()
-        if target_mini_jackpot > 0 and target_mini_jackpot < self.MINIMUN_TARGET_MINI_JACKPOT:
-            messagebox.showerror(
-                "❌ Error",
-                f"Target Mini Jackpot must be greater than {self.MINIMUN_TARGET_MINI_JACKPOT:,}\n"
-                "Please increase the target mini jackpot to start the tool",
-            )
+        if target_special_jackpot <= 10000:
+            messagebox.showerror("❌ Error", "Target Jackpot must be greater than 10,000!")
             return
 
         # Update UI
@@ -361,23 +338,39 @@ class MainWindow:
         def update_current_jackpot(value: int) -> None:
             self._root.after(0, lambda: self._activity_log_tab.update_current_jackpot(value=value))
 
+        def update_last_ultimate_prize_winner(nickname: str, value: str) -> None:
+            self._root.after(
+                0,
+                lambda: self._activity_log_tab.update_last_ultimate_prize_winner(nickname=nickname, value=value),
+            )
+
+        def update_last_mini_prize_winner(nickname: str, value: str) -> None:
+            self._root.after(
+                0,
+                lambda: self._activity_log_tab.update_last_mini_prize_winner(nickname=nickname, value=value),
+            )
+
         def close_browser() -> None:
             self._root.after(0, self._handle_click_stop)
 
         self._tool_instance.update_configs(
+            screen_width=self._root.winfo_screenwidth(),
+            screen_height=self._root.winfo_screenheight(),
+            req_width=self._root.winfo_reqwidth(),
+            req_height=self._root.winfo_reqheight(),
             is_running=True,
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
             username=self._username_var.get(),
             password=self._password_var.get(),
             spin_action=self._spin_action_var.get(),
             target_special_jackpot=target_special_jackpot,
-            target_mini_jackpot=target_mini_jackpot,
             close_when_jackpot_won=self._close_when_jackpot_won_var.get(),
-            close_when_mini_jackpot_won=self._close_when_mini_jackpot_won_var.get(),
             current_jackpot=0,
             add_message=add_message,
             add_notification=add_notification,
             update_current_jackpot=update_current_jackpot,
+            update_last_ultimate_prize_winner=update_last_ultimate_prize_winner,
+            update_last_mini_prize_winner=update_last_mini_prize_winner,
             close_browser=close_browser,
         )
 
@@ -442,8 +435,6 @@ class MainWindow:
                 password=self._password_var.get(),
                 spin_action=self._spin_action_var.get(),
                 target_special_jackpot=self._target_special_jackpot_var.get(),
-                target_mini_jackpot=self._target_mini_jackpot_var.get(),
                 close_when_jackpot_won=self._close_when_jackpot_won_var.get(),
-                close_when_mini_jackpot_won=self._close_when_mini_jackpot_won_var.get(),
             )
         )

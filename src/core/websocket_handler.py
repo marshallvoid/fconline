@@ -27,12 +27,12 @@ class WebsocketHandler:
         spin_action: int,
         current_jackpot: int,
         target_special_jackpot: int,
-        target_mini_jackpot: int,
         close_when_jackpot_won: bool,
-        close_when_mini_jackpot_won: bool,
         add_message: Optional[Callable[[str, str], None]] = None,
         add_notification: Optional[Callable[[str, str], None]] = None,
         update_current_jackpot: Optional[Callable[[int], None]] = None,
+        update_last_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
+        update_last_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
         close_browser: Optional[Callable[[], None]] = None,
     ) -> None:
         self._page = page
@@ -40,12 +40,12 @@ class WebsocketHandler:
         self._spin_action = spin_action
         self._current_jackpot = current_jackpot
         self._target_special_jackpot = target_special_jackpot
-        self._target_mini_jackpot = target_mini_jackpot
         self._close_when_jackpot_won = close_when_jackpot_won
-        self._close_when_mini_jackpot_won = close_when_mini_jackpot_won
         self._add_message = add_message
         self._add_notification = add_notification
         self._update_current_jackpot = update_current_jackpot
+        self._update_last_ultimate_prize_winner = update_last_ultimate_prize_winner
+        self._update_last_mini_prize_winner = update_last_mini_prize_winner
         self._close_browser = close_browser
 
         self._is_logged_in: bool = False
@@ -114,7 +114,7 @@ class WebsocketHandler:
             websocket.on("framesent", _on_framesent)
             websocket.on("close", _on_close)
 
-        self._page.on("websocket", _on_websocket)
+        self._page.on("websocket", _on_websocket)  # type: ignore
 
     async def _parse_socket_frame(self, frame: str) -> Optional[Tuple[str, int | str, str]]:
         # Extract the JSON payload from socket.io message format
@@ -174,19 +174,6 @@ class WebsocketHandler:
                             epoch_snapshot = self._jackpot_epoch
                             self._spin_task = asyncio.create_task(self._attempt_spin(epoch_snapshot))
 
-                    # Auto spin when mini jackpot target is reached
-                    if new_value >= self._target_mini_jackpot:
-                        md.should_execute_callback(
-                            self._add_message,
-                            MessageTag.REACHED_GOAL,
-                            f"Mini Jackpot has reached {self._target_mini_jackpot:,}",
-                        )
-
-                        # Trigger immediate spin when mini jackpot target is reached
-                        if not self._spin_task or self._spin_task.done():
-                            epoch_snapshot = self._jackpot_epoch
-                            self._spin_task = asyncio.create_task(self._attempt_spin(epoch_snapshot))
-
                     md.should_execute_callback(self._update_current_jackpot, new_value)
 
                 case "jackpot" | "mini_jackpot":
@@ -206,6 +193,12 @@ class WebsocketHandler:
                         self._jackpot_epoch += 1
                         self._current_jackpot = 0
 
+                        # Update last ultimate prize winner display
+                        md.should_execute_callback(self._update_last_ultimate_prize_winner, nickname, str(value))
+                    else:
+                        # Update last mini prize winner display
+                        md.should_execute_callback(self._update_last_mini_prize_winner, nickname, str(value))
+
                     # Determine message tag based on jackpot type and winner
                     tag = (
                         MessageTag.JACKPOT
@@ -221,12 +214,6 @@ class WebsocketHandler:
                         audio_name = "coin-1" if is_jackpot else "coin-2"
                         md.should_execute_callback(self._add_notification, nickname, value)
                         sounds.send_notification(msg, audio_name=audio_name)
-
-                        # Check if browser should be closed based on win type
-                        if (is_jackpot and self._close_when_jackpot_won) or (
-                            not is_jackpot and self._close_when_mini_jackpot_won
-                        ):
-                            md.should_execute_callback(self._close_browser)
 
                     md.should_execute_callback(self._add_message, tag, msg)
 

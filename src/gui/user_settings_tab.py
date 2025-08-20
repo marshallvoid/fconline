@@ -12,9 +12,7 @@ class UserSettingsTab:
         password_var: tk.StringVar,
         spin_action_var: tk.IntVar,
         target_special_jackpot_var: tk.IntVar,
-        target_mini_jackpot_var: tk.IntVar,
         close_when_jackpot_won_var: tk.BooleanVar,
-        close_when_mini_jackpot_won_var: tk.BooleanVar,
         spin_actions: List[str],
         on_spin_action_changed: Callable[[], None],
     ) -> None:
@@ -24,9 +22,7 @@ class UserSettingsTab:
         self._password_var = password_var
         self._spin_action_var = spin_action_var
         self._target_special_jackpot_var = target_special_jackpot_var
-        self._target_mini_jackpot_var = target_mini_jackpot_var
         self._close_when_jackpot_won_var = close_when_jackpot_won_var
-        self._close_when_mini_jackpot_won_var = close_when_mini_jackpot_won_var
         self._spin_actions = spin_actions
         self._on_spin_action_changed = on_spin_action_changed
 
@@ -46,26 +42,10 @@ class UserSettingsTab:
         self._username_entry.config(state=state)
         self._password_entry.config(state=state)
         self._target_special_jackpot_entry.config(state=state)
-        self._target_mini_jackpot_entry.config(state=state)
+        self._close_when_jackpot_won_checkbox.config(state=state)
 
         for radio_btn in self._radio_buttons:
             radio_btn.config(state=state)
-
-        # Handle checkbox states
-        if enabled:
-            # Re-apply the mini jackpot logic
-            self._on_mini_jackpot_changed()
-        else:
-            # Disable both checkboxes when UI is disabled
-            self._close_when_jackpot_won_checkbox.config(state="disabled")
-            self._close_when_mini_jackpot_won_checkbox.config(state="disabled")
-
-    def _on_mini_jackpot_changed(self) -> None:
-        if self._close_when_mini_jackpot_won_var.get():
-            self._close_when_jackpot_won_var.set(True)
-            self._close_when_jackpot_won_checkbox.config(state="disabled")
-        else:
-            self._close_when_jackpot_won_checkbox.config(state="normal")
 
     def _build(self) -> None:
         title_label = ttk.Label(self._frame, text="User Settings", font=("Arial", 14, "bold"))
@@ -106,18 +86,6 @@ class UserSettingsTab:
         )
         self._target_special_jackpot_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
-        # Target Mini Jackpot
-        target_mini_frame = ttk.Frame(container)
-        target_mini_frame.pack(fill="x", pady=(0, 10))
-        ttk.Label(target_mini_frame, text="Target Mini Jackpot:", width=20, font=("Arial", 12)).pack(side="left")
-        self._target_mini_jackpot_entry = ttk.Entry(
-            target_mini_frame,
-            textvariable=self._target_mini_jackpot_var,
-            width=30,
-            font=("Arial", 12),
-        )
-        self._target_mini_jackpot_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
-
         # Close when won checkboxes
         close_options_frame = ttk.LabelFrame(container, text="Auto Close Options", padding=10)
         close_options_frame.pack(fill="x", pady=(0, 10))
@@ -131,17 +99,6 @@ class UserSettingsTab:
             variable=self._close_when_jackpot_won_var,
         )
         self._close_when_jackpot_won_checkbox.pack(anchor="w")
-
-        # Close when mini jackpot won checkbox
-        close_mini_frame = ttk.Frame(close_options_frame)
-        close_mini_frame.pack(fill="x", pady=(0, 5))
-        self._close_when_mini_jackpot_won_checkbox = ttk.Checkbutton(
-            close_mini_frame,
-            text="Close when won Mini Prize",
-            variable=self._close_when_mini_jackpot_won_var,
-            command=self._on_mini_jackpot_changed,
-        )
-        self._close_when_mini_jackpot_won_checkbox.pack(anchor="w")
 
         # Spin Action
         spin_action_frame = ttk.LabelFrame(container, text="Spin Action", padding=10)
@@ -161,6 +118,3 @@ class UserSettingsTab:
             )
             radio_btn.pack(side="left", padx=(0, 20))
             self._radio_buttons.append(radio_btn)
-
-        # Initialize the checkbox states based on current values
-        self._on_mini_jackpot_changed()

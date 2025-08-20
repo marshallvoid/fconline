@@ -42,7 +42,9 @@ class LoginHandler:
         # Check if user is already authenticated
         if await self._detect_login_status():
             md.should_execute_callback(self._add_message, MessageTag.SUCCESS, "Already logged in")
-            self._websocket_handler.is_logged_in = True
+
+            if self._websocket_handler:
+                self._websocket_handler.is_logged_in = True
             return
 
         # Perform login if not already authenticated
@@ -52,7 +54,8 @@ class LoginHandler:
             raise Exception(msg)
 
         # Update websocket handler and ensure correct URL after login
-        self._websocket_handler.is_logged_in = True
+        if self._websocket_handler:
+            self._websocket_handler.is_logged_in = True
         await self._ensure_base_url()
         md.should_execute_callback(self._add_message, MessageTag.SUCCESS, "Login completed successfully")
 

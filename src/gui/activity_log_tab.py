@@ -1,7 +1,7 @@
 import tkinter as tk
 from datetime import datetime
 from tkinter import ttk
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from src.schemas.enums.message_tag import MessageTag
 
@@ -11,12 +11,14 @@ class ActivityLogTab:
     TAB_NAMES = ["All", "Game Events", "Rewards", "System", "Websocket"]
     CURRENT_JACKPOT_LABEL_TEXT = "CURRENT JACKPOT: {value:,}"
     TARGET_SPECIAL_JACKPOT_LABEL_TEXT = "TARGET SPECIAL JACKPOT: {value:,}"
+    LAST_ULTIMATE_PRIZE_WINNER_TEXT = "Last Ultimate Prize Winner: {nickname} ({value})"
+    LAST_MINI_PRIZE_WINNER_TEXT = "Last Mini Prize Winner: {nickname} ({value})"
 
     def __init__(self, parent: tk.Misc) -> None:
         self._frame = ttk.Frame(parent)
 
         # Message storage and tab management
-        self._message_tabs: Dict[str, Dict[str, tk.Text]] = {}
+        self._message_tabs: Dict[str, Dict[str, Any]] = {}
         self._current_tab: Optional[str] = None
         self._messages_by_tab: Dict[str, List[str]] = {tab_name: [] for tab_name in self.TAB_NAMES}
 
@@ -64,11 +66,29 @@ class ActivityLogTab:
             text_widget.delete("1.0", tk.END)
             text_widget.config(state="disabled")
 
+        # Clear last winner labels
+        self.clear_last_winners()
+
+    def clear_last_winners(self) -> None:
+        """Clear the last winner labels to show default values."""
+        self._last_ultimate_prize_label.config(
+            text=self.LAST_ULTIMATE_PRIZE_WINNER_TEXT.format(nickname="None", value="0")
+        )
+        self._last_mini_prize_label.config(text=self.LAST_MINI_PRIZE_WINNER_TEXT.format(nickname="None", value="0"))
+
     def update_current_jackpot(self, value: int) -> None:
         self._current_jackpot_label.config(text=self.CURRENT_JACKPOT_LABEL_TEXT.format(value=value))
 
     def update_target_special_jackpot(self, value: int) -> None:
         self._target_special_jackpot_label.config(text=self.TARGET_SPECIAL_JACKPOT_LABEL_TEXT.format(value=value))
+
+    def update_last_ultimate_prize_winner(self, nickname: str, value: str) -> None:
+        self._last_ultimate_prize_label.config(
+            text=self.LAST_ULTIMATE_PRIZE_WINNER_TEXT.format(nickname=nickname, value=value)
+        )
+
+    def update_last_mini_prize_winner(self, nickname: str, value: str) -> None:
+        self._last_mini_prize_label.config(text=self.LAST_MINI_PRIZE_WINNER_TEXT.format(nickname=nickname, value=value))
 
     def _build(self) -> None:
         title_label = ttk.Label(self._frame, text="Activity Log", font=("Arial", 14, "bold"))
@@ -100,6 +120,31 @@ class ActivityLogTab:
             font=("Consolas", 12, "bold"),
         )
         self._target_special_jackpot_label.pack(anchor="w", pady=(10, 0))
+
+        # Last Winners Display
+        last_winners_frame = ttk.LabelFrame(container, text="Last Winners", padding=10)
+        last_winners_frame.pack(fill="x", pady=(0, 10))
+
+        last_winners_container = ttk.Frame(last_winners_frame)
+        last_winners_container.pack(fill="x")
+
+        # Last Ultimate Prize Winner
+        self._last_ultimate_prize_label = ttk.Label(
+            last_winners_container,
+            text=self.LAST_ULTIMATE_PRIZE_WINNER_TEXT.format(nickname="None", value="0"),
+            foreground="#fbbf24",
+            font=("Consolas", 11, "bold"),
+        )
+        self._last_ultimate_prize_label.pack(anchor="w")
+
+        # Last Mini Prize Winner
+        self._last_mini_prize_label = ttk.Label(
+            last_winners_container,
+            text=self.LAST_MINI_PRIZE_WINNER_TEXT.format(nickname="None", value="0"),
+            foreground="#34d399",
+            font=("Consolas", 11, "bold"),
+        )
+        self._last_mini_prize_label.pack(anchor="w", pady=(10, 0))
 
         # Messages Tab Control
         messages_frame = ttk.LabelFrame(container, text="Messages", padding=10)
