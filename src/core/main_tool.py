@@ -28,7 +28,7 @@ class MainTool:
         close_when_jackpot_won: bool = True,
         close_when_mini_jackpot_won: bool = False,
     ) -> None:
-        # Configs
+        # Configuration parameters for the automation
         self._event_config: EventConfig = event_config
         self._username: str = username
         self._password: str = password
@@ -38,22 +38,22 @@ class MainTool:
         self._close_when_jackpot_won: bool = close_when_jackpot_won
         self._close_when_mini_jackpot_won: bool = close_when_mini_jackpot_won
 
-        # State
+        # Runtime state management
         self._is_running: bool = False
         self._current_jackpot: int = 0
 
-        # Callbacks
+        # Callback functions for UI updates and notifications
         self._add_message: Optional[Callable[[str, str], None]] = None
         self._add_notification: Optional[Callable[[str, str], None]] = None
         self._update_current_jackpot: Optional[Callable[[int], None]] = None
         self._close_browser: Optional[Callable[[], None]] = None
 
-        # Browser
+        # Browser automation components
         self._session: Optional[BrowserSession] = None
         self._page: Optional[Page] = None
         self._user_data_dir: Optional[str] = None
 
-        # User Info
+        # User authentication and profile data
         self._user_info: Optional[UserReponse] = None
 
     @property
@@ -74,13 +74,14 @@ class MainTool:
 
     async def run(self) -> None:
         try:
+            # Initialize browser session and navigate to target URL
             self._session, self._page = await self._setup_browser()
 
             logger.info(f"🌐 Navigating to: {self._event_config.base_url}")
             await self._page.goto(url=self._event_config.base_url)
             await self._page.wait_for_load_state(state="networkidle")
 
-            # Setup websocket handler
+            # Setup websocket handler for real-time jackpot monitoring
             websocket_handler = WebsocketHandler(
                 page=self._page,
                 event_config=self._event_config,
@@ -97,7 +98,7 @@ class MainTool:
             )
             websocket_handler.setup_websocket()
 
-            # Check login status and perform login if needed
+            # Handle user authentication - check if already logged in or perform login
             login_handler = LoginHandler(
                 page=self._page,
                 event_config=self._event_config,
@@ -108,7 +109,7 @@ class MainTool:
             login_handler.websocket_handler = websocket_handler
             await login_handler.ensure_logged_in()
 
-            # Get user info
+            # Initialize API client and fetch user profile information
             fconline_client = FCOnlineClient(
                 page=self._page,
                 base_url=self._event_config.base_url,
@@ -119,10 +120,11 @@ class MainTool:
             await fconline_client.prepare_resources()
             self._user_info = await fconline_client.lookup(username=self._username)
 
-            # Update websocket's configs
+            # Connect websocket handler with API client and user info
             websocket_handler.fconline_client = fconline_client
             websocket_handler.user_info = self._user_info
 
+            # Main monitoring loop - keep running until stopped
             while self._is_running:
                 await asyncio.sleep(delay=0.1)
 
@@ -201,6 +203,7 @@ class MainTool:
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("🌐 Setting up browser context...")
 
+        # Chrome arguments to disable security features and optimize for automation
         extra_chromium_args = [
             "--disable-web-security",
             "--disable-features=VizDisplayCompositor",
@@ -222,6 +225,7 @@ class MainTool:
             "--no-sandbox",
         ]
 
+        # Add Windows-specific optimizations for better performance
         if PlatformManager.platform() == "windows":
             extra_chromium_args.extend(
                 [
@@ -239,21 +243,23 @@ class MainTool:
             )
             logger.info("🪟 Applied Windows-specific browser arguments")
 
-        # Force Chrome usage for better compatibility with browser automation
+        # Ensure Chrome is available for consistent automation behavior
         if not (chrome_path := PlatformManager.get_chrome_executable_path()):
             msg = "Chrome/Chromium not found. Please install Chrome or Chromium."
             raise Exception(msg)
 
         logger.info(f"🌐 Using Chrome browser: {chrome_path}")
 
-        # Try multiple attempts with different profile strategies
+        # Retry mechanism with different profile strategies for reliability
         for attempt in range(3):
             try:
+                # Use persistent profile on first attempt, temporary on retries
                 user_data_dir = None if attempt > 0 else PlatformManager.get_user_data_directory()
                 # Store for cleanup later
                 if user_data_dir:
                     self._user_data_dir = user_data_dir
 
+                # Configure browser profile with stealth settings and timeouts
                 browser_profile = BrowserProfile(
                     stealth=True,
                     ignore_https_errors=True,
@@ -266,6 +272,7 @@ class MainTool:
                     user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
                 )
 
+                # Start browser session and get initial page
                 browser_session = BrowserSession(browser_profile=browser_profile)
                 await asyncio.wait_for(browser_session.start(), timeout=60000 * 3)
                 page = await browser_session.get_current_page()

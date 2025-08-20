@@ -26,6 +26,7 @@ class FCOnlineClient:
         self._spin_endpoint = spin_endpoint
         self._add_message = add_message
 
+        # HTTP request configuration extracted from browser session
         self._cookies: Dict[str, str] = {}
         self._headers: Dict[str, str] = {}
 
@@ -48,6 +49,7 @@ class FCOnlineClient:
                 headers=self._headers,
                 connector=RequestManager.connector(),
             ) as session:
+                # Make API request to get user information
                 async with session.get(f"{self._base_url}/{self._user_endpoint}") as response:
                     if not response.ok:
                         md.should_execute_callback(
@@ -57,6 +59,7 @@ class FCOnlineClient:
                         )
                         return None
 
+                    # Parse and validate API response
                     user_response = UserReponse.model_validate(await response.json())
                     if not user_response.is_successful:
                         md.should_execute_callback(
@@ -70,6 +73,21 @@ class FCOnlineClient:
                         self._add_message,
                         MessageTag.SUCCESS,
                         f"Get user info successfully for user '{username}'",
+                    )
+
+                    # Display recent jackpot winners for context
+                    jackpot_billboard = user_response.payload.jackpot_billboard
+                    md.should_execute_callback(
+                        self._add_message,
+                        MessageTag.OTHER_PLAYER,
+                        f"Last user won Ultimate Prize: {jackpot_billboard.nickname} ({jackpot_billboard.value})",
+                    )
+
+                    mini_jackpot_billboard = user_response.payload.mini_jackpot_billboard
+                    md.should_execute_callback(
+                        self._add_message,
+                        MessageTag.OTHER_PLAYER,
+                        f"Last user won Mini Prize: {mini_jackpot_billboard.nickname} ({mini_jackpot_billboard.value})",
                     )
 
                     return user_response
@@ -89,9 +107,11 @@ class FCOnlineClient:
                 headers=self._headers,
                 connector=RequestManager.connector(),
             ) as session:
+                # Prepare spin request payload
                 url = f"{self._base_url}/{self._spin_endpoint}"
                 payload = {"spin_type": spin_type, "payment_type": payment_type}
 
+                # Execute spin API call
                 async with session.post(url=url, json=payload) as response:
                     if not response.ok:
                         md.should_execute_callback(
@@ -101,6 +121,7 @@ class FCOnlineClient:
                         )
                         return None
 
+                    # Parse and validate spin response
                     spin_response = SpinResponse.model_validate(await response.json())
                     if not spin_response.payload or not spin_response.is_successful or spin_response.error_code:
                         md.should_execute_callback(
@@ -110,6 +131,7 @@ class FCOnlineClient:
                         )
                         return None
 
+                    # Display spin results to user
                     md.should_execute_callback(
                         self._add_message,
                         MessageTag.REWARD,

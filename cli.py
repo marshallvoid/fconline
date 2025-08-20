@@ -8,7 +8,6 @@ import signal
 from getpass import getpass
 from typing import Optional
 
-from icecream import ic
 from loguru import logger
 from src.core.event_config import EventConfig
 from src.core.main_tool import MainTool
@@ -79,7 +78,7 @@ async def _run_main(args: argparse.Namespace) -> None:
     """Async runner that wires signals, instantiates MainTool, and manages lifecycle."""
     # Logging sink
     logger.remove()
-    logger.add(lambda msg: ic(msg), level=args.log_level)
+    logger.add(lambda msg: print(msg), level=args.log_level)  # noqa: T201
 
     # Initialize tool
     tool: MainTool = MainTool(

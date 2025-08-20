@@ -25,6 +25,7 @@ class LoginHandler:
         self._password = password
         self._add_message = add_message
 
+        # Reference to websocket handler to update login status
         self._websocket_handler: Optional[WebsocketHandler] = None
 
     @property
@@ -38,27 +39,33 @@ class LoginHandler:
     async def ensure_logged_in(self) -> None:
         md.should_execute_callback(self._add_message, MessageTag.INFO, "Checking login status")
 
+        # Check if user is already authenticated
         if await self._detect_login_status():
             md.should_execute_callback(self._add_message, MessageTag.SUCCESS, "Already logged in")
             self._websocket_handler.is_logged_in = True
             return
 
+        # Perform login if not already authenticated
         md.should_execute_callback(self._add_message, MessageTag.WARNING, "Not logged in → performing login")
         if not await self._perform_login():
             msg = "Login failed! Exiting..."
             raise Exception(msg)
 
+        # Update websocket handler and ensure correct URL after login
         self._websocket_handler.is_logged_in = True
         await self._ensure_base_url()
         md.should_execute_callback(self._add_message, MessageTag.SUCCESS, "Login completed successfully")
 
     async def _detect_login_status(self) -> bool:
+        # If logout button is visible, user is logged in
         if await self._is_visible(selector=self._event_config.logout_btn_selector):
             return True
 
+        # If login button is visible, user is not logged in
         if await self._is_visible(selector=self._event_config.login_btn_selector):
             return False
 
+        # If neither button is visible, something is wrong with the page
         msg = "Login failed! Exiting..."
         raise Exception(msg)
 

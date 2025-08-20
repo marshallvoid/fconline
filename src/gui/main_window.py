@@ -10,8 +10,8 @@ import sv_ttk
 
 from src.core.main_tool import MainTool
 from src.gui.activity_log_tab import ActivityLogTab
-from src.gui.event_tab import EventTab
 from src.gui.notification_icon import NotificationIcon
+from src.gui.user_settings_tab import UserSettingsTab
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_config import UserConfig
 from src.utils import files
@@ -21,7 +21,11 @@ from src.utils.user_config import UserConfigManager
 
 
 class MainWindow:
+    # Minimum threshold for mini jackpot target to prevent invalid configurations
+    MINIMUN_TARGET_MINI_JACKPOT = 12000
+
     def __init__(self) -> None:
+        # Initialize main window with basic properties
         self._root = tk.Tk()
         self._root.title(string=PROGRAM_NAME)
         self._root.resizable(width=True, height=True)
@@ -164,7 +168,7 @@ class MainWindow:
 
             # Update the event tab with new event configuration
             # Instead of recreating the tab, update the existing one
-            self._event_tab = EventTab(
+            self._event_tab = UserSettingsTab(
                 parent=self._notebook,
                 title=self._selected_event,
                 username_var=self._username_var,
@@ -225,7 +229,7 @@ class MainWindow:
         self._notebook.pack(fill="both", expand=True)
 
         # Create event tab for current selected event
-        self._event_tab = EventTab(
+        self._event_tab = UserSettingsTab(
             parent=self._notebook,
             title=self._selected_event,
             username_var=self._username_var,
@@ -298,17 +302,30 @@ class MainWindow:
         self._root.geometry(f"{width}x{height}+{x}+{y}")
 
     def _handle_click_start(self) -> None:
+        # Validate required username input
         if not self._username_var.get().strip():
             messagebox.showerror("❌ Error", "Username is required!")
             return
 
+        # Validate required password input
         if not self._password_var.get().strip():
             messagebox.showerror("❌ Error", "Password is required!")
             return
 
+        # Validate special jackpot target is positive
         target_special_jackpot = self._target_special_jackpot_var.get()
         if target_special_jackpot <= 0:
             messagebox.showerror("❌ Error", "Target Jackpot must be a positive number!")
+            return
+
+        # Validate mini jackpot target meets minimum threshold
+        target_mini_jackpot = self._target_mini_jackpot_var.get()
+        if target_mini_jackpot > 0 and target_mini_jackpot < self.MINIMUN_TARGET_MINI_JACKPOT:
+            messagebox.showerror(
+                "❌ Error",
+                f"Target Mini Jackpot must be greater than {self.MINIMUN_TARGET_MINI_JACKPOT:,}\n"
+                "Please increase the target mini jackpot to start the tool",
+            )
             return
 
         # Update UI
@@ -354,7 +371,7 @@ class MainWindow:
             password=self._password_var.get(),
             spin_action=self._spin_action_var.get(),
             target_special_jackpot=target_special_jackpot,
-            target_mini_jackpot=self._target_mini_jackpot_var.get(),
+            target_mini_jackpot=target_mini_jackpot,
             close_when_jackpot_won=self._close_when_jackpot_won_var.get(),
             close_when_mini_jackpot_won=self._close_when_mini_jackpot_won_var.get(),
             current_jackpot=0,

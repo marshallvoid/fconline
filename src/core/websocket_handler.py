@@ -5,7 +5,7 @@ from typing import Callable, Optional, Tuple
 
 from browser_use.browser.types import Page
 from loguru import logger
-from playwright.async_api import WebSocket
+from playwright.async_api import WebSocket  # noqa: DEP003
 
 from src.core.event_config import EventConfig
 from src.infrastructure.clients.fconline_api import FCOnlineClient
@@ -16,6 +16,8 @@ from src.utils import sounds
 
 
 class WebsocketHandler:
+    # Regex pattern to extract socket payload from websocket frames
+    # Format: 42[{"content": {...}}] where 42 is the socket.io message prefix
     _SOCKET_PAYLOAD_RE = re.compile(r"42(\[.*\])")
 
     def __init__(
@@ -50,8 +52,11 @@ class WebsocketHandler:
         self._fconline_client: Optional[FCOnlineClient] = None
         self._user_info: Optional[UserReponse] = None
 
+        # Task management for spin operations
         self._spin_task: Optional[asyncio.Task] = None
         self._spin_lock = asyncio.Lock()
+
+        # Epoch counter to track jackpot resets and prevent stale spin operations
         self._jackpot_epoch: int = 0
 
     @property
@@ -82,12 +87,14 @@ class WebsocketHandler:
         logger.info(f"🔌 Monitoring WebSocket on {self._page.url}")
 
         def _on_websocket(websocket: WebSocket) -> None:
+            # Only process websocket events when logged in
             if not self._is_logged_in:
                 return
 
             logger.info(f"🔌 WebSocket opened: {websocket.url}")
 
             async def _on_framereceived(frame: bytes | str) -> None:
+                # Convert frame to string and parse for jackpot events
                 frame_str = frame if isinstance(frame, str) else frame.decode("utf-8", errors="ignore")
                 logger.info(f"🔌 Frame received: {frame_str[:256]}")
 
@@ -110,6 +117,7 @@ class WebsocketHandler:
         self._page.on("websocket", _on_websocket)
 
     async def _parse_socket_frame(self, frame: str) -> Optional[Tuple[str, int | str, str]]:
+        # Extract the JSON payload from socket.io message format
         m = self._SOCKET_PAYLOAD_RE.search(frame)
         if not m:
             return None
@@ -142,16 +150,18 @@ class WebsocketHandler:
         try:
             match kind:
                 case "jackpot_value":
+                    # Handle real-time jackpot value updates
                     new_value = int(value)
                     prev_value = self._current_jackpot
 
-                    # Detect reset/drop -> increase epoch & cancel pending spin task
+                    # Detect jackpot reset/drop - increase epoch and cancel pending spins
                     if new_value < prev_value:
                         self._jackpot_epoch += 1
                         self._cancel_spin_task()
 
                     self._current_jackpot = new_value
 
+                    # Check if special jackpot target reached
                     if new_value >= self._target_special_jackpot:
                         md.should_execute_callback(
                             self._add_message,
@@ -164,9 +174,26 @@ class WebsocketHandler:
                             epoch_snapshot = self._jackpot_epoch
                             self._spin_task = asyncio.create_task(self._attempt_spin(epoch_snapshot))
 
+                    # Auto spin when mini jackpot target is reached
+                    if new_value >= self._target_mini_jackpot:
+                        md.should_execute_callback(
+                            self._add_message,
+                            MessageTag.REACHED_GOAL,
+                            f"Mini Jackpot has reached {self._target_mini_jackpot:,}",
+                        )
+
+                        # Trigger immediate spin when mini jackpot target is reached
+                        if not self._spin_task or self._spin_task.done():
+                            epoch_snapshot = self._jackpot_epoch
+                            self._spin_task = asyncio.create_task(self._attempt_spin(epoch_snapshot))
+
                     md.should_execute_callback(self._update_current_jackpot, new_value)
 
                 case "jackpot" | "mini_jackpot":
+                    # Stop auto spin when any jackpot is won by anyone
+                    self._cancel_spin_task()
+
+                    # Check if the winner is the current user
                     try:
                         user = self._user_info and self._user_info.payload.user
                         is_me = bool(user and nickname and nickname.lower() == user.nickname.lower())
@@ -175,10 +202,11 @@ class WebsocketHandler:
 
                     is_jackpot = kind == "jackpot"
                     if is_jackpot:
+                        # Reset jackpot value and increment epoch when ultimate prize is won
                         self._jackpot_epoch += 1
-                        self._cancel_spin_task()
                         self._current_jackpot = 0
 
+                    # Determine message tag based on jackpot type and winner
                     tag = (
                         MessageTag.JACKPOT
                         if is_jackpot and is_me
@@ -189,11 +217,12 @@ class WebsocketHandler:
                     msg = f"{prefix} won {suffix}: {value}"
 
                     if is_me:
+                        # Play sound notification and show notification for user wins
                         audio_name = "coin-1" if is_jackpot else "coin-2"
                         md.should_execute_callback(self._add_notification, nickname, value)
                         sounds.send_notification(msg, audio_name=audio_name)
 
-                        # Check if browser should be closed
+                        # Check if browser should be closed based on win type
                         if (is_jackpot and self._close_when_jackpot_won) or (
                             not is_jackpot and self._close_when_mini_jackpot_won
                         ):
@@ -217,16 +246,17 @@ class WebsocketHandler:
 
         try:
             async with self._spin_lock:
-                # Epoch must still match (not reset)
+                # Verify epoch hasn't changed (jackpot wasn't reset)
                 if epoch_snapshot != self._jackpot_epoch:
                     logger.warning(f"⛔ Spin aborted: epoch changed (was {epoch_snapshot}, now {self._jackpot_epoch})")
                     return
 
-                # Current value must still be >= target
+                # Verify jackpot value still meets target threshold
                 if self._current_jackpot < self._target_special_jackpot:
                     logger.warning(f"⛔ Spin aborted: jackpot dropped to {self._current_jackpot}")
                     return
 
+                # Execute the spin operation
                 await self._fconline_client.spin(spin_type=self._spin_action, payment_type=1)
 
         except asyncio.CancelledError:

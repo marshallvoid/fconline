@@ -3,7 +3,7 @@ from tkinter import ttk
 from typing import Callable, List
 
 
-class EventTab:
+class UserSettingsTab:
     def __init__(
         self,
         parent: tk.Misc,
@@ -64,13 +64,8 @@ class EventTab:
         if self._close_when_mini_jackpot_won_var.get():
             self._close_when_jackpot_won_var.set(True)
             self._close_when_jackpot_won_checkbox.config(state="disabled")
-            # Enable target mini jackpot input
-            self._target_mini_jackpot_entry.config(state="normal")
         else:
             self._close_when_jackpot_won_checkbox.config(state="normal")
-            # Disable and clear target mini jackpot input
-            self._target_mini_jackpot_entry.config(state="disabled")
-            self._target_mini_jackpot_var.set(0)
 
     def _build(self) -> None:
         title_label = ttk.Label(self._frame, text="User Settings", font=("Arial", 14, "bold"))
