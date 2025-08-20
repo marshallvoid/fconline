@@ -19,12 +19,16 @@ class FCOnlineClient:
         user_endpoint: str,
         spin_endpoint: str,
         add_message: Optional[Callable[[str, str], None]],
+        update_last_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
+        update_last_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self._page = page
         self._base_url = base_url
         self._user_endpoint = user_endpoint
         self._spin_endpoint = spin_endpoint
         self._add_message = add_message
+        self._update_last_ultimate_prize_winner = update_last_ultimate_prize_winner
+        self._update_last_mini_prize_winner = update_last_mini_prize_winner
 
         # HTTP request configuration extracted from browser session
         self._cookies: Dict[str, str] = {}
@@ -83,11 +87,23 @@ class FCOnlineClient:
                         f"Last user won Ultimate Prize: {jackpot_billboard.nickname} ({jackpot_billboard.value})",
                     )
 
+                    # Update last ultimate prize winner display
+                    md.should_execute_callback(
+                        self._update_last_ultimate_prize_winner, jackpot_billboard.nickname, jackpot_billboard.value
+                    )
+
                     mini_jackpot_billboard = user_response.payload.mini_jackpot_billboard
                     md.should_execute_callback(
                         self._add_message,
                         MessageTag.OTHER_PLAYER,
                         f"Last user won Mini Prize: {mini_jackpot_billboard.nickname} ({mini_jackpot_billboard.value})",
+                    )
+
+                    # Update last mini prize winner display
+                    md.should_execute_callback(
+                        self._update_last_mini_prize_winner,
+                        mini_jackpot_billboard.nickname,
+                        mini_jackpot_billboard.value,
                     )
 
                     return user_response
@@ -150,7 +166,7 @@ class FCOnlineClient:
     async def _build_cookies(self) -> Dict[str, str]:
         try:
             cookies = await self._page.context.cookies()
-            return {c["name"]: c["value"] for c in cookies if c.get("name") and c.get("value")}
+            return {name: value for c in cookies if (name := c.get("name")) and (value := c.get("value"))}
 
         except Exception as e:
             logger.error(f"❌ Failed to extract cookies: {e}")

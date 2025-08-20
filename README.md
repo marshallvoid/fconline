@@ -48,7 +48,7 @@ A Python-based automation tool for FC Online events featuring a modern GUI inter
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd fc-online
+cd fconline
 
 # Install dependencies
 uv sync

@@ -24,9 +24,7 @@ class MainTool:
         password: str,
         spin_action: int = 1,
         target_special_jackpot: int = 19000,
-        target_mini_jackpot: int = 12000,
         close_when_jackpot_won: bool = True,
-        close_when_mini_jackpot_won: bool = False,
     ) -> None:
         # Configuration parameters for the automation
         self._event_config: EventConfig = event_config
@@ -34,18 +32,22 @@ class MainTool:
         self._password: str = password
         self._spin_action: int = spin_action
         self._target_special_jackpot: int = target_special_jackpot
-        self._target_mini_jackpot: int = target_mini_jackpot
         self._close_when_jackpot_won: bool = close_when_jackpot_won
-        self._close_when_mini_jackpot_won: bool = close_when_mini_jackpot_won
 
         # Runtime state management
         self._is_running: bool = False
         self._current_jackpot: int = 0
+        self._screen_width: int = 0
+        self._screen_height: int = 0
+        self._req_width: int = 0
+        self._req_height: int = 0
 
         # Callback functions for UI updates and notifications
         self._add_message: Optional[Callable[[str, str], None]] = None
         self._add_notification: Optional[Callable[[str, str], None]] = None
         self._update_current_jackpot: Optional[Callable[[int], None]] = None
+        self._update_last_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None
+        self._update_last_mini_prize_winner: Optional[Callable[[str, str], None]] = None
         self._close_browser: Optional[Callable[[], None]] = None
 
         # Browser automation components
@@ -88,12 +90,12 @@ class MainTool:
                 spin_action=self._spin_action,
                 current_jackpot=self._current_jackpot,
                 target_special_jackpot=self._target_special_jackpot,
-                target_mini_jackpot=self._target_mini_jackpot,
                 close_when_jackpot_won=self._close_when_jackpot_won,
-                close_when_mini_jackpot_won=self._close_when_mini_jackpot_won,
                 add_message=self._add_message,
                 add_notification=self._add_notification,
                 update_current_jackpot=self._update_current_jackpot,
+                update_last_ultimate_prize_winner=self._update_last_ultimate_prize_winner,
+                update_last_mini_prize_winner=self._update_last_mini_prize_winner,
                 close_browser=self._close_browser,
             )
             websocket_handler.setup_websocket()
@@ -116,6 +118,8 @@ class MainTool:
                 user_endpoint=self._event_config.user_endpoint,
                 spin_endpoint=self._event_config.spin_endpoint,
                 add_message=self._add_message,
+                update_last_ultimate_prize_winner=self._update_last_ultimate_prize_winner,
+                update_last_mini_prize_winner=self._update_last_mini_prize_winner,
             )
             await fconline_client.prepare_resources()
             self._user_info = await fconline_client.lookup(username=self._username)
@@ -156,35 +160,37 @@ class MainTool:
 
     def update_configs(
         self,
+        screen_width: Optional[int] = None,
+        screen_height: Optional[int] = None,
+        req_width: Optional[int] = None,
+        req_height: Optional[int] = None,
         is_running: Optional[bool] = None,
         event_config: Optional[EventConfig] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
         spin_action: Optional[int] = None,
         target_special_jackpot: Optional[int] = None,
-        target_mini_jackpot: Optional[int] = None,
         close_when_jackpot_won: Optional[bool] = None,
-        close_when_mini_jackpot_won: Optional[bool] = None,
         current_jackpot: Optional[int] = None,
-        add_message: Optional[Callable[[str, str], None]] = None,
+        add_message: Optional[Callable[[MessageTag, str], None]] = None,
         add_notification: Optional[Callable[[str, str], None]] = None,
         update_current_jackpot: Optional[Callable[[int], None]] = None,
+        update_last_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
+        update_last_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
         close_browser: Optional[Callable[[], None]] = None,
     ) -> None:
+        self._screen_width = screen_width if screen_width is not None else self._screen_width
+        self._screen_height = screen_height if screen_height is not None else self._screen_height
+        self._req_width = req_width if req_width is not None else self._req_width
+        self._req_height = req_height if req_height is not None else self._req_height
         self._is_running = is_running if is_running is not None else self._is_running
         self._event_config = event_config or self._event_config
         self._username = username or self._username
         self._password = password or self._password
         self._spin_action = spin_action or self._spin_action
         self._target_special_jackpot = target_special_jackpot or self._target_special_jackpot
-        self._target_mini_jackpot = target_mini_jackpot or self._target_mini_jackpot
         self._close_when_jackpot_won = (
             close_when_jackpot_won if close_when_jackpot_won is not None else self._close_when_jackpot_won
-        )
-        self._close_when_mini_jackpot_won = (
-            close_when_mini_jackpot_won
-            if close_when_mini_jackpot_won is not None
-            else self._close_when_mini_jackpot_won
         )
         self._current_jackpot = current_jackpot or self._current_jackpot
 
@@ -196,6 +202,12 @@ class MainTool:
 
         if update_current_jackpot:
             self._update_current_jackpot = update_current_jackpot
+
+        if update_last_ultimate_prize_winner:
+            self._update_last_ultimate_prize_winner = update_last_ultimate_prize_winner
+
+        if update_last_mini_prize_winner:
+            self._update_last_mini_prize_winner = update_last_mini_prize_winner
 
         if close_browser:
             self._close_browser = close_browser
@@ -220,7 +232,7 @@ class MainTool:
             "--disable-dev-shm-usage",
             "--hide-scrollbars",
             "--mute-audio",
-            "--start-maximized",
+            # "--start-maximized",
             "--ignore-certificate-errors",
             "--no-sandbox",
         ]
@@ -269,6 +281,7 @@ class MainTool:
                     args=extra_chromium_args,
                     user_data_dir=user_data_dir,
                     executable_path=chrome_path,
+                    window_size={"width": self._screen_width - self._req_width, "height": self._req_height},
                     user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
                 )
 

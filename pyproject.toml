@@ -39,8 +39,8 @@ build = [
 ]
 
 [project.scripts]
-fconline = "manage:main"
-fconline-cli = "cli:main"
+fco = "manage:main"
+fco-cli = "cli:main"
 
 [build-system]
 requires = ["hatchling"]
