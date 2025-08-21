@@ -71,14 +71,13 @@ class AccountsTab:
         # Configure columns for Treeview
         columns: Dict[str, Dict[str, Any]] = {
             "Username": {"width": 220, "anchor": "w"},
-            "Status": {"width": 100, "anchor": "center"},
-            "Spin Action": {"width": 120, "anchor": "center"},
             "Target": {"width": 120, "anchor": "center"},
+            "Spin Action": {"width": 120, "anchor": "center"},
             "Auto Close": {"width": 120, "anchor": "center"},
         }
 
         # Calculate total width for visible columns
-        visible_width = columns["Username"]["width"] + columns["Status"]["width"] + 100
+        visible_width = columns["Username"]["width"] + columns["Target"]["width"]
 
         # Create a frame to constrain treeview width
         tree_container = ttk.Frame(accounts_frame, width=visible_width)
@@ -251,13 +250,7 @@ class AccountsTab:
             messagebox.showinfo("Info", f"Account '{account.username}' is already running.")
             return "break"
 
-        self._on_account_run(
-            account.username,
-            account.password,
-            account.spin_action,
-            account.target_special_jackpot,
-            account.close_when_jackpot_won,
-        )
+        self._run_account(account=account)
 
         return "break"
 
@@ -278,29 +271,30 @@ class AccountsTab:
         # Hide no accounts message
         self._no_accounts_label.pack_forget()
 
+        # Configure tags for colors
+        self._accounts_tree.tag_configure("running", background="#90EE90", foreground="#000000")
+        self._accounts_tree.tag_configure("stopped", background="#FFB6C1", foreground="#000000")
+
         # Add accounts to treeview
         for account in self._accounts:
-            username = account.username
-            status = "Running" if account.username in self._running_usernames else "Stopped"
-            spin_action = EVENT_CONFIGS_MAP[self._selected_event].spin_actions[account.spin_action - 1]
-            target_special_jackpot = account.target_special_jackpot
-            close_when_jackpot_won = account.close_when_jackpot_won
-
             self._accounts_tree.insert(
                 "",
                 "end",
                 values=(
-                    username,
-                    status,
-                    spin_action,
-                    target_special_jackpot,
-                    close_when_jackpot_won,
+                    account.username,
+                    account.target_special_jackpot,
+                    EVENT_CONFIGS_MAP[self._selected_event].spin_actions[account.spin_action - 1],
+                    account.close_when_jackpot_won,
                 ),
+                tags=("running" if account.username in self._running_usernames else "stopped",),
             )
 
         # Enable if there is at least one account not running
         any_pending = any(a.username not in self._running_usernames for a in self._accounts)
         self._run_all_btn.config(state="normal" if any_pending else "disabled")
+
+        any_running = any(a.username in self._running_usernames for a in self._accounts)
+        self._stop_all_btn.config(state="normal" if any_running else "disabled")
 
     def _run_all_account(self) -> None:
         pending_accounts = [a for a in self._accounts if a.username not in self._running_usernames]
@@ -317,9 +311,6 @@ class AccountsTab:
                 account.close_when_jackpot_won,
             )
 
-        self._run_all_btn.config(state="disabled")
-        self._stop_all_btn.config(state="normal")
-
         self._running_usernames.update(a.username for a in pending_accounts)
         self._refresh_accounts_list()
 
@@ -333,11 +324,6 @@ class AccountsTab:
         )
 
         self._running_usernames.add(account.username)
-
-        self._stop_all_btn.config(state="normal")
-        if len(self._running_usernames) == len(self._accounts):
-            self._run_all_btn.config(state="disabled")
-
         self._refresh_accounts_list()
 
     def _stop_all_account(self) -> None:
@@ -348,9 +334,6 @@ class AccountsTab:
         for username in self._running_usernames:
             self._on_account_stop(username)
 
-        self._run_all_btn.config(state="normal")
-        self._stop_all_btn.config(state="disabled")
-
         self._running_usernames.clear()
         self._refresh_accounts_list()
 
@@ -358,11 +341,6 @@ class AccountsTab:
         self._on_account_stop(username)
 
         self._running_usernames.remove(username)
-
-        self._run_all_btn.config(state="normal")
-        if len(self._running_usernames) == 0:
-            self._stop_all_btn.config(state="disabled")
-
         self._refresh_accounts_list()
 
     def _open_account_dialog(
@@ -553,7 +531,7 @@ class AccountsTab:
             self._refresh_accounts_list()
             return True
 
-        self._open_account_dialog(title=f"Edit Account: {account.username}", initial=account, on_submit=on_submit)
+        self._open_account_dialog(title="Edit Account", initial=account, on_submit=on_submit)
 
     def _delete_account(self, account: Account) -> None:
         result = messagebox.askyesno(
