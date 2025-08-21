@@ -12,7 +12,7 @@ def should_execute_callback(callback: Optional[Callable], *args: Any, **kwargs: 
 
 
 def format_spin_block(spin_results: List["SpinResult"], jackpot_value: int) -> str:
-    lines: list[str] = [f"Auto-spin Results (jackpot: {jackpot_value})"]
+    lines: List[str] = [f"Auto-spin Results (jackpot: {jackpot_value})"]
 
     for r in spin_results:
         lines.append(f"  • {r.reward_name}")
@@ -22,7 +22,7 @@ def format_spin_block(spin_results: List["SpinResult"], jackpot_value: int) -> s
 
 def format_spin_block_compact(spin_results: List["SpinResult"], jackpot_value: int) -> str:
     counter = Counter(r.reward_name for r in spin_results)
-    lines: list[str] = [f"Auto-spin Results (jackpot: {jackpot_value})"]
+    lines: List[str] = [f"Auto-spin Results (jackpot: {jackpot_value})"]
 
     for name, cnt in counter.items():
         suffix = f" × {cnt}" if cnt > 1 else ""

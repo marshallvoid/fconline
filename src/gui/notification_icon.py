@@ -1,19 +1,17 @@
 import tkinter as tk
-from tkinter import ttk
-from typing import List, Optional, Tuple
+from tkinter import messagebox, ttk
+from typing import List, Optional
 
+from src.schemas.configs import Notification
 from src.utils.user_config import UserConfigManager
 
 
 class NotificationIcon:
     def __init__(self, parent: tk.Misc) -> None:
         self._parent: tk.Misc = parent
-
-        # Store notification data: (nickname, jackpot_value, timestamp, is_seen)
-        self._notifications: List[Tuple[str, str, str, bool]] = []
         self._menu_window: Optional[tk.Toplevel] = None
 
-        self._load_notifications_from_config()
+        self._notifications: List[Notification] = self._load_notifications_from_config()
 
         self._build()
 
@@ -21,13 +19,8 @@ class NotificationIcon:
     def frame(self) -> ttk.Frame:
         return self._frame
 
-    def add_notification(self, nickname: str, jackpot_value: str, timestamp: str) -> None:
-        self._notifications.append((nickname, jackpot_value, timestamp, False))
-        self._update_icon()
-        self._save_notifications_to_config()
-
-    def clear_notifications(self) -> None:
-        self._notifications.clear()
+    def add_notification(self, nickname: str, jackpot_value: str) -> None:
+        self._notifications.append(Notification(nickname=nickname, jackpot_value=jackpot_value))
         self._update_icon()
         self._save_notifications_to_config()
 
@@ -39,11 +32,11 @@ class NotificationIcon:
             self._frame,
             text="🔔",
             font=("Arial", 16),
-            foreground="#6b7280",
+            foreground="#fbbf24",
             cursor="hand2",
         )
         self._icon_label.pack(side="left")
-        self._icon_label.bind("<Button-1>", lambda e: self._on_icon_click())
+        self._icon_label.bind("<Button-1>", lambda _: self._on_icon_click())
 
         # Notification count badge
         self._count_label: ttk.Label = ttk.Label(
@@ -71,9 +64,9 @@ class NotificationIcon:
                 pass
 
         # Mark all notifications as seen
-        for i in range(len(self._notifications)):
-            nickname, jackpot_value, timestamp, _ = self._notifications[i]
-            self._notifications[i] = (nickname, jackpot_value, timestamp, True)
+        for notification in self._notifications:
+            notification.is_seen = True
+
         self._save_notifications_to_config()
 
         if self._count_label.winfo_exists():
@@ -163,10 +156,10 @@ class NotificationIcon:
             canvas.bind("<Configure>", _update_scroll_region)
 
             # Sort notifications: unseen first, then by timestamp in descending order (newest first)
-            sorted_notifications = sorted(self._notifications, key=lambda x: (x[3], x[2]), reverse=True)
+            sorted_notifications = sorted(self._notifications, key=lambda x: (x.is_seen, x.timestamp), reverse=True)
 
             # Add each notification
-            for nickname, jackpot_value, timestamp, _ in sorted_notifications:
+            for notification in sorted_notifications:
                 notification_frame: ttk.Frame = ttk.Frame(scrollable_frame)
                 notification_frame.pack(fill="x", pady=(0, 10))
 
@@ -177,7 +170,7 @@ class NotificationIcon:
                 # Timestamp
                 time_label: ttk.Label = ttk.Label(
                     notification_content_frame,
-                    text=f"Time: {timestamp}",
+                    text=f"Time: {notification.timestamp}",
                     font=("Arial", 10),
                     foreground="#9ca3af",
                 )
@@ -185,7 +178,7 @@ class NotificationIcon:
 
                 winner_label: ttk.Label = ttk.Label(
                     notification_content_frame,
-                    text=f"User: {nickname}",
+                    text=f"User: {notification.nickname}",
                     font=("Arial", 12, "bold"),
                     foreground="#22c55e",
                 )
@@ -193,7 +186,7 @@ class NotificationIcon:
 
                 jackpot_label: ttk.Label = ttk.Label(
                     notification_content_frame,
-                    text=f"Reward: {jackpot_value}",
+                    text=f"Reward: {notification.jackpot_value}",
                     font=("Arial", 14, "bold"),
                     foreground="#f97316",
                 )
@@ -217,7 +210,7 @@ class NotificationIcon:
         close_btn.pack(side="right")
 
     def _update_icon(self) -> None:
-        unread_count: int = sum(1 for _, _, _, is_seen in self._notifications if not is_seen)
+        unread_count: int = sum(1 for notification in self._notifications if not notification.is_seen)
 
         if unread_count == 0:
             self._icon_label.config(text="🔔", foreground="#6b7280", font=("Arial", 16))
@@ -242,19 +235,19 @@ class NotificationIcon:
         if self._menu_window:
             self._menu_window.destroy()
 
-    def _load_notifications_from_config(self) -> None:
+    def _load_notifications_from_config(self) -> List[Notification]:
         try:
-            config = UserConfigManager.load_configs()
-            self._notifications = config.notifications
+            configs = UserConfigManager.load_configs()
+            return configs.notifications
 
         except Exception:
-            self._notifications = []
+            return []
 
     def _save_notifications_to_config(self) -> None:
         try:
-            config = UserConfigManager.load_configs()
-            config.notifications = self._notifications
-            UserConfigManager.save_configs(config)
+            configs = UserConfigManager.load_configs()
+            configs.notifications = self._notifications
+            UserConfigManager.save_configs(configs)
 
         except Exception:
-            pass
+            messagebox.showerror("Error", "Failed to save notifications to config!")

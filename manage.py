@@ -14,7 +14,7 @@ try:
     def main() -> None:
         # Initialize logging infrastructure first
         import src.infrastructure.logger  # noqa: F401
-        from src.gui.main_window import MainWindow
+        from src.gui.fco import MainWindow
 
         # Create and run main application window
         app = MainWindow()

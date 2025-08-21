@@ -9,8 +9,8 @@ from getpass import getpass
 from typing import Optional
 
 from loguru import logger
-from src.core.event_config import EventConfig
-from src.core.main_tool import MainTool
+from src.services.fco import MainTool
+from src.utils.contants import EventConfig
 
 
 def build_parser() -> argparse.ArgumentParser:

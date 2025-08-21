@@ -7,12 +7,12 @@ from browser_use.browser.types import Page
 from loguru import logger
 from playwright.async_api import WebSocket  # noqa: DEP003
 
-from src.core.event_config import EventConfig
-from src.infrastructure.clients.fconline_api import FCOnlineClient
+from src.infrastructure.clients.fco import FCOnlineClient
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
 from src.utils import methods as md
 from src.utils import sounds
+from src.utils.contants import EventConfig
 
 
 class WebsocketHandler:
@@ -31,30 +31,32 @@ class WebsocketHandler:
         add_message: Optional[Callable[[MessageTag, str], None]] = None,
         add_notification: Optional[Callable[[str, str], None]] = None,
         update_current_jackpot: Optional[Callable[[int], None]] = None,
-        update_last_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
-        update_last_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
+        update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
+        update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
         close_browser: Optional[Callable[[], None]] = None,
     ) -> None:
         self._page = page
+
         self._event_config = event_config
         self._spin_action = spin_action
         self._current_jackpot = current_jackpot
         self._target_special_jackpot = target_special_jackpot
         self._close_when_jackpot_won = close_when_jackpot_won
+
+        self._close_browser = close_browser
         self._add_message = add_message
         self._add_notification = add_notification
         self._update_current_jackpot = update_current_jackpot
-        self._update_last_ultimate_prize_winner = update_last_ultimate_prize_winner
-        self._update_last_mini_prize_winner = update_last_mini_prize_winner
-        self._close_browser = close_browser
+        self._update_ultimate_prize_winner = update_ultimate_prize_winner
+        self._update_mini_prize_winner = update_mini_prize_winner
 
         self._is_logged_in: bool = False
-        self._fconline_client: Optional[FCOnlineClient] = None
         self._user_info: Optional[UserReponse] = None
+        self._fconline_client: Optional[FCOnlineClient] = None
 
         # Task management for spin operations
-        self._spin_task: Optional[asyncio.Task] = None
         self._spin_lock = asyncio.Lock()
+        self._spin_task: Optional[asyncio.Task] = None
 
         # Epoch counter to track jackpot resets and prevent stale spin operations
         self._jackpot_epoch: int = 0
@@ -64,24 +66,24 @@ class WebsocketHandler:
         return self._is_logged_in
 
     @is_logged_in.setter
-    def is_logged_in(self, is_logged_in: bool) -> None:
-        self._is_logged_in = is_logged_in
+    def is_logged_in(self, new_is_logged_in: bool) -> None:
+        self._is_logged_in = new_is_logged_in
 
     @property
     def fconline_client(self) -> Optional[FCOnlineClient]:
         return self._fconline_client
 
     @fconline_client.setter
-    def fconline_client(self, fconline_client: FCOnlineClient) -> None:
-        self._fconline_client = fconline_client
+    def fconline_client(self, new_fconline_client: FCOnlineClient) -> None:
+        self._fconline_client = new_fconline_client
 
     @property
     def user_info(self) -> Optional[UserReponse]:
         return self._user_info
 
     @user_info.setter
-    def user_info(self, user_info: UserReponse) -> None:
-        self._user_info = user_info
+    def user_info(self, new_user_info: UserReponse) -> None:
+        self._user_info = new_user_info
 
     def setup_websocket(self) -> None:
         logger.info(f"🔌 Monitoring WebSocket on {self._page.url}")
@@ -150,8 +152,6 @@ class WebsocketHandler:
         try:
             match kind:
                 case "jackpot_value":
-                    md.should_execute_callback(self._add_message, MessageTag.WEBSOCKET, f"Jackpot value: {value}")
-
                     # Handle real-time jackpot value updates
                     new_value = int(value)
                     prev_value = self._current_jackpot
@@ -195,11 +195,11 @@ class WebsocketHandler:
                         self._jackpot_epoch += 1
                         self._current_jackpot = 0
 
-                        # Update last ultimate prize winner display
-                        md.should_execute_callback(self._update_last_ultimate_prize_winner, nickname, str(value))
+                        # Update ultimate prize winner display
+                        md.should_execute_callback(self._update_ultimate_prize_winner, nickname, str(value))
                     else:
-                        # Update last mini prize winner display
-                        md.should_execute_callback(self._update_last_mini_prize_winner, nickname, str(value))
+                        # Update mini prize winner display
+                        md.should_execute_callback(self._update_mini_prize_winner, nickname, str(value))
 
                     # Determine message tag based on jackpot type and winner
                     tag = MessageTag.OTHER_PLAYER

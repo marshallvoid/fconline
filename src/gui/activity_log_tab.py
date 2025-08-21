@@ -1,14 +1,19 @@
 import tkinter as tk
 from datetime import datetime
 from tkinter import ttk
-from typing import Any, Dict, List, Optional
+from typing import Dict, Optional, TypedDict
 
 from src.schemas.enums.message_tag import MessageTag
 
 
+class MessageTabInfo(TypedDict):
+    frame: ttk.Frame
+    text_widget: tk.Text
+    scrollbar: ttk.Scrollbar
+
+
 class ActivityLogTab:
-    # Available tab categories for organizing different types of messages
-    TAB_NAMES = ["All", "Game Events", "Rewards", "System", "Websocket"]
+    TAB_NAMES = ["All", "Game Events", "Rewards", "System"]
 
     CURRENT_JACKPOT_LABEL_TEXT = "Current Jackpot: {value:,}"
     TARGET_SPECIAL_JACKPOT_LABEL_TEXT = "Target Special Jackpot: {value:,}"
@@ -17,11 +22,7 @@ class ActivityLogTab:
 
     def __init__(self, parent: tk.Misc) -> None:
         self._frame = ttk.Frame(parent)
-
-        # Message storage and tab management
-        self._message_tabs: Dict[str, Dict[str, Any]] = {}
-        self._current_tab: Optional[str] = None
-        self._messages_by_tab: Dict[str, List[str]] = {tab_name: [] for tab_name in self.TAB_NAMES}
+        self._message_tabs: Dict[str, MessageTabInfo] = {}
 
         self._build()
 
@@ -50,15 +51,11 @@ class ActivityLogTab:
             text_widget.config(state="disabled")
 
         self.update_current_jackpot(value=0)
-        self.update_target_special_jackpot(value=0)
         self.update_ultimate_prize_winner(nickname="Unknown", value="0")
         self.update_mini_prize_winner(nickname="Unknown", value="0")
 
     def update_current_jackpot(self, value: int) -> None:
         self._current_jackpot_label.config(text=self.CURRENT_JACKPOT_LABEL_TEXT.format(value=value))
-
-    def update_target_special_jackpot(self, value: int) -> None:
-        self._target_special_jackpot_label.config(text=self.TARGET_SPECIAL_JACKPOT_LABEL_TEXT.format(value=value))
 
     def update_ultimate_prize_winner(self, nickname: str, value: str) -> None:
         self._ultimate_prize_label.config(text=self.JACKPOT_WINNER_TEXT.format(nickname=nickname, value=value))
@@ -97,42 +94,40 @@ class ActivityLogTab:
         row_container.pack(fill="x", pady=(0, 10))
 
         # Jackpot Status
-        jackpot_status_frame = ttk.LabelFrame(row_container, text="Jackpot Status", padding=10)
+        jackpot_status_frame = ttk.LabelFrame(row_container, text="Status", padding=10)
         jackpot_status_frame.pack(side="left", fill="both", expand=True)
+
         jackpot_container = ttk.Frame(jackpot_status_frame)
         jackpot_container.pack(side="left", fill="both", expand=True)
+
         self._current_jackpot_label = ttk.Label(
             jackpot_container,
-            text=self.CURRENT_JACKPOT_LABEL_TEXT.format(value=0),
             foreground="#f97316",
             font=("Consolas", 12, "bold"),
+            text=self.CURRENT_JACKPOT_LABEL_TEXT.format(value=0),
         )
         self._current_jackpot_label.pack(anchor="w")
-        self._target_special_jackpot_label = ttk.Label(
-            jackpot_container,
-            text=self.TARGET_SPECIAL_JACKPOT_LABEL_TEXT.format(value=0),
-            foreground="#22c55e",
-            font=("Consolas", 12, "bold"),
-        )
-        self._target_special_jackpot_label.pack(anchor="w", pady=(10, 0))
 
         # Winners Display
-        winners_frame = ttk.LabelFrame(row_container, text="Last Winners", padding=10)
+        winners_frame = ttk.LabelFrame(row_container, text="Winners", padding=10)
         winners_frame.pack(side="right", fill="both", expand=True, padx=(10, 0))
+
         winners_container = ttk.Frame(winners_frame)
         winners_container.pack(fill="x")
+
         self._ultimate_prize_label = ttk.Label(
             winners_container,
-            text=self.JACKPOT_WINNER_TEXT.format(nickname="Unknown", value="0"),
             foreground="#fbbf24",
             font=("Consolas", 11, "bold"),
+            text=self.JACKPOT_WINNER_TEXT.format(nickname="Unknown", value="0"),
         )
         self._ultimate_prize_label.pack(anchor="w")
+
         self._mini_prize_label = ttk.Label(
             winners_container,
-            text=self.MINI_JACKPOT_WINNER_TEXT.format(nickname="Unknown", value="0"),
             foreground="#34d399",
             font=("Consolas", 11, "bold"),
+            text=self.MINI_JACKPOT_WINNER_TEXT.format(nickname="Unknown", value="0"),
         )
         self._mini_prize_label.pack(anchor="w", pady=(10, 0))
 

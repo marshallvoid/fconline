@@ -4,10 +4,10 @@ from typing import Callable, Optional
 from browser_use.browser.types import Page
 from loguru import logger
 
-from src.core.event_config import EventConfig
-from src.core.websocket_handler import WebsocketHandler
 from src.schemas.enums.message_tag import MessageTag
+from src.services.websocket_handler import WebsocketHandler
 from src.utils import methods as md
+from src.utils.contants import EventConfig
 
 
 class LoginHandler:
@@ -20,9 +20,11 @@ class LoginHandler:
         add_message: Optional[Callable[[MessageTag, str], None]] = None,
     ) -> None:
         self._page = page
+
         self._event_config = event_config
         self._username = username
         self._password = password
+
         self._add_message = add_message
 
         # Reference to websocket handler to update login status
@@ -33,8 +35,8 @@ class LoginHandler:
         return self._websocket_handler
 
     @websocket_handler.setter
-    def websocket_handler(self, websocket_handler: WebsocketHandler) -> None:
-        self._websocket_handler = websocket_handler
+    def websocket_handler(self, new_websocket_handler: WebsocketHandler) -> None:
+        self._websocket_handler = new_websocket_handler
 
     async def ensure_logged_in(self) -> None:
         md.should_execute_callback(self._add_message, MessageTag.INFO, "Checking login status")
