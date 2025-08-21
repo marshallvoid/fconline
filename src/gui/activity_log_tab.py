@@ -9,10 +9,11 @@ from src.schemas.enums.message_tag import MessageTag
 class ActivityLogTab:
     # Available tab categories for organizing different types of messages
     TAB_NAMES = ["All", "Game Events", "Rewards", "System", "Websocket"]
-    CURRENT_JACKPOT_LABEL_TEXT = "CURRENT JACKPOT: {value:,}"
-    TARGET_SPECIAL_JACKPOT_LABEL_TEXT = "TARGET SPECIAL JACKPOT: {value:,}"
-    LAST_ULTIMATE_PRIZE_WINNER_TEXT = "Last Ultimate Prize Winner: {nickname} ({value})"
-    LAST_MINI_PRIZE_WINNER_TEXT = "Last Mini Prize Winner: {nickname} ({value})"
+
+    CURRENT_JACKPOT_LABEL_TEXT = "Current Jackpot: {value:,}"
+    TARGET_SPECIAL_JACKPOT_LABEL_TEXT = "Target Special Jackpot: {value:,}"
+    JACKPOT_WINNER_TEXT = "Ultimate Prize Winner: {nickname} ({value})"
+    MINI_JACKPOT_WINNER_TEXT = "Mini Prize Winner: {nickname} ({value})"
 
     def __init__(self, parent: tk.Misc) -> None:
         self._frame = ttk.Frame(parent)
@@ -37,8 +38,33 @@ class ActivityLogTab:
         timestamped_message = f"[{timestamp}] {message.strip()}"
 
         # Distribute message to relevant tabs based on message type
-        self._add_message_to_tab(tab_name="All", tag=tag.name, message=timestamped_message)
+        if tag != MessageTag.WEBSOCKET:
+            self._add_message_to_tab(tab_name="All", tag=tag.name, message=timestamped_message)
         self._add_message_to_tab(tab_name=tag.tab_name, tag=tag.name, message=timestamped_message)
+
+    def clear_messages(self) -> None:
+        for tab_info in self._message_tabs.values():
+            text_widget = tab_info["text_widget"]
+            text_widget.config(state="normal")
+            text_widget.delete("1.0", tk.END)
+            text_widget.config(state="disabled")
+
+        self.update_current_jackpot(value=0)
+        self.update_target_special_jackpot(value=0)
+        self.update_ultimate_prize_winner(nickname="Unknown", value="0")
+        self.update_mini_prize_winner(nickname="Unknown", value="0")
+
+    def update_current_jackpot(self, value: int) -> None:
+        self._current_jackpot_label.config(text=self.CURRENT_JACKPOT_LABEL_TEXT.format(value=value))
+
+    def update_target_special_jackpot(self, value: int) -> None:
+        self._target_special_jackpot_label.config(text=self.TARGET_SPECIAL_JACKPOT_LABEL_TEXT.format(value=value))
+
+    def update_ultimate_prize_winner(self, nickname: str, value: str) -> None:
+        self._ultimate_prize_label.config(text=self.JACKPOT_WINNER_TEXT.format(nickname=nickname, value=value))
+
+    def update_mini_prize_winner(self, nickname: str, value: str) -> None:
+        self._mini_prize_label.config(text=self.MINI_JACKPOT_WINNER_TEXT.format(nickname=nickname, value=value))
 
     def _add_message_to_tab(self, tab_name: str, tag: str, message: str) -> None:
         if tab_name not in self._message_tabs:
@@ -59,37 +85,6 @@ class ActivityLogTab:
         text_widget.see(tk.END)
         text_widget.config(state="disabled")
 
-    def clear_messages(self) -> None:
-        for tab_info in self._message_tabs.values():
-            text_widget = tab_info["text_widget"]
-            text_widget.config(state="normal")
-            text_widget.delete("1.0", tk.END)
-            text_widget.config(state="disabled")
-
-        # Clear last winner labels
-        self.clear_last_winners()
-
-    def clear_last_winners(self) -> None:
-        """Clear the last winner labels to show default values."""
-        self._last_ultimate_prize_label.config(
-            text=self.LAST_ULTIMATE_PRIZE_WINNER_TEXT.format(nickname="None", value="0")
-        )
-        self._last_mini_prize_label.config(text=self.LAST_MINI_PRIZE_WINNER_TEXT.format(nickname="None", value="0"))
-
-    def update_current_jackpot(self, value: int) -> None:
-        self._current_jackpot_label.config(text=self.CURRENT_JACKPOT_LABEL_TEXT.format(value=value))
-
-    def update_target_special_jackpot(self, value: int) -> None:
-        self._target_special_jackpot_label.config(text=self.TARGET_SPECIAL_JACKPOT_LABEL_TEXT.format(value=value))
-
-    def update_last_ultimate_prize_winner(self, nickname: str, value: str) -> None:
-        self._last_ultimate_prize_label.config(
-            text=self.LAST_ULTIMATE_PRIZE_WINNER_TEXT.format(nickname=nickname, value=value)
-        )
-
-    def update_last_mini_prize_winner(self, nickname: str, value: str) -> None:
-        self._last_mini_prize_label.config(text=self.LAST_MINI_PRIZE_WINNER_TEXT.format(nickname=nickname, value=value))
-
     def _build(self) -> None:
         title_label = ttk.Label(self._frame, text="Activity Log", font=("Arial", 14, "bold"))
         title_label.pack(pady=(10, 20))
@@ -97,13 +92,15 @@ class ActivityLogTab:
         container = ttk.Frame(self._frame)
         container.pack(fill="both", expand=True, padx=20, pady=10)
 
-        # Special Jackpot Display
-        jackpot_frame = ttk.LabelFrame(container, text="Jackpot Status", padding=10)
-        jackpot_frame.pack(fill="x", pady=(0, 10))
+        # Create a horizontal container for jackpot status and last winners
+        row_container = ttk.Frame(container)
+        row_container.pack(fill="x", pady=(0, 10))
 
-        jackpot_container = ttk.Frame(jackpot_frame)
-        jackpot_container.pack(fill="x")
-
+        # Jackpot Status
+        jackpot_status_frame = ttk.LabelFrame(row_container, text="Jackpot Status", padding=10)
+        jackpot_status_frame.pack(side="left", fill="both", expand=True)
+        jackpot_container = ttk.Frame(jackpot_status_frame)
+        jackpot_container.pack(side="left", fill="both", expand=True)
         self._current_jackpot_label = ttk.Label(
             jackpot_container,
             text=self.CURRENT_JACKPOT_LABEL_TEXT.format(value=0),
@@ -111,8 +108,6 @@ class ActivityLogTab:
             font=("Consolas", 12, "bold"),
         )
         self._current_jackpot_label.pack(anchor="w")
-
-        # Target Jackpot Display
         self._target_special_jackpot_label = ttk.Label(
             jackpot_container,
             text=self.TARGET_SPECIAL_JACKPOT_LABEL_TEXT.format(value=0),
@@ -121,30 +116,25 @@ class ActivityLogTab:
         )
         self._target_special_jackpot_label.pack(anchor="w", pady=(10, 0))
 
-        # Last Winners Display
-        last_winners_frame = ttk.LabelFrame(container, text="Last Winners", padding=10)
-        last_winners_frame.pack(fill="x", pady=(0, 10))
-
-        last_winners_container = ttk.Frame(last_winners_frame)
-        last_winners_container.pack(fill="x")
-
-        # Last Ultimate Prize Winner
-        self._last_ultimate_prize_label = ttk.Label(
-            last_winners_container,
-            text=self.LAST_ULTIMATE_PRIZE_WINNER_TEXT.format(nickname="None", value="0"),
+        # Winners Display
+        winners_frame = ttk.LabelFrame(row_container, text="Last Winners", padding=10)
+        winners_frame.pack(side="right", fill="both", expand=True, padx=(10, 0))
+        winners_container = ttk.Frame(winners_frame)
+        winners_container.pack(fill="x")
+        self._ultimate_prize_label = ttk.Label(
+            winners_container,
+            text=self.JACKPOT_WINNER_TEXT.format(nickname="Unknown", value="0"),
             foreground="#fbbf24",
             font=("Consolas", 11, "bold"),
         )
-        self._last_ultimate_prize_label.pack(anchor="w")
-
-        # Last Mini Prize Winner
-        self._last_mini_prize_label = ttk.Label(
-            last_winners_container,
-            text=self.LAST_MINI_PRIZE_WINNER_TEXT.format(nickname="None", value="0"),
+        self._ultimate_prize_label.pack(anchor="w")
+        self._mini_prize_label = ttk.Label(
+            winners_container,
+            text=self.MINI_JACKPOT_WINNER_TEXT.format(nickname="Unknown", value="0"),
             foreground="#34d399",
             font=("Consolas", 11, "bold"),
         )
-        self._last_mini_prize_label.pack(anchor="w", pady=(10, 0))
+        self._mini_prize_label.pack(anchor="w", pady=(10, 0))
 
         # Messages Tab Control
         messages_frame = ttk.LabelFrame(container, text="Messages", padding=10)
@@ -164,42 +154,6 @@ class ActivityLogTab:
 
         # Setup focus handling to prevent text selection issues
         self._setup_focus_handling()
-
-    def _setup_focus_handling(self) -> None:
-        self._focus_after_id: Optional[str] = None
-
-        def _schedule_focus_current_tab() -> None:
-            def _focus_current_tab() -> None:
-                try:
-                    current = self._notebook.nametowidget(self._notebook.select())
-                    if current and isinstance(current, (tk.Frame, ttk.Frame)):
-                        current.focus_set()
-                except Exception:
-                    pass
-
-            if self._focus_after_id:
-                try:
-                    self._frame.after_cancel(self._focus_after_id)
-                except Exception:
-                    pass
-                finally:
-                    self._focus_after_id = None
-
-            self._focus_after_id = self._frame.after(10, _focus_current_tab)
-
-        def _on_tab_changed(_: object) -> None:
-            try:
-                current = self._notebook.nametowidget(self._notebook.select())
-                if current and isinstance(current, (tk.Frame, ttk.Frame)):
-                    current.focus_set()
-            except Exception:
-                pass
-
-            _schedule_focus_current_tab()
-
-        self._notebook.bind("<<NotebookTabChanged>>", _on_tab_changed)
-        self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
-        self._frame.after_idle(_schedule_focus_current_tab)
 
     def _create_message_tab(self, tab_name: str, display_name: str) -> None:
         tab_frame = ttk.Frame(self._notebook)
@@ -241,3 +195,39 @@ class ActivityLogTab:
 
         # Store tab information
         self._message_tabs[tab_name] = {"frame": tab_frame, "text_widget": text_widget, "scrollbar": scrollbar}
+
+    def _setup_focus_handling(self) -> None:
+        self._focus_after_id: Optional[str] = None
+
+        def _schedule_focus_current_tab() -> None:
+            def _focus_current_tab() -> None:
+                try:
+                    current = self._notebook.nametowidget(self._notebook.select())
+                    if current and isinstance(current, (tk.Frame, ttk.Frame)):
+                        current.focus_set()
+                except Exception:
+                    pass
+
+            if self._focus_after_id:
+                try:
+                    self._frame.after_cancel(self._focus_after_id)
+                except Exception:
+                    pass
+                finally:
+                    self._focus_after_id = None
+
+            self._focus_after_id = self._frame.after(10, _focus_current_tab)
+
+        def _on_tab_changed(_: object) -> None:
+            try:
+                current = self._notebook.nametowidget(self._notebook.select())
+                if current and isinstance(current, (tk.Frame, ttk.Frame)):
+                    current.focus_set()
+            except Exception:
+                pass
+
+            _schedule_focus_current_tab()
+
+        self._notebook.bind("<<NotebookTabChanged>>", _on_tab_changed)
+        self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
+        self._frame.after_idle(_schedule_focus_current_tab)

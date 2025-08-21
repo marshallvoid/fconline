@@ -13,12 +13,7 @@ class NotificationIcon:
         self._notifications: List[Tuple[str, str, str, bool]] = []
         self._menu_window: Optional[tk.Toplevel] = None
 
-        try:
-            config = UserConfigManager.load_configs()
-            self._notifications = config.notifications
-
-        except Exception:
-            self._notifications = []
+        self._load_notifications_from_config()
 
         self._build()
 
@@ -35,15 +30,6 @@ class NotificationIcon:
         self._notifications.clear()
         self._update_icon()
         self._save_notifications_to_config()
-
-    def _save_notifications_to_config(self) -> None:
-        try:
-            config = UserConfigManager.load_configs()
-            config.notifications = self._notifications
-            UserConfigManager.save_configs(config)
-
-        except Exception:
-            pass
 
     def _build(self) -> None:
         self._frame: ttk.Frame = ttk.Frame(self._parent)
@@ -84,7 +70,12 @@ class NotificationIcon:
             except tk.TclError:
                 pass
 
-        self._mark_all_as_seen()
+        # Mark all notifications as seen
+        for i in range(len(self._notifications)):
+            nickname, jackpot_value, timestamp, _ = self._notifications[i]
+            self._notifications[i] = (nickname, jackpot_value, timestamp, True)
+        self._save_notifications_to_config()
+
         if self._count_label.winfo_exists():
             self._count_label.pack_forget()
 
@@ -225,12 +216,6 @@ class NotificationIcon:
         close_btn: ttk.Button = ttk.Button(button_frame, text="Close", command=self._menu_window.destroy)
         close_btn.pack(side="right")
 
-    def _mark_all_as_seen(self) -> None:
-        for i in range(len(self._notifications)):
-            nickname, jackpot_value, timestamp, _ = self._notifications[i]
-            self._notifications[i] = (nickname, jackpot_value, timestamp, True)
-        self._save_notifications_to_config()
-
     def _update_icon(self) -> None:
         unread_count: int = sum(1 for _, _, _, is_seen in self._notifications if not is_seen)
 
@@ -256,3 +241,20 @@ class NotificationIcon:
 
         if self._menu_window:
             self._menu_window.destroy()
+
+    def _load_notifications_from_config(self) -> None:
+        try:
+            config = UserConfigManager.load_configs()
+            self._notifications = config.notifications
+
+        except Exception:
+            self._notifications = []
+
+    def _save_notifications_to_config(self) -> None:
+        try:
+            config = UserConfigManager.load_configs()
+            config.notifications = self._notifications
+            UserConfigManager.save_configs(config)
+
+        except Exception:
+            pass

@@ -28,7 +28,7 @@ class WebsocketHandler:
         current_jackpot: int,
         target_special_jackpot: int,
         close_when_jackpot_won: bool,
-        add_message: Optional[Callable[[str, str], None]] = None,
+        add_message: Optional[Callable[[MessageTag, str], None]] = None,
         add_notification: Optional[Callable[[str, str], None]] = None,
         update_current_jackpot: Optional[Callable[[int], None]] = None,
         update_last_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
@@ -150,6 +150,8 @@ class WebsocketHandler:
         try:
             match kind:
                 case "jackpot_value":
+                    md.should_execute_callback(self._add_message, MessageTag.WEBSOCKET, f"Jackpot value: {value}")
+
                     # Handle real-time jackpot value updates
                     new_value = int(value)
                     prev_value = self._current_jackpot
@@ -200,16 +202,13 @@ class WebsocketHandler:
                         md.should_execute_callback(self._update_last_mini_prize_winner, nickname, str(value))
 
                     # Determine message tag based on jackpot type and winner
-                    tag = (
-                        MessageTag.JACKPOT
-                        if is_jackpot and is_me
-                        else MessageTag.OTHER_PLAYER if not is_me else MessageTag.MINI_JACKPOT
-                    )
+                    tag = MessageTag.OTHER_PLAYER
                     prefix = "You" if is_me else f"User '{nickname}'"
                     suffix = "Ultimate Prize" if is_jackpot else "Mini Prize"
                     msg = f"{prefix} won {suffix}: {value}"
 
                     if is_me:
+                        tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT
                         # Play sound notification and show notification for user wins
                         audio_name = "coin-1" if is_jackpot else "coin-2"
                         md.should_execute_callback(self._add_notification, nickname, value)
@@ -221,7 +220,7 @@ class WebsocketHandler:
                     logger.warning("Unknown event type: {}", kind)
 
         except asyncio.CancelledError:
-            md.should_execute_callback(self._add_message, MessageTag.WARNING, "Spin aborted: jackpot reset/drop")
+            logger.warning("Spin aborted: jackpot reset/drop")
 
         except Exception as e:
             logger.error(f"Spin API error: {e}")
@@ -247,7 +246,7 @@ class WebsocketHandler:
                 await self._fconline_client.spin(spin_type=self._spin_action, payment_type=1)
 
         except asyncio.CancelledError:
-            md.should_execute_callback(self._add_message, MessageTag.WARNING, "Spin aborted: jackpot reset/drop")
+            logger.warning("Spin aborted: jackpot reset/drop")
 
         except Exception as e:
             logger.error(f"Spin API error: {e}")

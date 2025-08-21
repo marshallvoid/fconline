@@ -43,7 +43,7 @@ class MainTool:
         self._req_height: int = 0
 
         # Callback functions for UI updates and notifications
-        self._add_message: Optional[Callable[[str, str], None]] = None
+        self._add_message: Optional[Callable[[MessageTag, str], None]] = None
         self._add_notification: Optional[Callable[[str, str], None]] = None
         self._update_current_jackpot: Optional[Callable[[int], None]] = None
         self._update_last_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None

@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Callable, List
 
 
@@ -15,6 +15,7 @@ class UserSettingsTab:
         close_when_jackpot_won_var: tk.BooleanVar,
         spin_actions: List[str],
         on_spin_action_changed: Callable[[], None],
+        on_save_account: Callable[[str, str], None],
     ) -> None:
         self._frame = ttk.Frame(parent)
         self._title = title
@@ -25,6 +26,7 @@ class UserSettingsTab:
         self._close_when_jackpot_won_var = close_when_jackpot_won_var
         self._spin_actions = spin_actions
         self._on_spin_action_changed = on_spin_action_changed
+        self._on_save_account = on_save_account
 
         self._build()
 
@@ -43,6 +45,7 @@ class UserSettingsTab:
         self._password_entry.config(state=state)
         self._target_special_jackpot_entry.config(state=state)
         self._close_when_jackpot_won_checkbox.config(state=state)
+        self._save_account_btn.config(state=state)
 
         for radio_btn in self._radio_buttons:
             radio_btn.config(state=state)
@@ -86,6 +89,18 @@ class UserSettingsTab:
         )
         self._target_special_jackpot_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
+        # Save Account Button - moved here, right below Target Special Jackpot
+        save_account_frame = ttk.Frame(container)
+        save_account_frame.pack(fill="x", pady=(10, 0))
+
+        self._save_account_btn = ttk.Button(
+            save_account_frame,
+            text="Save Account",
+            command=self._save_account,
+            style="Accent.TButton",
+        )
+        self._save_account_btn.pack(anchor="e")
+
         # Close when won checkboxes
         close_options_frame = ttk.LabelFrame(container, text="Auto Close Options", padding=10)
         close_options_frame.pack(fill="x", pady=(0, 10))
@@ -118,3 +133,20 @@ class UserSettingsTab:
             )
             radio_btn.pack(side="left", padx=(0, 20))
             self._radio_buttons.append(radio_btn)
+
+    def _save_account(self) -> None:
+        username = self._username_var.get().strip()
+        password = self._password_var.get().strip()
+
+        if not username:
+            messagebox.showerror("Error", "Username is required to save account!")
+            return
+
+        if not password:
+            messagebox.showerror("Error", "Password is required to save account!")
+            return
+
+        # Call the callback to save the account
+        self._on_save_account(username, password)
+
+        messagebox.showinfo("Success", f"Account '{username}' saved successfully!")
