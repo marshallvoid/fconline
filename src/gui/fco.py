@@ -2,7 +2,7 @@ import asyncio
 import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
-from typing import Any, Dict, Optional, TypedDict
+from typing import Any, Dict, Optional
 
 import darkdetect
 import sv_ttk
@@ -17,11 +17,6 @@ from src.utils import files
 from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME
 from src.utils.platforms import PlatformManager
 from src.utils.user_config import UserConfigManager
-
-
-class RunningTool(TypedDict):
-    tool: MainTool
-    thread: threading.Thread
 
 
 class MainWindow:
@@ -49,7 +44,7 @@ class MainWindow:
         # Track per-account running tool instances
         configs = UserConfigManager.load_configs()
         self._selected_event = configs.event or list(EVENT_CONFIGS_MAP.keys())[0]
-        self._running_tools: Dict[str, RunningTool] = {}
+        self._running_tools: Dict[str, MainTool] = {}
 
         self._setup_ui()
 
@@ -57,8 +52,9 @@ class MainWindow:
         logger.info(f"Running {PROGRAM_NAME}")
 
         def on_close() -> None:
-            for tool in self._running_tools.values():
-                tool["tool"].update_configs(is_running=False)
+            for running_tool in self._running_tools.values():
+                running_tool.update_configs(is_running=False)
+                asyncio.run(running_tool.close())
 
             self._root.destroy()
 
@@ -127,15 +123,12 @@ class MainWindow:
         self._notification_icon.frame.pack(side="right")
 
     def _setup_event_selection(self) -> None:
-        event_selection_frame = ttk.LabelFrame(self._root, padding=10)
+        event_selection_frame = ttk.LabelFrame(self._root, padding=10, text="Select Event:")
         event_selection_frame.pack(fill="x", padx=10, pady=(10, 5))
 
         event_var = tk.StringVar(value=self._selected_event)
 
         # Create dropdown menu for event selection
-        event_label = ttk.Label(event_selection_frame, text="Select Event:")
-        event_label.pack(anchor="w", pady=(0, 5))
-
         event_combobox = ttk.Combobox(
             event_selection_frame,
             textvariable=event_var,
@@ -234,7 +227,7 @@ class MainWindow:
             return
 
         # Build a dedicated tool instance for this account
-        tool = MainTool(
+        new_tool = MainTool(
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
             username=username,
             password=password,
@@ -246,8 +239,7 @@ class MainWindow:
         # Announce start in activity log
         spin_action_name = EVENT_CONFIGS_MAP[self._selected_event].spin_actions[spin_action - 1]
         message = (
-            f"Running account '{username}' with action '{spin_action_name}'"
-            f" until target '{target_special_jackpot:,}'"
+            f"Running account '{username}' with action '{spin_action_name}' until target '{target_special_jackpot:,}'"
         )
         self._activity_log_tab.add_message(tag=MessageTag.INFO, message=message)
 
@@ -287,7 +279,7 @@ class MainWindow:
 
             self._root.after(0, _cb)
 
-        tool.update_configs(
+        new_tool.update_configs(
             screen_width=self._root.winfo_screenwidth(),
             screen_height=self._root.winfo_screenheight(),
             req_width=self._root.winfo_reqwidth(),
@@ -313,33 +305,32 @@ class MainWindow:
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                loop.run_until_complete(tool.run())
+                loop.run_until_complete(new_tool.run())
 
             except Exception as error:
                 self._root.after(0, messagebox.showerror, "❌ Error", f"Account '{username}': {error}")
 
-            finally:
-                # Cleanup entry once finished
-                self._running_tools.pop(username, None)
-
-                # Reflect running state removal in UI
-                def _cb() -> None:
-                    self._accounts_tab.running_usernames = set(self._running_tools.keys())
-
-                self._root.after(0, _cb)
-
-        thread = threading.Thread(target=handle_account_task, daemon=True)
-        self._running_tools[username] = {"tool": tool, "thread": thread}
-        thread.start()
+        self._running_tools[username] = new_tool
+        threading.Thread(target=handle_account_task, daemon=True).start()
 
     def _stop_account(self, username: str) -> None:
-        entry = self._running_tools.get(username)
-        if not entry:
+        if username not in self._running_tools:
+            self._activity_log_tab.add_message(
+                tag=MessageTag.WARNING,
+                message=f"Account '{username}' is not running",
+            )
             return
 
-        tool = entry.get("tool")
-        if not tool:
-            return
+        running_tool = self._running_tools.pop(username)
+        running_tool.update_configs(is_running=False)
 
-        # Signal stop; MainTool.run will close resources in finally
-        tool.update_configs(is_running=False)
+        def handle_account_task() -> None:
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(running_tool.close())
+
+            except Exception as error:
+                self._root.after(0, messagebox.showerror, "❌ Error", f"Account '{username}': {error}")
+
+        threading.Thread(target=handle_account_task, daemon=True).start()
