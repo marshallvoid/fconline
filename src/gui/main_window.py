@@ -9,11 +9,12 @@ import darkdetect
 import sv_ttk
 
 from src.core.main_tool import MainTool
+from src.gui.accounts_tab import AccountsTab
 from src.gui.activity_log_tab import ActivityLogTab
 from src.gui.notification_icon import NotificationIcon
 from src.gui.user_settings_tab import UserSettingsTab
 from src.schemas.enums.message_tag import MessageTag
-from src.schemas.user_config import UserConfig
+from src.schemas.user_config import Account, UserConfig
 from src.utils import files
 from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME
 from src.utils.platforms import PlatformManager
@@ -171,6 +172,7 @@ class MainWindow:
                 close_when_jackpot_won_var=self._close_when_jackpot_won_var,
                 spin_actions=EVENT_CONFIGS_MAP[self._selected_event].spin_actions,
                 on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
+                on_save_account=self._save_account,
             )
 
             # Replace the content of the first tab without changing tab selection
@@ -215,7 +217,7 @@ class MainWindow:
         main_container = ttk.Frame(self._root)
         main_container.pack(fill="both", expand=True, padx=10, pady=5)
 
-        # Create notebook for user settings and activity log
+        # Create notebook for user settings, account management, and activity log
         self._notebook = ttk.Notebook(main_container, takefocus=False)
         self._notebook.pack(fill="both", expand=True)
 
@@ -230,8 +232,19 @@ class MainWindow:
             close_when_jackpot_won_var=self._close_when_jackpot_won_var,
             spin_actions=EVENT_CONFIGS_MAP[self._selected_event].spin_actions,
             on_spin_action_changed=lambda: setattr(self._tool_instance, "spin_action", self._spin_action_var.get()),
+            on_save_account=self._save_account,
         )
         self._notebook.add(self._event_tab.frame, text="User Settings")
+
+        # Create account management tab
+        saved_configs = UserConfigManager.load_configs()
+        self._account_management_tab = AccountsTab(
+            parent=self._notebook,
+            accounts=saved_configs.accounts,
+            on_account_use=self._use_account,
+            on_accounts_changed=self._on_accounts_changed,
+        )
+        self._notebook.add(self._account_management_tab.frame, text="Accounts")
 
         self._activity_log_tab = ActivityLogTab(parent=self._notebook)
         self._notebook.add(self._activity_log_tab.frame, text="Activity Log")
@@ -288,6 +301,61 @@ class MainWindow:
         x, y = self._root.winfo_screenwidth() - width, 0
         self._root.geometry(f"{width}x{height}+{x}+{y}")
 
+    def _save_account(self, username: str, password: str) -> None:
+        try:
+            # Load current configs
+            config = UserConfigManager.load_configs()
+
+            # Use the current target value from the UI for this account
+            current_target = self._target_special_jackpot_var.get()
+
+            # Check if account already exists
+            for existing_account in config.accounts:
+                if existing_account.username == username:
+                    # Update existing account password and target
+                    existing_account.password = password
+                    existing_account.target_special_jackpot = current_target
+                    break
+            else:
+                # Add new account
+                new_account = Account(
+                    username=username,
+                    password=password,
+                    target_special_jackpot=current_target,
+                )
+                config.accounts.append(new_account)
+
+            # Save updated configs
+            UserConfigManager.save_configs(config)
+
+            # Update the account management tab
+            self._account_management_tab.update_accounts(config.accounts)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save account: {e}")
+
+    def _use_account(self, username: str, password: str, target_special_jackpot: int) -> None:
+        """Use an account by filling it into User Settings"""
+        self._username_var.set(username)
+        self._password_var.set(password)
+        self._target_special_jackpot_var.set(target_special_jackpot)
+
+        # Switch to User Settings tab
+        self._notebook.select(0)
+
+    def _on_accounts_changed(self, accounts: list[Account]) -> None:
+        """Handle when accounts list is modified"""
+        try:
+            # Load current configs
+            config = UserConfigManager.load_configs()
+            config.accounts = accounts
+
+            # Save updated configs
+            UserConfigManager.save_configs(config)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to update accounts: {e}")
+
     def _handle_click_start(self) -> None:
         # Validate required username input
         if not self._username_var.get().strip():
@@ -341,13 +409,13 @@ class MainWindow:
         def update_last_ultimate_prize_winner(nickname: str, value: str) -> None:
             self._root.after(
                 0,
-                lambda: self._activity_log_tab.update_last_ultimate_prize_winner(nickname=nickname, value=value),
+                lambda: self._activity_log_tab.update_ultimate_prize_winner(nickname=nickname, value=value),
             )
 
         def update_last_mini_prize_winner(nickname: str, value: str) -> None:
             self._root.after(
                 0,
-                lambda: self._activity_log_tab.update_last_mini_prize_winner(nickname=nickname, value=value),
+                lambda: self._activity_log_tab.update_mini_prize_winner(nickname=nickname, value=value),
             )
 
         def close_browser() -> None:
@@ -426,8 +494,12 @@ class MainWindow:
         self._event_combobox.config(state="disabled" if is_running else "readonly")
 
         self._event_tab.set_enabled(enabled=not is_running)
+        self._account_management_tab.set_enabled(enabled=not is_running)
 
     def _save_configs(self) -> None:
+        # Load current configs to preserve accounts and notifications
+        current_config = UserConfigManager.load_configs()
+
         UserConfigManager.save_configs(
             config=UserConfig(
                 event=self._selected_event,
@@ -436,5 +508,7 @@ class MainWindow:
                 spin_action=self._spin_action_var.get(),
                 target_special_jackpot=self._target_special_jackpot_var.get(),
                 close_when_jackpot_won=self._close_when_jackpot_won_var.get(),
+                accounts=current_config.accounts,
+                notifications=current_config.notifications,
             )
         )

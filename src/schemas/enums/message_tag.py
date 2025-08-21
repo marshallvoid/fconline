@@ -45,5 +45,8 @@ class MessageTag(Enum):
         if self.is_system:
             return "System"
 
+        if self.is_websocket:
+            return "Websocket"
+
         msg = f"Invalid message tag: {self}"
         raise ValueError(msg)

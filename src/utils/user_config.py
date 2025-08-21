@@ -29,6 +29,33 @@ class UserConfigManager:
             pass
 
     @classmethod
+    def load_configs(cls) -> UserConfig:
+        config = UserConfig()
+
+        try:
+            config_file = os.path.join(cls._get_config_data_directory(), "configs.json")
+            if not os.path.exists(config_file):
+                return config
+
+            with open(config_file, "r", encoding="utf-8") as f:
+                encrypted_config = json.load(f)
+
+            # Handle legacy configs that might not have accounts field
+            if "accounts" not in encrypted_config:
+                encrypted_config["accounts"] = []
+
+            config = UserConfig.model_validate(encrypted_config)
+            config.username = cls._decrypt_data(value=config.username)
+            config.password = cls._decrypt_data(value=config.password)
+
+            return config
+
+        except Exception:
+            pass
+
+        return config
+
+    @classmethod
     def _encrypt_data(cls, value: Optional[str] = None) -> str:
         if not value:
             return ""
@@ -42,29 +69,6 @@ class UserConfigManager:
         except Exception:
             # Fallback to simple base64 encoding if encryption fails
             return base64.urlsafe_b64encode(value.encode()).decode()
-
-    @classmethod
-    def load_configs(cls) -> UserConfig:
-        config = UserConfig()
-
-        try:
-            config_file = os.path.join(cls._get_config_data_directory(), "configs.json")
-            if not os.path.exists(config_file):
-                return config
-
-            with open(config_file, "r", encoding="utf-8") as f:
-                encrypted_config = json.load(f)
-
-            config = UserConfig.model_validate(encrypted_config)
-            config.username = cls._decrypt_data(value=config.username)
-            config.password = cls._decrypt_data(value=config.password)
-
-            return config
-
-        except Exception:
-            pass
-
-        return config
 
     @classmethod
     def _decrypt_data(cls, value: Optional[str] = None) -> str:

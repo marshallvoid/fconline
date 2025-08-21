@@ -18,7 +18,7 @@ class FCOnlineClient:
         base_url: str,
         user_endpoint: str,
         spin_endpoint: str,
-        add_message: Optional[Callable[[str, str], None]],
+        add_message: Optional[Callable[[MessageTag, str], None]],
         update_last_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
         update_last_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
     ) -> None:
@@ -79,27 +79,16 @@ class FCOnlineClient:
                         f"Get user info successfully for user '{username}'",
                     )
 
-                    # Display recent jackpot winners for context
+                    # Update last ultimate prize winner display
                     jackpot_billboard = user_response.payload.jackpot_billboard
                     md.should_execute_callback(
-                        self._add_message,
-                        MessageTag.OTHER_PLAYER,
-                        f"Last user won Ultimate Prize: {jackpot_billboard.nickname} ({jackpot_billboard.value})",
-                    )
-
-                    # Update last ultimate prize winner display
-                    md.should_execute_callback(
-                        self._update_last_ultimate_prize_winner, jackpot_billboard.nickname, jackpot_billboard.value
-                    )
-
-                    mini_jackpot_billboard = user_response.payload.mini_jackpot_billboard
-                    md.should_execute_callback(
-                        self._add_message,
-                        MessageTag.OTHER_PLAYER,
-                        f"Last user won Mini Prize: {mini_jackpot_billboard.nickname} ({mini_jackpot_billboard.value})",
+                        self._update_last_ultimate_prize_winner,
+                        jackpot_billboard.nickname,
+                        jackpot_billboard.value,
                     )
 
                     # Update last mini prize winner display
+                    mini_jackpot_billboard = user_response.payload.mini_jackpot_billboard
                     md.should_execute_callback(
                         self._update_last_mini_prize_winner,
                         mini_jackpot_billboard.nickname,

@@ -17,7 +17,7 @@ class LoginHandler:
         event_config: EventConfig,
         username: str,
         password: str,
-        add_message: Optional[Callable[[str, str], None]] = None,
+        add_message: Optional[Callable[[MessageTag, str], None]] = None,
     ) -> None:
         self._page = page
         self._event_config = event_config
