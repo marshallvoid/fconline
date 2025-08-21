@@ -19,16 +19,18 @@ class FCOnlineClient:
         user_endpoint: str,
         spin_endpoint: str,
         add_message: Optional[Callable[[MessageTag, str], None]],
-        update_last_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
-        update_last_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
+        update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
+        update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self._page = page
+
         self._base_url = base_url
         self._user_endpoint = user_endpoint
         self._spin_endpoint = spin_endpoint
+
         self._add_message = add_message
-        self._update_last_ultimate_prize_winner = update_last_ultimate_prize_winner
-        self._update_last_mini_prize_winner = update_last_mini_prize_winner
+        self._update_ultimate_prize_winner = update_ultimate_prize_winner
+        self._update_mini_prize_winner = update_mini_prize_winner
 
         # HTTP request configuration extracted from browser session
         self._cookies: Dict[str, str] = {}
@@ -82,7 +84,7 @@ class FCOnlineClient:
                     # Update last ultimate prize winner display
                     jackpot_billboard = user_response.payload.jackpot_billboard
                     md.should_execute_callback(
-                        self._update_last_ultimate_prize_winner,
+                        self._update_ultimate_prize_winner,
                         jackpot_billboard.nickname,
                         jackpot_billboard.value,
                     )
@@ -90,7 +92,7 @@ class FCOnlineClient:
                     # Update last mini prize winner display
                     mini_jackpot_billboard = user_response.payload.mini_jackpot_billboard
                     md.should_execute_callback(
-                        self._update_last_mini_prize_winner,
+                        self._update_mini_prize_winner,
                         mini_jackpot_billboard.nickname,
                         mini_jackpot_billboard.value,
                     )

@@ -5,55 +5,64 @@ from typing import Optional
 
 from cryptography.fernet import Fernet
 
-from src.schemas.user_config import UserConfig
+from src.schemas.configs import Configs
 from src.utils.platforms import PlatformManager
 
 
 class UserConfigManager:
     @classmethod
-    def save_configs(cls, config: UserConfig) -> None:
+    def load_configs(cls) -> Configs:
         try:
-            # Encrypt sensitive fields and combine with other config data
-            encrypted_config = {
-                "username": cls._encrypt_data(value=config.username),
-                "password": cls._encrypt_data(value=config.password),
-                **config.model_dump(exclude={"username", "password"}),
-            }
+            configs_file = os.path.join(cls._get_config_data_directory(), "configs.json")
+            if not os.path.exists(configs_file):
+                return Configs()
 
-            # Write encrypted config to JSON file
-            config_file = os.path.join(cls._get_config_data_directory(), "configs.json")
-            with open(config_file, "w", encoding="utf-8") as f:
-                json.dump(encrypted_config, f, indent=2, ensure_ascii=False)
+            with open(configs_file, "r", encoding="utf-8") as f:
+                encrypted_configs = json.load(f)
+
+            if "accounts" in encrypted_configs and isinstance(encrypted_configs["accounts"], list):
+                encrypted_configs["accounts"] = [
+                    {
+                        **account,
+                        "username": cls._decrypt_data(value=account.get("username")),
+                        "password": cls._decrypt_data(value=account.get("password")),
+                    }
+                    for account in encrypted_configs["accounts"]
+                ]
+
+            configs = Configs.model_validate(encrypted_configs)
+
+            return configs
 
         except Exception:
             pass
+
+        return Configs()
 
     @classmethod
-    def load_configs(cls) -> UserConfig:
-        config = UserConfig()
-
+    def save_configs(cls, configs: Configs) -> None:
         try:
+            encrypted_accounts = [
+                {
+                    "username": cls._encrypt_data(value=account.username),
+                    "password": cls._encrypt_data(value=account.password),
+                    **account.model_dump(exclude={"username", "password"}),
+                }
+                for account in configs.accounts
+            ]
+
+            encrypted_configs = {
+                "event": configs.event,
+                "accounts": encrypted_accounts,
+                "notifications": [notification.model_dump() for notification in configs.notifications],
+            }
+
             config_file = os.path.join(cls._get_config_data_directory(), "configs.json")
-            if not os.path.exists(config_file):
-                return config
-
-            with open(config_file, "r", encoding="utf-8") as f:
-                encrypted_config = json.load(f)
-
-            # Handle legacy configs that might not have accounts field
-            if "accounts" not in encrypted_config:
-                encrypted_config["accounts"] = []
-
-            config = UserConfig.model_validate(encrypted_config)
-            config.username = cls._decrypt_data(value=config.username)
-            config.password = cls._decrypt_data(value=config.password)
-
-            return config
+            with open(config_file, "w", encoding="utf-8") as f:
+                json.dump(encrypted_configs, f, indent=2, ensure_ascii=False)
 
         except Exception:
             pass
-
-        return config
 
     @classmethod
     def _encrypt_data(cls, value: Optional[str] = None) -> str:
