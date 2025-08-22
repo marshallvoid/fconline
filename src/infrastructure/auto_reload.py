@@ -1,92 +1,136 @@
 import os
+import sys
+import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Optional
+
+from loguru import logger
 
 try:
-    from watchdog.events import FileSystemEvent, FileSystemEventHandler
+    from watchdog.events import FileSystemEventHandler
     from watchdog.observers import Observer
 
     WATCHDOG_AVAILABLE = True
-
 except ImportError:
     WATCHDOG_AVAILABLE = False
 
 
-class AutoReloadHandler(FileSystemEventHandler):
-    """Handles automatic reloading of Python files during development."""
-
-    def __init__(self, callback: Callable[[], None], watch_paths: Optional[List[str]] = None) -> None:
-        """
-        Initialize the auto-reload handler.
-
-        Args:
-            callback: Function to call when files change
-            watch_paths: List of paths to watch for changes
-        """
+class FileChangeHandler(FileSystemEventHandler):
+    def __init__(self, callback: Callable[[], None], extensions: tuple = (".py",)) -> None:
         self.callback = callback
-        self.watch_paths = watch_paths or ["src"]
-        self.last_modified: Dict[Any, Any] = {}
-        self.observer = Observer()
+        self.extensions = extensions
+        self.last_modified = {}
+        self.debounce_time = 0.5  # Seconds to wait before triggering reload
 
-    def on_modified(self, event: FileSystemEvent) -> None:
-        """
-        Handle file modification events.
-
-        Args:
-            event: File system event
-        """
+    def on_modified(self, event) -> None:
         if event.is_directory:
             return
 
-        file_path = Path(event.src_path)
-        if file_path.suffix != ".py":
+        file_path = event.src_path
+        if not any(file_path.endswith(ext) for ext in self.extensions):
             return
 
-        # Check if file was actually modified (not just accessed)
+        # Debounce rapid file changes
+        current_time = time.time()
+        if file_path in self.last_modified:
+            if current_time - self.last_modified[file_path] < self.debounce_time:
+                return
+
+        self.last_modified[file_path] = current_time
+
+        # Schedule callback after debounce period
+        threading.Timer(self.debounce_time, self.callback).start()
+
+
+class AutoReloader:
+    def __init__(self, callback: Callable[[], None]) -> None:
+        self.callback = callback
+        self.observer: Optional[Observer] = None  # type: ignore
+        self.watching = False
+
+    def start_watching(self, paths: Optional[list[str]] = None) -> bool:
+        """Start watching for file changes"""
+        if not WATCHDOG_AVAILABLE:
+            logger.warning("watchdog not available. Install with: pip install watchdog")
+            return False
+
+        if self.watching:
+            return True
+
+        if paths is None:
+            # Default to watching the src directory
+            current_dir = Path(__file__).parent
+            paths = [str(current_dir)]
+
         try:
-            current_mtime = os.path.getmtime(file_path)
-            last_mtime = self.last_modified.get(file_path, 0)
+            self.observer = Observer()
+            if not self.observer:
+                logger.error("Failed to create Observer instance")
+                return False
 
-            if current_mtime > last_mtime:
-                self.last_modified[file_path] = current_mtime
-                print(f"🔄 File changed: {file_path}")  # noqa: T201
-                time.sleep(0.1)  # Small delay to ensure file is fully written
-                self.callback()
+            handler = FileChangeHandler(self.callback)
 
-        except OSError:
-            pass  # File might be temporarily unavailable
+            for path in paths:
+                if os.path.exists(path):
+                    self.observer.schedule(handler, path, recursive=True)
+                    logger.info("Watching for changes in: {}", path)
 
-    def start(self) -> None:
-        """Start watching for file changes."""
-        for path in self.watch_paths:
-            if os.path.exists(path):
-                self.observer.schedule(self, path, recursive=True)
-                print(f"👀 Watching for changes in: {path}")  # noqa: T201
+            self.observer.start()
+            self.watching = True
+            return True
 
-        self.observer.start()
+        except Exception as e:
+            logger.error("Failed to start file watcher: {}", e)
+            return False
 
-    def stop(self) -> None:
-        """Stop watching for file changes."""
-        self.observer.stop()
-        self.observer.join()
+    def stop_watching(self) -> None:
+        """Stop watching for file changes"""
+        if self.observer and self.watching:
+            self.observer.stop()
+            self.observer.join()
+            self.watching = False
+            logger.info("Stopped watching for file changes")
+
+    def restart_application(self) -> None:
+        """Restart the current Python application"""
+        logger.info("Restarting application...")
+
+        # Stop watching before restart
+        self.stop_watching()
+
+        # Get current script path and arguments
+        script_path = sys.argv[0]
+        args = sys.argv[1:]
+
+        # Restart with same arguments
+        os.execv(sys.executable, [sys.executable, script_path] + args)
 
 
 def auto_reload(
+    watch_paths: Optional[list[str]] = None,
     callback: Optional[Callable[[], None]] = None,
-    watch_paths: Optional[List[str]] = None,
-) -> AutoReloadHandler:
+) -> AutoReloader:
     """
-    Create and start an auto-reload handler.
+    Enable auto-reload functionality
 
     Args:
-        callback: Function to call when files change
-        watch_paths: List of paths to watch for changes
+        callback: Function to call when files change (default: restart application)
+        watch_paths: List of paths to watch (default: current src directory)
 
     Returns:
-        AutoReloadHandler instance
+        AutoReloader instance
     """
-    callback = callback or (lambda: None)
-    handler = AutoReloadHandler(callback, watch_paths)
-    handler.start()
-    return handler
+    if callback is None:
+        # Create a dummy reloader for the static method call
+        dummy_reloader = AutoReloader(lambda: None)
+        callback = dummy_reloader.restart_application
+
+    reloader = AutoReloader(callback)
+
+    if reloader.start_watching(watch_paths):
+        logger.info("Auto-reload enabled! The application will restart when you save Python files.")
+    else:
+        logger.error("Could not enable auto-reload")
+
+    return reloader

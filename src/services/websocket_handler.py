@@ -12,6 +12,7 @@ from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
 from src.utils import methods as md
 from src.utils import sounds
+from src.utils.contants import EventConfig
 
 
 class WebsocketHandler:
@@ -22,10 +23,11 @@ class WebsocketHandler:
     def __init__(
         self,
         page: Page,
+        event_config: EventConfig,
         username: str,
         spin_action: int,
-        current_jackpot: int,
         target_special_jackpot: int,
+        current_jackpot: int,
         on_account_won: Optional[Callable[[str], None]] = None,
         on_add_message: Optional[Callable[[MessageTag, str], None]] = None,
         on_add_notification: Optional[Callable[[str, str], None]] = None,
@@ -34,11 +36,11 @@ class WebsocketHandler:
         on_update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self._page = page
-
+        self._event_config = event_config
         self._username = username
         self._spin_action = spin_action
-        self._current_jackpot = current_jackpot
         self._target_special_jackpot = target_special_jackpot
+        self._current_jackpot = current_jackpot
 
         self._on_account_won = on_account_won
         self._on_add_message = on_add_message
@@ -135,11 +137,12 @@ class WebsocketHandler:
                 return None
 
             etype = content.get("type")
-            value = content.get("value")
+            value = content.get("value") or content.get("data", {}).get("jackpot_prize")
+
             if not isinstance(etype, str) or not isinstance(value, (int, str)):
                 return None
 
-            return etype, value, content.get("nickname", "")
+            return etype, value, next((content.get(key) for key in ("nickname", "account_name") if content.get(key) is not None), "")
 
         except json.JSONDecodeError:
             logger.info("🔌 WebSocket frame received but failed to parse JSON")
@@ -148,7 +151,9 @@ class WebsocketHandler:
     async def _handle_jackpot_event(self, kind: str, value: int | str, nickname: str = "") -> None:
         try:
             match kind:
-                case "jackpot_value":
+                case "jackpot_value" | "prize_change":
+                    md.should_execute_callback(self._on_add_message, MessageTag.WEBSOCKET, f"Jackpot value: {value}")
+
                     # Handle real-time jackpot value updates
                     new_value = int(value)
                     prev_value = self._current_jackpot
@@ -176,12 +181,8 @@ class WebsocketHandler:
                     md.should_execute_callback(self._on_update_current_jackpot, new_value)
 
                 case "jackpot" | "mini_jackpot":
-                    # Check if the winner is the current user
-                    try:
-                        user = self._user_info and self._user_info.payload.user
-                        is_me = bool(user and nickname and nickname.lower() == user.nickname.lower())
-                    except Exception:
-                        is_me = False
+                    # Stop auto spin when any jackpot is won by anyone
+                    self._cancel_spin_task()
 
                     is_jackpot = kind == "jackpot"
                     if is_jackpot:
@@ -189,32 +190,7 @@ class WebsocketHandler:
                         self._jackpot_epoch += 1
                         self._current_jackpot = 0
 
-                        # Update ultimate prize winner display
-                        md.should_execute_callback(self._on_update_ultimate_prize_winner, nickname, str(value))
-                    else:
-                        # Update mini prize winner display
-                        md.should_execute_callback(self._on_update_mini_prize_winner, nickname, str(value))
-
-                    # Determine message tag based on jackpot type and winner
-                    tag = MessageTag.OTHER_PLAYER
-                    prefix = "You" if is_me else f"User '{nickname}'"
-                    suffix = "Ultimate Prize" if is_jackpot else "Mini Prize"
-                    msg = f"{prefix} won {suffix}: {value}"
-
-                    if is_me:
-                        tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT
-                        # Play sound notification and show notification for user wins
-                        audio_name = "coin-1" if is_jackpot else "coin-2"
-                        md.should_execute_callback(self._on_add_notification, nickname, value)
-                        sounds.send_notification(msg, audio_name=audio_name)
-
-                        # Notify that this account has won
-                        md.should_execute_callback(self._on_account_won, self._username)
-
-                    md.should_execute_callback(self._on_add_message, tag, msg)
-
-                    # Stop auto spin when any jackpot is won by anyone
-                    self._cancel_spin_task()
+                    self._check_winner(is_jackpot=is_jackpot, target_nickname=nickname, target_value=value)
 
                 case _:
                     logger.warning("Unknown event type: {}", kind)
@@ -243,7 +219,7 @@ class WebsocketHandler:
                     return
 
                 # Execute the spin operation
-                await self._fconline_client.spin(spin_type=self._spin_action, payment_type=1)
+                await self._fconline_client.spin(spin_type=self._spin_action, params=self._event_config.params)
 
         except asyncio.CancelledError:
             logger.warning("Spin aborted: jackpot reset/drop")
@@ -254,6 +230,41 @@ class WebsocketHandler:
 
         finally:
             self._spin_task = None
+
+    def _check_winner(self, is_jackpot: bool, target_nickname: str, target_value: int | str) -> None:
+        try:
+            user = self._user_info and self._user_info.payload and self._user_info.payload.user
+            nickname_lower = target_nickname.lower()
+            is_me = bool(
+                user
+                and (
+                    (user.nickname and nickname_lower == user.nickname.lower())
+                    or (user.account_name and nickname_lower == user.account_name.lower())
+                )
+            )
+
+        except Exception:
+            is_me = False
+
+        tag = MessageTag.OTHER_PLAYER
+        prefix = "You" if is_me else f"User '{target_nickname}'"
+        suffix = "Ultimate Prize" if is_jackpot else "Mini Prize"
+        msg = f"{prefix} won {suffix}: {str(target_value)}"
+
+        if is_me:
+            tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT
+            audio_name = "coin-1" if is_jackpot else "coin-2"
+
+            md.should_execute_callback(self._on_add_notification, target_nickname, str(target_value))
+            sounds.send_notification(msg, audio_name=audio_name)
+            md.should_execute_callback(self._on_account_won, self._username)
+
+        md.should_execute_callback(self._on_add_message, tag, msg)
+
+        if is_jackpot:
+            md.should_execute_callback(self._on_update_ultimate_prize_winner, target_nickname, str(target_value))
+        else:
+            md.should_execute_callback(self._on_update_mini_prize_winner, target_nickname, str(target_value))
 
     def _cancel_spin_task(self) -> None:
         if self._spin_task and not self._spin_task.done():

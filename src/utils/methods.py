@@ -20,9 +20,9 @@ def format_spin_block(spin_results: List["SpinResult"], jackpot_value: int) -> s
     return "\n".join(lines)
 
 
-def format_spin_block_compact(spin_results: List["SpinResult"], jackpot_value: int) -> str:
+def format_spin_block_compact(spin_results: List["SpinResult"]) -> str:
     counter = Counter(r.reward_name for r in spin_results)
-    lines: List[str] = [f"Auto-spin Results (jackpot: {jackpot_value})"]
+    lines: List[str] = ["Auto-spin Results"]
 
     for name, cnt in counter.items():
         suffix = f" × {cnt}" if cnt > 1 else ""

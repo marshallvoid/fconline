@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 import aiohttp
 from browser_use.browser.types import Page
@@ -28,9 +28,9 @@ class FCOnlineClient:
         self._user_endpoint = user_endpoint
         self._spin_endpoint = spin_endpoint
 
-        self._add_message = on_add_message
-        self._update_ultimate_prize_winner = on_update_ultimate_prize_winner
-        self._update_mini_prize_winner = on_update_mini_prize_winner
+        self._on_add_message = on_add_message
+        self._on_update_ultimate_prize_winner = on_update_ultimate_prize_winner
+        self._on_update_mini_prize_winner = on_update_mini_prize_winner
 
         # HTTP request configuration extracted from browser session
         self._cookies: Dict[str, str] = {}
@@ -59,7 +59,7 @@ class FCOnlineClient:
                 async with session.get(f"{self._base_url}/{self._user_endpoint}") as response:
                     if not response.ok:
                         md.should_execute_callback(
-                            self._add_message,
+                            self._on_add_message,
                             MessageTag.ERROR,
                             f"User API request failed with status: {response.status} for user '{username}'",
                         )
@@ -67,47 +67,39 @@ class FCOnlineClient:
 
                     # Parse and validate API response
                     user_response = UserReponse.model_validate(await response.json())
-                    if not user_response.is_successful:
+                    if not user_response.is_successful or user_response.payload.error_code:
                         md.should_execute_callback(
-                            self._add_message,
+                            self._on_add_message,
                             MessageTag.ERROR,
-                            f"User '{username}' not found",
+                            f"Get user info failed: {user_response.payload.error_code or 'Unknown error'}",
                         )
                         return None
 
                     md.should_execute_callback(
-                        self._add_message,
+                        self._on_add_message,
                         MessageTag.SUCCESS,
                         f"Get user info successfully for user '{username}'",
                     )
 
                     # Update last ultimate prize winner display
-                    jackpot_billboard = user_response.payload.jackpot_billboard
-                    md.should_execute_callback(
-                        self._update_ultimate_prize_winner,
-                        jackpot_billboard.nickname,
-                        jackpot_billboard.value,
-                    )
+                    if jackpot_billboard := user_response.payload.jackpot_billboard:
+                        nickname = jackpot_billboard.nickname
+                        value = jackpot_billboard.value
+                        md.should_execute_callback(self._on_update_ultimate_prize_winner, nickname, value)
 
                     # Update last mini prize winner display
-                    mini_jackpot_billboard = user_response.payload.mini_jackpot_billboard
-                    md.should_execute_callback(
-                        self._update_mini_prize_winner,
-                        mini_jackpot_billboard.nickname,
-                        mini_jackpot_billboard.value,
-                    )
+                    if mini_jackpot_billboard := user_response.payload.mini_jackpot_billboard:
+                        nickname = mini_jackpot_billboard.nickname
+                        value = mini_jackpot_billboard.value
+                        md.should_execute_callback(self._on_update_mini_prize_winner, nickname, value)
 
                     return user_response
 
         except Exception as e:
-            md.should_execute_callback(
-                self._add_message,
-                MessageTag.ERROR,
-                f"Failed to get user info for user '{username}': {e}",
-            )
+            md.should_execute_callback(self._on_add_message, MessageTag.ERROR, f"Failed to get user info: {e}")
             return None
 
-    async def spin(self, spin_type: int, payment_type: int = 1) -> Optional[SpinResponse]:
+    async def spin(self, spin_type: int, payment_type: int = 1, params: Dict[str, Any] = {}) -> None:
         try:
             async with aiohttp.ClientSession(
                 cookies=self._cookies,
@@ -116,43 +108,37 @@ class FCOnlineClient:
             ) as session:
                 # Prepare spin request payload
                 url = f"{self._base_url}/{self._spin_endpoint}"
-                payload = {"spin_type": spin_type, "payment_type": payment_type}
+                payload = {"spin_type": spin_type, "payment_type": payment_type, **params}
 
                 # Execute spin API call
                 async with session.post(url=url, json=payload) as response:
                     if not response.ok:
                         md.should_execute_callback(
-                            self._add_message,
+                            self._on_add_message,
                             MessageTag.ERROR,
                             f"Spin API request failed with status: {response.status}",
                         )
-                        return None
+                        return
 
                     # Parse and validate spin response
                     spin_response = SpinResponse.model_validate(await response.json())
                     if not spin_response.payload or not spin_response.is_successful or spin_response.error_code:
                         md.should_execute_callback(
-                            self._add_message,
+                            self._on_add_message,
                             MessageTag.ERROR,
                             f"Spin failed: {spin_response.error_code or 'Unknown error'}",
                         )
-                        return None
+                        return
 
                     # Display spin results to user
                     md.should_execute_callback(
-                        self._add_message,
+                        self._on_add_message,
                         MessageTag.REWARD,
-                        md.format_spin_block_compact(
-                            spin_results=spin_response.payload.spin_results,
-                            jackpot_value=spin_response.payload.jackpot_value,
-                        ),
+                        md.format_spin_block_compact(spin_results=spin_response.payload.spin_results),
                     )
 
-                    return spin_response
-
         except Exception as e:
-            md.should_execute_callback(self._add_message, MessageTag.ERROR, f"Failed to spin: {e}")
-            return None
+            md.should_execute_callback(self._on_add_message, MessageTag.ERROR, f"Failed to spin: {e}")
 
     async def _build_cookies(self) -> Dict[str, str]:
         try:
