@@ -18,6 +18,7 @@ class Account(BaseModel):
     target_special_jackpot: int = 19000
     close_when_jackpot_won: bool = True
     has_won: bool = False
+    marked_not_run: bool = False
 
 
 class Configs(BaseModel):

@@ -13,8 +13,8 @@ def send_notification(message: str, audio_name: str, loop_count: int = 1, loop_i
             default_notification_title=PROGRAM_NAME,
             default_notification_message=message,
             default_notification_application_name=PROGRAM_NAME,
-            default_notification_icon=files.resource_path("assets/icon.ico"),
-            default_notification_audio=files.resource_path(f"assets/sounds/{audio_name}.wav"),
+            default_notification_icon=files.get_resource_path("assets/icon.ico"),
+            default_notification_audio=files.get_resource_path(f"assets/sounds/{audio_name}.wav"),
         )
 
         for _ in range(loop_count):

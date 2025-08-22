@@ -6,7 +6,7 @@ from loguru import logger
 
 from src.schemas.enums.message_tag import MessageTag
 from src.services.websocket_handler import WebsocketHandler
-from src.utils import methods as md
+from src.utils import helpers as hp
 from src.utils.contants import EventConfig
 
 
@@ -39,18 +39,18 @@ class LoginHandler:
         self._websocket_handler = new_websocket_handler
 
     async def ensure_logged_in(self) -> None:
-        md.should_execute_callback(self._on_add_message, MessageTag.INFO, "Checking login status")
+        hp.maybe_callback(self._on_add_message, MessageTag.INFO, "Checking login status")
 
         # Check if user is already authenticated
         if await self._detect_login_status():
-            md.should_execute_callback(self._on_add_message, MessageTag.SUCCESS, "Already logged in")
+            hp.maybe_callback(self._on_add_message, MessageTag.SUCCESS, "Already logged in")
 
             if self._websocket_handler:
                 self._websocket_handler.is_logged_in = True
             return
 
         # Perform login if not already authenticated
-        md.should_execute_callback(self._on_add_message, MessageTag.WARNING, "Not logged in → performing login")
+        hp.maybe_callback(self._on_add_message, MessageTag.WARNING, "Not logged in → performing login")
         if not await self._perform_login():
             msg = "Login failed! Exiting..."
             raise Exception(msg)
@@ -59,7 +59,7 @@ class LoginHandler:
         if self._websocket_handler:
             self._websocket_handler.is_logged_in = True
         await self._ensure_base_url()
-        md.should_execute_callback(self._on_add_message, MessageTag.SUCCESS, "Login completed successfully")
+        hp.maybe_callback(self._on_add_message, MessageTag.SUCCESS, "Login completed successfully")
 
     async def _detect_login_status(self) -> bool:
         # If logout button is visible, user is logged in
@@ -78,28 +78,28 @@ class LoginHandler:
         try:
             # Open login form
             if not await self._click_if_present(self._event_config.login_btn_selector):
-                md.should_execute_callback(self._on_add_message, MessageTag.ERROR, "Login button not found")
+                hp.maybe_callback(self._on_add_message, MessageTag.ERROR, "Login button not found")
                 return False
             await self._page.wait_for_load_state("networkidle")
 
             # Fill username
             user_loc = self._page.locator(self._event_config.username_input_selector).first
             if await user_loc.count() == 0:
-                md.should_execute_callback(self._on_add_message, MessageTag.ERROR, "Username input field not found")
+                hp.maybe_callback(self._on_add_message, MessageTag.ERROR, "Username input field not found")
                 return False
             await user_loc.fill(self._username)
 
             # Fill password
             pass_loc = self._page.locator(self._event_config.password_input_selector).first
             if await pass_loc.count() == 0:
-                md.should_execute_callback(self._on_add_message, MessageTag.ERROR, "Password input field not found")
+                hp.maybe_callback(self._on_add_message, MessageTag.ERROR, "Password input field not found")
                 return False
             await pass_loc.fill(self._password)
 
             # Submit
             submit_loc = self._page.locator(self._event_config.submit_btn_selector).first
             if await submit_loc.count() == 0:
-                md.should_execute_callback(self._on_add_message, MessageTag.ERROR, "Submit button not found")
+                hp.maybe_callback(self._on_add_message, MessageTag.ERROR, "Submit button not found")
                 return False
             await submit_loc.click()
 
@@ -109,13 +109,13 @@ class LoginHandler:
                     return True
 
                 if self._page.is_closed():
-                    md.should_execute_callback(self._on_add_message, MessageTag.ERROR, "Page closed during login")
+                    hp.maybe_callback(self._on_add_message, MessageTag.ERROR, "Page closed during login")
                     return False
 
                 await asyncio.sleep(0.5)
 
         except Exception as e:
-            md.should_execute_callback(self._on_add_message, MessageTag.ERROR, f"Error performing login: {e}")
+            hp.maybe_callback(self._on_add_message, MessageTag.ERROR, f"Error performing login: {e}")
             return False
 
     async def _ensure_base_url(self) -> None:

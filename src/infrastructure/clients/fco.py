@@ -5,9 +5,11 @@ from browser_use.browser.types import Page
 from loguru import logger
 
 from src.schemas.enums.message_tag import MessageTag
+from src.schemas.reload_response import ReloadResponse
 from src.schemas.spin_response import SpinResponse
-from src.schemas.user_response import UserReponse
-from src.utils import methods as md
+from src.schemas.user_response import UserDetail, UserReponse
+from src.utils import helpers as hp
+from src.utils.contants import EventConfig
 from src.utils.requests import RequestManager
 
 
@@ -15,26 +17,26 @@ class FCOnlineClient:
     def __init__(
         self,
         page: Page,
-        base_url: str,
-        user_endpoint: str,
-        spin_endpoint: str,
+        event_config: EventConfig,
+        username: str,
         on_add_message: Optional[Callable[[MessageTag, str], None]],
-        on_update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
-        on_update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
+        on_update_user_info: Optional[Callable[[str, UserDetail], None]],
     ) -> None:
         self._page = page
-
-        self._base_url = base_url
-        self._user_endpoint = user_endpoint
-        self._spin_endpoint = spin_endpoint
+        self._event_config = event_config
+        self._username = username
 
         self._on_add_message = on_add_message
-        self._on_update_ultimate_prize_winner = on_update_ultimate_prize_winner
-        self._on_update_mini_prize_winner = on_update_mini_prize_winner
+        self._on_update_user_info = on_update_user_info
 
         # HTTP request configuration extracted from browser session
         self._cookies: Dict[str, str] = {}
         self._headers: Dict[str, str] = {}
+        self._user_info: Optional[UserReponse] = None
+
+        self._user_api = f"{self._event_config.base_url}/{self._event_config.user_endpoint}"
+        self._spin_api = f"{self._event_config.base_url}/{self._event_config.spin_endpoint}"
+        self._reload_api = f"{self._event_config.base_url}/{self._event_config.reload_endpoint}"
 
     @property
     def cookies(self) -> Dict[str, str]:
@@ -56,9 +58,9 @@ class FCOnlineClient:
                 connector=RequestManager.connector(),
             ) as session:
                 # Make API request to get user information
-                async with session.get(f"{self._base_url}/{self._user_endpoint}") as response:
+                async with session.get(self._user_api) as response:
                     if not response.ok:
-                        md.should_execute_callback(
+                        hp.maybe_callback(
                             self._on_add_message,
                             MessageTag.ERROR,
                             f"User API request failed with status: {response.status} for user '{username}'",
@@ -68,36 +70,65 @@ class FCOnlineClient:
                     # Parse and validate API response
                     user_response = UserReponse.model_validate(await response.json())
                     if not user_response.is_successful or user_response.payload.error_code:
-                        md.should_execute_callback(
+                        hp.maybe_callback(
                             self._on_add_message,
                             MessageTag.ERROR,
                             f"Get user info failed: {user_response.payload.error_code or 'Unknown error'}",
                         )
                         return None
 
-                    md.should_execute_callback(
+                    self._user_info = user_response
+                    hp.maybe_callback(
                         self._on_add_message,
                         MessageTag.SUCCESS,
                         f"Get user info successfully for user '{username}'",
                     )
 
-                    # Update last ultimate prize winner display
-                    if jackpot_billboard := user_response.payload.jackpot_billboard:
-                        nickname = jackpot_billboard.nickname
-                        value = jackpot_billboard.value
-                        md.should_execute_callback(self._on_update_ultimate_prize_winner, nickname, value)
-
-                    # Update last mini prize winner display
-                    if mini_jackpot_billboard := user_response.payload.mini_jackpot_billboard:
-                        nickname = mini_jackpot_billboard.nickname
-                        value = mini_jackpot_billboard.value
-                        md.should_execute_callback(self._on_update_mini_prize_winner, nickname, value)
-
                     return user_response
 
         except Exception as e:
-            md.should_execute_callback(self._on_add_message, MessageTag.ERROR, f"Failed to get user info: {e}")
+            hp.maybe_callback(self._on_add_message, MessageTag.ERROR, f"Failed to get user info: {e}")
             return None
+
+    async def reload_balance(self) -> None:
+        try:
+            async with aiohttp.ClientSession(
+                cookies=self._cookies,
+                headers=self._headers,
+                connector=RequestManager.connector(),
+            ) as session:
+                async with session.post(url=self._reload_api) as response:
+                    if not response.ok:
+                        hp.maybe_callback(
+                            self._on_add_message,
+                            MessageTag.ERROR,
+                            f"Reload balance API request failed with status: {response.status}",
+                        )
+                        return
+
+                    reload_response = ReloadResponse.model_validate(await response.json())
+                    if not reload_response.payload or not reload_response.is_successful or reload_response.error_code:
+                        hp.maybe_callback(
+                            self._on_add_message,
+                            MessageTag.ERROR,
+                            f"Reload balance failed: {reload_response.error_code or 'Unknown error'}",
+                        )
+                        return
+
+                    hp.maybe_callback(
+                        self._on_add_message,
+                        MessageTag.SUCCESS,
+                        f"Reload balance successfully for user '{self._username}'",
+                    )
+
+                    if self._user_info and (user_detail := self._user_info.payload.user):
+                        user_detail.fc = reload_response.payload.fc
+                        user_detail.mc = reload_response.payload.mc
+
+                        hp.maybe_callback(self._on_update_user_info, self._username, user_detail)
+
+        except Exception as e:
+            hp.maybe_callback(self._on_add_message, MessageTag.ERROR, f"Failed to reload balance: {e}")
 
     async def spin(self, spin_type: int, payment_type: int = 1, params: Dict[str, Any] = {}) -> None:
         try:
@@ -107,13 +138,12 @@ class FCOnlineClient:
                 connector=RequestManager.connector(),
             ) as session:
                 # Prepare spin request payload
-                url = f"{self._base_url}/{self._spin_endpoint}"
                 payload = {"spin_type": spin_type, "payment_type": payment_type, **params}
 
                 # Execute spin API call
-                async with session.post(url=url, json=payload) as response:
+                async with session.post(url=self._spin_api, json=payload) as response:
                     if not response.ok:
-                        md.should_execute_callback(
+                        hp.maybe_callback(
                             self._on_add_message,
                             MessageTag.ERROR,
                             f"Spin API request failed with status: {response.status}",
@@ -123,22 +153,21 @@ class FCOnlineClient:
                     # Parse and validate spin response
                     spin_response = SpinResponse.model_validate(await response.json())
                     if not spin_response.payload or not spin_response.is_successful or spin_response.error_code:
-                        md.should_execute_callback(
+                        hp.maybe_callback(
                             self._on_add_message,
                             MessageTag.ERROR,
                             f"Spin failed: {spin_response.error_code or 'Unknown error'}",
                         )
                         return
 
-                    # Display spin results to user
-                    md.should_execute_callback(
+                    hp.maybe_callback(
                         self._on_add_message,
                         MessageTag.REWARD,
-                        md.format_spin_block_compact(spin_results=spin_response.payload.spin_results),
+                        hp.format_spin_results_block(spin_results=spin_response.payload.spin_results),
                     )
 
         except Exception as e:
-            md.should_execute_callback(self._on_add_message, MessageTag.ERROR, f"Failed to spin: {e}")
+            hp.maybe_callback(self._on_add_message, MessageTag.ERROR, f"Failed to spin: {e}")
 
     async def _build_cookies(self) -> Dict[str, str]:
         try:
@@ -154,8 +183,8 @@ class FCOnlineClient:
             "x-csrftoken": self._cookies.get("csrftoken", ""),
             "Cookie": "; ".join([f"{name}={value}" for name, value in self._cookies.items()]),
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            "Referer": self._base_url,
-            "Origin": self._base_url,
+            "Referer": self._event_config.base_url,
+            "Origin": self._event_config.base_url,
             "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": "gzip, deflate, br, zstd",

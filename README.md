@@ -22,7 +22,6 @@ A Python-based automation tool for FC Online events featuring a modern GUI inter
 │   │       └── activity_log_tab.py # Real-time activity logging
 │   ├── infrastructure/
 │   │   ├── logger.py        # Logging configuration with Loguru
-│   │   └── auto_reload.py   # Development auto-reload functionality
 │   ├── utils/
 │   │   ├── credentials.py   # Secure credential management
 │   │   ├── contants.py      # Event configurations and constants
@@ -87,9 +86,6 @@ uv run python manage.py
 
 # Alternative entry point
 uv run python src/main.py
-
-# Development with auto-reload
-uv run python src/infrastructure/auto_reload.py
 ```
 
 #### CLI Application
@@ -182,9 +178,6 @@ uv sync --group dev
 
 # Install pre-commit hooks
 uv run pre-commit install
-
-# Run with auto-reload during development
-uv run python src/infrastructure/auto_reload.py
 ```
 
 ### Code Quality Tools
