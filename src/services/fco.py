@@ -66,6 +66,7 @@ class MainTool:
             # Setup websocket handler for real-time jackpot monitoring
             websocket_handler = WebsocketHandler(
                 page=self._page,
+                event_config=self._event_config,
                 username=self._username,
                 spin_action=self._spin_action,
                 current_jackpot=self._current_jackpot,
@@ -89,6 +90,8 @@ class MainTool:
             )
             login_handler.websocket_handler = websocket_handler
             await login_handler.ensure_logged_in()
+
+            await self._page.wait_for_load_state(state="networkidle")
 
             # Initialize API client and fetch user profile information
             fconline_client = FCOnlineClient(

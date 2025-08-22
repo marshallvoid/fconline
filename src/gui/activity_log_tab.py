@@ -13,7 +13,7 @@ class MessageTabInfo(TypedDict):
 
 
 class ActivityLogTab:
-    TAB_NAMES = ["All", "Game Events", "Rewards", "System"]
+    TAB_NAMES = ["All", "Game Events", "Rewards", "System", "WebSockets"]
 
     CURRENT_JACKPOT_LABEL_TEXT = "Current Jackpot: {value:,}"
     TARGET_SPECIAL_JACKPOT_LABEL_TEXT = "Target Special Jackpot: {value:,}"

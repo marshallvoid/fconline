@@ -2,9 +2,11 @@ import os
 import sys
 import tkinter as tk
 import traceback
+from pathlib import Path
 from tkinter import messagebox
 
 from loguru import logger
+from src.infrastructure.auto_reload import auto_reload
 
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
@@ -16,11 +18,14 @@ try:
         import src.infrastructure.logger  # noqa: F401
         from src.gui.fco import MainWindow
 
+        auto_reload(watch_paths=[str(Path(project_root) / "src")])
+
         # Create and run main application window
         app = MainWindow()
         app.run()
 
     if __name__ == "__main__":
+        auto_reload(watch_paths=[str(Path(project_root) / "src")])
         main()
 
 except ImportError as e:

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Any, Dict, List
 
 # Application name displayed in UI and notifications
 PROGRAM_NAME = "FC Online Automation Tool"
@@ -14,6 +14,8 @@ class EventConfig:
     user_endpoint: str = "api/user/get"
     spin_endpoint: str = "api/user/spin"
 
+    params: Dict[str, Any] = field(default_factory=dict)
+
     login_btn_selector: str = "a[href='/user/login']"
     logout_btn_selector: str = "a[href='/user/logout']"
     username_input_selector: str = "form input[type='text']"
@@ -26,12 +28,19 @@ class EventConfig:
 EVENT_CONFIGS_MAP: Dict[str, EventConfig] = {
     "Bi Lắc": EventConfig(
         tab_attr_name="_bilac_tab",
-        spin_actions=["Free Spin", "10 FC Spin", "190 FC Spin", "900 FC Spin"],
+        spin_actions=["10 FC Spin", "190 FC Spin", "900 FC Spin"],
         base_url="https://bilac.fconline.garena.vn",
     ),
     "Tỷ Phú": EventConfig(
         tab_attr_name="_typhu_tab",
         spin_actions=["20 FC Spin", "190 FC Spin", "900 FC Spin", "1800 FC Spin"],
         base_url="https://typhu.fconline.garena.vn",
+    ),
+    "Vòng Quanh Thế Giới": EventConfig(
+        tab_attr_name="_vqtg_tab",
+        spin_actions=["20 FC Spin", "190 FC Spin", "900 FC Spin"],
+        spin_endpoint="api/reward/spin",
+        params={"is_free": False, "use_topup_deal": False},
+        base_url="https://vqtg.fconline.garena.vn",
     ),
 }

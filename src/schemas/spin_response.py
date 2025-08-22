@@ -1,21 +1,17 @@
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
+
+SPIN_RESULT_ALIASES = ("spin_results", "receive_reward_infos")
+REWARD_NAME_ALIASES = ("reward_name", "item_name")
 
 
 class SpinResult(BaseModel):
-    reward_name: str
-    image: str
-    dice_result: Optional[int] = None
-    step_type: Optional[int] = None
-    extra_value: Optional[int] = None
-    accumulation_point: Optional[int] = None
-    spin_result_reward_id: Optional[int] = None
+    reward_name: str = Field(validation_alias=AliasChoices(*REWARD_NAME_ALIASES))
 
 
 class SpinPayload(BaseModel):
-    jackpot_value: int
-    spin_results: List[SpinResult]
+    spin_results: List[SpinResult] = Field(validation_alias=AliasChoices(*SPIN_RESULT_ALIASES))
 
 
 class SpinResponse(BaseModel):
