@@ -1,38 +1,27 @@
-import os
-import sys
-import tkinter as tk
-import traceback
-from pathlib import Path
-from tkinter import messagebox
-
-from loguru import logger
-from src.infrastructure.auto_reload import auto_reload
-
-project_root = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, project_root)
-
 try:
+    import os
+    import sys
+    import tkinter as tk
+    import traceback
+    from tkinter import messagebox
+
+    import src.infrastructure.logger  # noqa: F401
+    from loguru import logger
+    from src.gui.fco import MainWindow
+    from src.utils import files
 
     def main() -> None:
-        # Initialize logging infrastructure first
-        import src.infrastructure.logger  # noqa: F401
-        from src.gui.fco import MainWindow
-
         # Create and run main application window
         app = MainWindow()
         app.run()
 
     if __name__ == "__main__":
-        auto_reload(watch_paths=[str(Path(project_root) / "src")])
         main()
 
 except ImportError as e:
-    error_msg = (
-        f"Import error: {e}\nMake sure you have installed all required dependencies:\npip install -r requirements.txt"
-    )
-
+    error_msg = f"{e}\nMake sure you have installed all required dependencies:\npip install -r requirements.txt"
     logger.error(traceback.format_exc())
-    logger.error(error_msg)
+    logger.error(f"Import error: {error_msg}")
 
     root = tk.Tk()
     root.withdraw()
@@ -50,9 +39,7 @@ except Exception as e:
 
     # Also write to file as backup
     try:
-        from src.utils.user_config import UserConfigManager
-
-        config_dir = UserConfigManager._get_config_data_directory()
+        config_dir = files.get_config_data_directory()
         log_file = os.path.join(config_dir, "app_error.log")
         with open(log_file, "w", encoding="utf-8") as f:
             f.write(traceback.format_exc() + "\n")

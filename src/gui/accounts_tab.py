@@ -4,6 +4,8 @@ from typing import Any, Callable, Dict, List, Optional, Set
 
 from src.schemas.configs import Account
 from src.schemas.enums.account_tag import AccountTag
+from src.schemas.user_response import UserDetail
+from src.utils import helpers as hp
 from src.utils.contants import EVENT_CONFIGS_MAP
 from src.utils.user_config import UserConfigManager
 
@@ -24,6 +26,7 @@ class AccountsTab:
 
         self._accounts: List[Account] = self._load_accounts_from_config()
         self._running_usernames: Set[str] = set()
+        self._users_info: Dict[str, UserDetail] = {}
 
         self._build()
 
@@ -39,15 +42,6 @@ class AccountsTab:
     def selected_event(self, new_event: str) -> None:
         self._selected_event = new_event
 
-    @property
-    def running_usernames(self) -> Set[str]:
-        return self._running_usernames
-
-    @running_usernames.setter
-    def running_usernames(self, new_running_usernames: Set[str]) -> None:
-        self._running_usernames = new_running_usernames
-        self._refresh_accounts_list()
-
     def mark_account_as_won(self, username: str) -> None:
         account = next((a for a in self._accounts if a.username == username), None)
         if not account:
@@ -56,6 +50,14 @@ class AccountsTab:
         account.has_won = True
         self._save_accounts_to_config()
         self._refresh_accounts_list()
+
+    def update_user_info(self, username: str, user: UserDetail) -> None:
+        account = next((a for a in self._accounts if a.username == username), None)
+        if not account:
+            return
+
+        self._users_info[username] = user
+        self._update_info_display(account=account, is_running=username in self._running_usernames)
 
     def _build(self) -> None:
         container = ttk.Frame(self._frame)
@@ -75,22 +77,19 @@ class AccountsTab:
         main_content_frame.pack(fill="both", expand=True)
 
         # Left side: Accounts list frame
-        accounts_frame = ttk.LabelFrame(main_content_frame, text="Saved Accounts", padding=10)
-        accounts_frame.pack(side="left", fill="both", expand=True)
+        left_frame = ttk.LabelFrame(main_content_frame, text="Saved Accounts", padding=10)
+        left_frame.pack(side="left", fill="both", expand=True)
 
         # Configure columns for Treeview
         columns: Dict[str, Dict[str, Any]] = {
-            "Username": {"width": 220, "anchor": "w"},
+            "Username": {"width": 160, "anchor": "w"},
             "Target": {"width": 120, "anchor": "center"},
             "Spin Action": {"width": 120, "anchor": "center"},
             "Auto Close": {"width": 120, "anchor": "center"},
         }
 
-        # Calculate total width for visible columns
-        visible_width = columns["Username"]["width"] + columns["Target"]["width"]
-
         # Create a frame to constrain treeview width
-        tree_container = ttk.Frame(accounts_frame, width=visible_width)
+        tree_container = ttk.Frame(left_frame, width=300)
         tree_container.pack_propagate(False)  # Prevent frame from expanding
 
         self._accounts_tree = ttk.Treeview(
@@ -119,11 +118,11 @@ class AccountsTab:
             self._accounts_tree.column(column, **config)
 
         # Right side: Action buttons frame
-        action_buttons_frame = ttk.LabelFrame(main_content_frame, text="Actions", padding=10)
-        action_buttons_frame.pack(side="right", fill="y", padx=(10, 0))
+        right_frame = ttk.LabelFrame(main_content_frame, text="Actions", padding=10)
+        right_frame.pack(side="right", fill="y", padx=(10, 0))
 
         self._add_account_btn = ttk.Button(
-            action_buttons_frame,
+            right_frame,
             text="Add Account",
             style="Accent.TButton",
             width=15,
@@ -131,38 +130,42 @@ class AccountsTab:
         )
         self._add_account_btn.pack(fill="x", pady=(0, 20))
 
+        # Run All and Stop All buttons on the same row
+        control_all_container = ttk.Frame(right_frame)
+        control_all_container.pack(fill="x", pady=(0, 20))
+
         self._run_all_btn = ttk.Button(
-            action_buttons_frame,
+            control_all_container,
             text="Run All",
             style="Accent.TButton",
             width=15,
             state="normal",
             command=self._run_all_account,
         )
-        self._run_all_btn.pack(fill="x", pady=(0, 20))
+        self._run_all_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
         self._stop_all_btn = ttk.Button(
-            action_buttons_frame,
+            control_all_container,
             text="Stop All",
             style="Accent.TButton",
             width=15,
             state="disabled",
             command=self._stop_all_account,
         )
-        self._stop_all_btn.pack(fill="x", pady=(0, 20))
+        self._stop_all_btn.pack(side="right", fill="x", expand=True)
 
         # Reset Winners button
         self._reset_winners_btn = ttk.Button(
-            action_buttons_frame,
+            right_frame,
             text="Reset Winners",
             width=15,
             command=self._reset_winners,
         )
         self._reset_winners_btn.pack(fill="x", pady=(0, 20))
 
-        # Frame for Delete buttons
-        self._delete_frame = ttk.Frame(action_buttons_frame)
-        self._delete_frame.pack(fill="x")
+        # Frame for hidden buttons
+        self._hidden_frame = ttk.Frame(right_frame)
+        self._hidden_frame.pack(fill="x")
 
         # Bind selection event
         self._accounts_tree.bind("<<TreeviewSelect>>", self._on_account_selected)
@@ -176,7 +179,7 @@ class AccountsTab:
         selection = self._accounts_tree.selection()
 
         # Clear previous buttons
-        for widget in self._delete_frame.winfo_children():
+        for widget in self._hidden_frame.winfo_children():
             widget.destroy()
 
         if not selection:
@@ -196,47 +199,100 @@ class AccountsTab:
         if not selected_account:
             return
 
-        # Create Run/Edit/Delete buttons reflecting enabled state and running status
+        # Create buttons reflecting enabled state and running status
         is_running = selected_account.username in self._running_usernames
         is_winning = selected_account.has_won
+        is_marked_not_run = selected_account.marked_not_run
+
+        # Control buttons group (Run/Stop)
+        control_container = ttk.Frame(self._hidden_frame)
+        control_container.pack(fill="x", pady=(0, 10))
 
         run_btn = ttk.Button(
-            self._delete_frame,
+            control_container,
             text="Run",
             style="Accent.TButton",
             width=15,
-            state="disabled" if is_running or is_winning else "normal",
+            state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
             command=lambda: self._run_account(selected_account),
         )
-        run_btn.pack(fill="x", pady=(0, 10))
+        run_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
         stop_btn = ttk.Button(
-            self._delete_frame,
+            control_container,
             text="Stop",
             style="Accent.TButton",
             width=15,
             state="disabled" if not is_running else "normal",
             command=lambda: self._stop_account(selected_account.username),
         )
-        stop_btn.pack(fill="x", pady=(0, 10))
+        stop_btn.pack(side="right", fill="x", expand=True)
+
+        # Management buttons group (Mark/Edit)
+        management_container = ttk.Frame(self._hidden_frame)
+        management_container.pack(fill="x", pady=(0, 10))
+
+        mark_not_run_btn = ttk.Button(
+            management_container,
+            text="Unmark Not Run" if is_marked_not_run else "Mark Not Run",
+            width=15,
+            state="disabled" if is_running or is_winning else "normal",
+            command=lambda: self._toggle_mark_not_run(selected_account),
+        )
+        mark_not_run_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
         edit_btn = ttk.Button(
-            self._delete_frame,
+            management_container,
             text="Edit",
             width=15,
-            state="disabled" if is_running or is_winning else "normal",
+            state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
             command=lambda: self._edit_account(selected_account),
         )
-        edit_btn.pack(fill="x", pady=(0, 10))
+        edit_btn.pack(side="right", fill="x", expand=True)
 
+        # Delete button
         delete_btn = ttk.Button(
-            self._delete_frame,
+            self._hidden_frame,
             text="Delete",
             width=15,
-            state="disabled" if is_running or is_winning else "normal",
+            state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
             command=lambda: self._delete_account(selected_account),
         )
         delete_btn.pack(fill="x")
+
+        # Frame for browser and user information
+        self._info_frame = ttk.LabelFrame(self._hidden_frame, text="Information", padding=10)
+        self._info_frame.pack(fill="x", pady=(20, 0))
+
+        # Browser position info
+        self._browser_position_label = ttk.Label(
+            self._info_frame,
+            text="Browser Position: -",
+            font=("Arial", 14),
+            foreground="#6b7280",
+        )
+        self._browser_position_label.pack(anchor="w", pady=(0, 5))
+
+        # User info
+        self._user_info_label = ttk.Label(
+            self._info_frame,
+            text="User: -",
+            font=("Arial", 14),
+            foreground="#6b7280",
+        )
+        self._user_info_label.pack(anchor="w", pady=(0, 5))
+
+        # FC info
+        self._fc_info_label = ttk.Label(
+            self._info_frame,
+            text="FC: -",
+            font=("Arial", 14),
+            foreground="#6b7280",
+        )
+        self._fc_info_label.pack(anchor="w")
+
+        # Update information display
+        self._update_info_display(account=selected_account, is_running=is_running)
 
     def _get_account_at_event(self, event: tk.Event) -> Optional[Account]:
         iid = self._accounts_tree.identify_row(event.y)
@@ -274,6 +330,12 @@ class AccountsTab:
             messagebox.showinfo("Info", f"Account '{account.username}' has already won; cannot run winning accounts.")
             return "break"
 
+        if account.marked_not_run:
+            messagebox.showinfo(
+                "Info", f"Account '{account.username}' is marked as not run; cannot run marked accounts."
+            )
+            return "break"
+
         self._run_account(account=account)
 
         return "break"
@@ -284,7 +346,7 @@ class AccountsTab:
             self._accounts_tree.delete(item)
 
         # Clear Delete buttons
-        for widget in self._delete_frame.winfo_children():
+        for widget in self._hidden_frame.winfo_children():
             widget.destroy()
 
         if not self._accounts and self._accounts_tree.master.master:
@@ -305,6 +367,8 @@ class AccountsTab:
                 tags = (AccountTag.WINNER.name,)
             elif account.username in self._running_usernames:
                 tags = (AccountTag.RUNNING.name,)
+            elif account.marked_not_run:
+                tags = (AccountTag.MARKED_NOT_RUN.name,)
             else:
                 tags = (AccountTag.STOPPED.name,)
 
@@ -321,8 +385,10 @@ class AccountsTab:
             )
 
         # Enable if there is at least one account not running
-        # Check if there are any accounts that can be run (not running and not winning)
-        any_pending = any(a.username not in self._running_usernames and not a.has_won for a in self._accounts)
+        # Check if there are any accounts that can be run (not running, not winning, and not marked not run)
+        any_pending = any(
+            a.username not in self._running_usernames and not a.has_won and not a.marked_not_run for a in self._accounts
+        )
         self._run_all_btn.config(state="normal" if any_pending else "disabled")
 
         any_running = any(a.username in self._running_usernames for a in self._accounts)
@@ -331,83 +397,6 @@ class AccountsTab:
         # Enable Reset Winners button only if there are winning accounts
         any_winning = any(a.has_won for a in self._accounts)
         self._reset_winners_btn.config(state="normal" if any_winning else "disabled")
-
-    def _run_all_account(self) -> None:
-        pending_accounts = [a for a in self._accounts if a.username not in self._running_usernames and not a.has_won]
-        if not pending_accounts:
-            messagebox.showinfo("Info", "No accounts to run.")
-            return
-
-        for account in pending_accounts:
-            self._on_account_run(
-                account.username,
-                account.password,
-                account.spin_action,
-                account.target_special_jackpot,
-                account.close_when_jackpot_won,
-            )
-
-        self._running_usernames.update(a.username for a in pending_accounts)
-        self._refresh_accounts_list()
-
-    def _run_account(self, account: Account) -> None:
-        if account.has_won:
-            messagebox.showinfo("Info", f"Account '{account.username}' has already won; cannot run winning accounts.")
-            return
-
-        self._on_account_run(
-            account.username,
-            account.password,
-            account.spin_action,
-            account.target_special_jackpot,
-            account.close_when_jackpot_won,
-        )
-
-        self._running_usernames.add(account.username)
-        self._refresh_accounts_list()
-
-    def _stop_all_account(self) -> None:
-        if not self._running_usernames:
-            messagebox.showinfo("Info", "No accounts to stop.")
-            return
-
-        for username in self._running_usernames:
-            self._on_account_stop(username)
-
-        self._running_usernames.clear()
-        self._refresh_accounts_list()
-
-    def _stop_account(self, username: str) -> None:
-        self._on_account_stop(username)
-
-        self._running_usernames.remove(username)
-        self._refresh_accounts_list()
-
-    def _reset_winners(self) -> None:
-        winning_accounts = {a for a in self._accounts if a.has_won}
-        if not winning_accounts:
-            messagebox.showinfo("Info", "No winning accounts to reset.")
-            return
-
-        result = messagebox.askyesno(
-            "Confirm Reset",
-            (
-                f"Are you sure you want to reset {len(winning_accounts)} winning account(s)?\n"
-                "This will allow them to run again."
-            ),
-            icon="warning",
-        )
-
-        if not result:
-            return
-
-        for account in winning_accounts:
-            account.has_won = False
-
-        self._save_accounts_to_config()
-        self._refresh_accounts_list()
-
-        messagebox.showinfo("Success", "All winning accounts have been reset.")
 
     def _open_account_dialog(
         self,
@@ -531,10 +520,8 @@ class AccountsTab:
 
         # Center and focus
         dialog.update_idletasks()
-        w, h = dialog.winfo_width(), dialog.winfo_height()
-        x = (dialog.winfo_screenwidth() - w) // 2
-        y = (dialog.winfo_screenheight() - h) // 2
-        dialog.geometry(f"{w}x{h}+{x}+{y}")
+        _, _, dw, dh, x, y = hp.get_window_position(child_frame=dialog, parent_frame=self._frame)
+        dialog.geometry(f"{dw}x{dh}+{x}+{y}")
         dialog.resizable(False, False)
 
         username_entry.focus_set()
@@ -573,6 +560,98 @@ class AccountsTab:
             return True
 
         self._open_account_dialog(title="Add New Account", initial=None, on_submit=on_submit)
+
+    def _run_all_account(self) -> None:
+        pending_accounts = [
+            a
+            for a in self._accounts
+            if a.username not in self._running_usernames and not a.has_won and not a.marked_not_run
+        ]
+        if not pending_accounts:
+            messagebox.showinfo("Info", "No accounts to run.")
+            return
+
+        for account in pending_accounts:
+            self._on_account_run(
+                account.username,
+                account.password,
+                account.spin_action,
+                account.target_special_jackpot,
+                account.close_when_jackpot_won,
+            )
+
+        self._running_usernames.update(a.username for a in pending_accounts)
+        self._refresh_accounts_list()
+
+    def _stop_all_account(self) -> None:
+        if not self._running_usernames:
+            messagebox.showinfo("Info", "No accounts to stop.")
+            return
+
+        for username in self._running_usernames:
+            self._on_account_stop(username)
+
+        self._running_usernames.clear()
+        self._refresh_accounts_list()
+
+    def _reset_winners(self) -> None:
+        winning_accounts = {a for a in self._accounts if a.has_won}
+        if not winning_accounts:
+            messagebox.showinfo("Info", "No winning accounts to reset.")
+            return
+
+        result = messagebox.askyesno(
+            "Confirm Reset",
+            (
+                f"Are you sure you want to reset {len(winning_accounts)} winning account(s)?\n"
+                "This will allow them to run again."
+            ),
+            icon="warning",
+        )
+
+        if not result:
+            return
+
+        for account in winning_accounts:
+            account.has_won = False
+
+        self._save_accounts_to_config()
+        self._refresh_accounts_list()
+
+        messagebox.showinfo("Success", "All winning accounts have been reset.")
+
+    def _run_account(self, account: Account) -> None:
+        if account.has_won:
+            messagebox.showinfo("Info", f"Account '{account.username}' has already won; cannot run winning accounts.")
+            return
+
+        if account.marked_not_run:
+            messagebox.showinfo(
+                "Info", f"Account '{account.username}' is marked as not run; cannot run marked accounts."
+            )
+            return
+
+        self._on_account_run(
+            account.username,
+            account.password,
+            account.spin_action,
+            account.target_special_jackpot,
+            account.close_when_jackpot_won,
+        )
+
+        self._running_usernames.add(account.username)
+        self._refresh_accounts_list()
+
+    def _stop_account(self, username: str) -> None:
+        self._on_account_stop(username)
+
+        self._running_usernames.remove(username)
+        self._refresh_accounts_list()
+
+    def _toggle_mark_not_run(self, account: Account) -> None:
+        account.marked_not_run = not account.marked_not_run
+        self._save_accounts_to_config()
+        self._refresh_accounts_list()
 
     def _edit_account(self, account: Account) -> None:
         def on_submit(
@@ -630,3 +709,44 @@ class AccountsTab:
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save accounts: {e}")
+
+    def _update_info_display(self, account: Account, is_running: bool) -> None:
+        green, gray = "#22c55e", "#6b7280"
+        positions = ("Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right")
+
+        def set_ok_or_unknown(label: ttk.Label, build_text: Callable[[], str], unknown_text: str) -> None:
+            try:
+                text = build_text()
+                if text:
+                    label.config(text=text, foreground=green)
+                    return
+
+            except Exception:
+                pass
+
+            label.config(text=unknown_text, foreground=gray)
+
+        if not is_running:
+            self._browser_position_label.config(text="Browser Position: Not Running", foreground=gray)
+            self._user_info_label.config(text="User: Unknown", foreground=gray)
+            self._fc_info_label.config(text="FC: Unknown", foreground=gray)
+            return
+
+        def browser_pos_text() -> str:
+            idx = list(self._running_usernames).index(account.username)
+            pos = positions[idx] if idx < len(positions) else "Center"
+            return f"Browser Position: {pos}"
+
+        def pick_display_name() -> Optional[str]:
+            u = self._users_info[account.username]
+            uname = account.username.casefold()
+
+            for c in (u.nickname, u.account_name):
+                if c and c.casefold() != uname:
+                    return c
+
+            return None
+
+        set_ok_or_unknown(self._browser_position_label, browser_pos_text, "Browser Position: Unknown")
+        set_ok_or_unknown(self._user_info_label, lambda: f"User: {pick_display_name()}", "User: Unknown")
+        set_ok_or_unknown(self._fc_info_label, lambda: f"FC: {self._users_info[account.username].fc}", "FC: Unknown")

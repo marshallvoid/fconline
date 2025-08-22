@@ -3,6 +3,7 @@ from tkinter import messagebox, ttk
 from typing import List, Optional
 
 from src.schemas.configs import Notification
+from src.utils import helpers as hp
 from src.utils.user_config import UserConfigManager
 
 
@@ -76,27 +77,16 @@ class NotificationIcon:
         self._menu_window = tk.Toplevel(self._parent)
         self._menu_window.title("Notifications")
         self._menu_window.resizable(False, False)
+        self._menu_window.geometry("400x500")
 
         # Make menu floating (always on top)
         self._menu_window.attributes("-topmost", True)
         self._menu_window.transient(self._parent)  # type: ignore
 
-        # Position menu near the notification icon
-        icon_x: int = self._frame.winfo_rootx() + self._frame.winfo_width()
-        icon_y: int = self._frame.winfo_rooty()
-
-        # Get screen dimensions to prevent window from going off-screen
-        screen_width: int = self._menu_window.winfo_screenwidth()
-        screen_height: int = self._menu_window.winfo_screenheight()
-
-        # Adjust position if window would go off-screen
-        if icon_x + 400 > screen_width:
-            icon_x = max(0, screen_width - 400)
-        if icon_y + 500 > screen_height:
-            icon_y = max(0, screen_height - 500)
-
-        # Ensure the window appears near the notification icon
-        self._menu_window.geometry(f"400x500+{icon_x}+{icon_y}")
+        # Center the menu window
+        self._menu_window.update_idletasks()
+        _, _, _, _, x, y = hp.get_window_position(child_frame=self._menu_window, parent_frame=self._parent)
+        self._menu_window.geometry(f"400x500+{x}+{y}")
 
         # Configure menu appearance
         self._menu_window.configure(bg="#1f2937")

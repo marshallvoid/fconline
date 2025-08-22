@@ -10,7 +10,7 @@ from playwright.async_api import WebSocket  # noqa: DEP003
 from src.infrastructure.clients.fco import FCOnlineClient
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
-from src.utils import methods as md
+from src.utils import helpers as hp
 from src.utils import sounds
 from src.utils.contants import EventConfig
 
@@ -23,11 +23,11 @@ class WebsocketHandler:
     def __init__(
         self,
         page: Page,
+        current_jackpot: int,
         event_config: EventConfig,
         username: str,
         spin_action: int,
         target_special_jackpot: int,
-        current_jackpot: int,
         on_account_won: Optional[Callable[[str], None]] = None,
         on_add_message: Optional[Callable[[MessageTag, str], None]] = None,
         on_add_notification: Optional[Callable[[str, str], None]] = None,
@@ -36,11 +36,11 @@ class WebsocketHandler:
         on_update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self._page = page
+        self._current_jackpot = current_jackpot
         self._event_config = event_config
         self._username = username
         self._spin_action = spin_action
         self._target_special_jackpot = target_special_jackpot
-        self._current_jackpot = current_jackpot
 
         self._on_account_won = on_account_won
         self._on_add_message = on_add_message
@@ -154,7 +154,7 @@ class WebsocketHandler:
         try:
             match kind:
                 case "jackpot_value" | "prize_change":
-                    md.should_execute_callback(self._on_add_message, MessageTag.WEBSOCKET, f"Jackpot value: {value}")
+                    hp.maybe_callback(self._on_add_message, MessageTag.WEBSOCKET, f"Jackpot value: {value}")
 
                     # Handle real-time jackpot value updates
                     new_value = int(value)
@@ -169,7 +169,7 @@ class WebsocketHandler:
 
                     # Check if special jackpot target reached
                     if new_value >= self._target_special_jackpot:
-                        md.should_execute_callback(
+                        hp.maybe_callback(
                             self._on_add_message,
                             MessageTag.REACHED_GOAL,
                             f"Special Jackpot has reached {self._target_special_jackpot:,}",
@@ -180,7 +180,7 @@ class WebsocketHandler:
                             epoch_snapshot = self._jackpot_epoch
                             self._spin_task = asyncio.create_task(self._attempt_spin(epoch_snapshot))
 
-                    md.should_execute_callback(self._on_update_current_jackpot, new_value)
+                    hp.maybe_callback(self._on_update_current_jackpot, new_value)
 
                 case "jackpot" | "mini_jackpot":
                     # Stop auto spin when any jackpot is won by anyone
@@ -192,7 +192,10 @@ class WebsocketHandler:
                         self._jackpot_epoch += 1
                         self._current_jackpot = 0
 
-                    self._check_winner(is_jackpot=is_jackpot, target_nickname=nickname, target_value=value)
+                    await self._check_winner(is_jackpot=is_jackpot, target_nickname=nickname, target_value=value)
+
+                    if self._fconline_client:
+                        await self._fconline_client.reload_balance()
 
                 case _:
                     logger.warning("Unknown event type: {}", kind)
@@ -202,7 +205,7 @@ class WebsocketHandler:
 
         except Exception as e:
             logger.error(f"Spin API error: {e}")
-            md.should_execute_callback(self._on_add_message, MessageTag.ERROR, f"Spin API error: {e}")
+            hp.maybe_callback(self._on_add_message, MessageTag.ERROR, f"Spin API error: {e}")
 
     async def _attempt_spin(self, epoch_snapshot: int) -> None:
         if not self._fconline_client:
@@ -228,12 +231,12 @@ class WebsocketHandler:
 
         except Exception as e:
             logger.error(f"Spin API error: {e}")
-            md.should_execute_callback(self._on_add_message, MessageTag.ERROR, f"Spin API error: {e}")
+            hp.maybe_callback(self._on_add_message, MessageTag.ERROR, f"Spin API error: {e}")
 
         finally:
             self._spin_task = None
 
-    def _check_winner(self, is_jackpot: bool, target_nickname: str, target_value: int | str) -> None:
+    async def _check_winner(self, is_jackpot: bool, target_nickname: str, target_value: int | str) -> None:
         try:
             user = self._user_info and self._user_info.payload and self._user_info.payload.user
             nickname_lower = target_nickname.lower()
@@ -257,16 +260,16 @@ class WebsocketHandler:
             tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT
             audio_name = "coin-1" if is_jackpot else "coin-2"
 
-            md.should_execute_callback(self._on_add_notification, target_nickname, str(target_value))
+            hp.maybe_callback(self._on_add_notification, target_nickname, str(target_value))
             sounds.send_notification(msg, audio_name=audio_name)
-            md.should_execute_callback(self._on_account_won, self._username)
+            hp.maybe_callback(self._on_account_won, self._username)
 
-        md.should_execute_callback(self._on_add_message, tag, msg)
+        hp.maybe_callback(self._on_add_message, tag, msg)
 
         if is_jackpot:
-            md.should_execute_callback(self._on_update_ultimate_prize_winner, target_nickname, str(target_value))
+            hp.maybe_callback(self._on_update_ultimate_prize_winner, target_nickname, str(target_value))
         else:
-            md.should_execute_callback(self._on_update_mini_prize_winner, target_nickname, str(target_value))
+            hp.maybe_callback(self._on_update_mini_prize_winner, target_nickname, str(target_value))
 
     def _cancel_spin_task(self) -> None:
         if self._spin_task and not self._spin_task.done():

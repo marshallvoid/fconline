@@ -12,8 +12,10 @@ from src.gui.accounts_tab import AccountsTab
 from src.gui.activity_log_tab import ActivityLogTab
 from src.gui.notification_icon import NotificationIcon
 from src.schemas.enums.message_tag import MessageTag
+from src.schemas.user_response import UserDetail
 from src.services.fco import MainTool
 from src.utils import files
+from src.utils import helpers as hp
 from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME
 from src.utils.platforms import PlatformManager
 from src.utils.user_config import UserConfigManager
@@ -23,10 +25,10 @@ class MainWindow:
     def __init__(self) -> None:
         self._root = tk.Tk()
         self._root.title(string=PROGRAM_NAME)
-        self._root.resizable(width=True, height=True)
+        self._root.resizable(width=False, height=False)
 
         try:
-            png_path = files.resource_path("assets/icon.png")
+            png_path = files.get_resource_path("assets/icon.png")
             icon = tk.PhotoImage(file=png_path)
             self._root.iconphoto(True, icon)
 
@@ -35,7 +37,7 @@ class MainWindow:
 
         if PlatformManager.is_windows():
             try:
-                ico_path = files.resource_path("assets/icon.ico")
+                ico_path = files.get_resource_path("assets/icon.ico")
                 self._root.iconbitmap(ico_path)
 
             except Exception:
@@ -106,8 +108,7 @@ class MainWindow:
         self._setup_main_content()
 
         self._root.update_idletasks()
-        width, height = self._root.winfo_reqwidth(), self._root.winfo_reqheight()
-        x, y = self._root.winfo_screenwidth() - width, 0
+        _, _, width, height, x, y = hp.get_window_position(child_frame=self._root)
         self._root.geometry(f"{width}x{height}+{x}+{y}")
 
     def _setup_notification_icon(self) -> None:
@@ -220,14 +221,17 @@ class MainWindow:
     ) -> None:
         # Avoid starting duplicate runner for same username
         if username in self._running_tools:
-            self._activity_log_tab.add_message(
-                tag=MessageTag.WARNING,
-                message=f"Account '{username}' is already running",
-            )
+            message = f"Account '{username}' is already running"
+            self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
             return
 
         # Build a dedicated tool instance for this account
         new_tool = MainTool(
+            browser_index=len(self._running_tools),
+            screen_width=self._root.winfo_screenwidth(),
+            screen_height=self._root.winfo_screenheight(),
+            req_width=self._root.winfo_reqwidth(),
+            req_height=self._root.winfo_reqheight(),
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
             username=username,
             password=password,
@@ -242,12 +246,11 @@ class MainWindow:
         )
         self._activity_log_tab.add_message(tag=MessageTag.INFO, message=message)
 
-        def on_account_won(username: str) -> None:
+        def on_account_won(won_username: str) -> None:
             def _cb() -> None:
-                self._accounts_tab.mark_account_as_won(username)
-
+                self._accounts_tab.mark_account_as_won(won_username)
                 if close_when_jackpot_won:
-                    self._stop_account(username)
+                    self._stop_account(won_username)
 
             self._root.after(0, _cb)
 
@@ -281,13 +284,14 @@ class MainWindow:
 
             self._root.after(0, _cb)
 
+        def on_update_user_info(username: str, user: UserDetail) -> None:
+            def _cb() -> None:
+                self._accounts_tab.update_user_info(username=username, user=user)
+
+            self._root.after(0, _cb)
+
         new_tool.update_configs(
-            screen_width=self._root.winfo_screenwidth(),
-            screen_height=self._root.winfo_screenheight(),
-            req_width=self._root.winfo_reqwidth(),
-            req_height=self._root.winfo_reqheight(),
             is_running=True,
-            current_jackpot=0,
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
             username=username,
             password=password,
@@ -299,6 +303,7 @@ class MainWindow:
             on_update_current_jackpot=on_update_current_jackpot,
             on_update_ultimate_prize_winner=on_update_ultimate_prize_winner,
             on_update_mini_prize_winner=on_update_mini_prize_winner,
+            on_update_user_info=on_update_user_info,
         )
 
         # Runner thread

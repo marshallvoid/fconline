@@ -39,7 +39,7 @@ build = [
 ]
 
 [project.scripts]
-fco = "manage:main"
+fco = "src.main:main"
 fco-cli = "cli:main"
 
 [build-system]

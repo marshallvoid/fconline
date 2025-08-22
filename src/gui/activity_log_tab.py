@@ -83,9 +83,6 @@ class ActivityLogTab:
         text_widget.config(state="disabled")
 
     def _build(self) -> None:
-        title_label = ttk.Label(self._frame, text="Activity Log", font=("Arial", 14, "bold"))
-        title_label.pack(pady=(10, 20))
-
         container = ttk.Frame(self._frame)
         container.pack(fill="both", expand=True, padx=20, pady=10)
 
@@ -94,7 +91,7 @@ class ActivityLogTab:
         row_container.pack(fill="x", pady=(0, 10))
 
         # Jackpot Status
-        jackpot_status_frame = ttk.LabelFrame(row_container, text="Status", padding=10)
+        jackpot_status_frame = ttk.LabelFrame(row_container, text="Status", padding=8)
         jackpot_status_frame.pack(side="left", fill="both", expand=True)
 
         jackpot_container = ttk.Frame(jackpot_status_frame)
@@ -109,8 +106,8 @@ class ActivityLogTab:
         self._current_jackpot_label.pack(anchor="w")
 
         # Winners Display
-        winners_frame = ttk.LabelFrame(row_container, text="Winners", padding=10)
-        winners_frame.pack(side="right", fill="both", expand=True, padx=(10, 0))
+        winners_frame = ttk.LabelFrame(row_container, text="Winners", padding=8)
+        winners_frame.pack(side="right", fill="both", expand=True, padx=(8, 0))
 
         winners_container = ttk.Frame(winners_frame)
         winners_container.pack(fill="x")
@@ -129,12 +126,11 @@ class ActivityLogTab:
             font=("Consolas", 11, "bold"),
             text=self.MINI_JACKPOT_WINNER_TEXT.format(nickname="Unknown", value="0"),
         )
-        self._mini_prize_label.pack(anchor="w", pady=(10, 0))
+        self._mini_prize_label.pack(anchor="w", pady=(5, 0))
 
         # Messages Tab Control
-        messages_frame = ttk.LabelFrame(container, text="Messages", padding=10)
-        messages_frame.pack(fill="both", expand=True)
-        messages_frame.configure(height=250)
+        messages_frame = ttk.LabelFrame(container, text="Messages", padding=8)
+        messages_frame.pack(fill="both", expand=True, pady=(5, 0))
 
         # Create notebook for tabs
         self._notebook = ttk.Notebook(messages_frame)
@@ -143,9 +139,6 @@ class ActivityLogTab:
         # Create tabs
         for tab_name in self.TAB_NAMES:
             self._create_message_tab(tab_name=tab_name, display_name=tab_name)
-
-        # Set default tab
-        self._notebook.select(0)
 
         # Setup focus handling to prevent text selection issues
         self._setup_focus_handling()
@@ -160,7 +153,7 @@ class ActivityLogTab:
         text_widget = tk.Text(
             text_container,
             wrap=tk.WORD,
-            height=12,
+            height=18,
             font=("Arial", 12),
             bg="#2b2b2b",
             fg="#e0e0e0",
