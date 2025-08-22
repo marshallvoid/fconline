@@ -137,12 +137,14 @@ class WebsocketHandler:
                 return None
 
             etype = content.get("type")
-            value = content.get("value") or content.get("data", {}).get("jackpot_prize")
+            data = content.get("data", {})
+            value = content.get("value") or data.get("jackpot_prize")
+            nickname = content.get("nickname") or data.get("account_name")
 
             if not isinstance(etype, str) or not isinstance(value, (int, str)):
                 return None
 
-            return etype, value, next((content.get(key) for key in ("nickname", "account_name") if content.get(key) is not None), "")
+            return etype, value, nickname
 
         except json.JSONDecodeError:
             logger.info("🔌 WebSocket frame received but failed to parse JSON")

@@ -18,8 +18,6 @@ try:
         import src.infrastructure.logger  # noqa: F401
         from src.gui.fco import MainWindow
 
-        auto_reload(watch_paths=[str(Path(project_root) / "src")])
-
         # Create and run main application window
         app = MainWindow()
         app.run()
