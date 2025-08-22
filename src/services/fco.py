@@ -23,30 +23,28 @@ class MainTool:
         password: str,
         spin_action: int = 1,
         target_special_jackpot: int = 19000,
-        close_when_jackpot_won: bool = True,
     ) -> None:
         self._event_config = event_config
         self._username = username
         self._password = password
         self._spin_action = spin_action
         self._target_special_jackpot = target_special_jackpot
-        self._close_when_jackpot_won = close_when_jackpot_won
 
         # Runtime state management
-        self._is_running: bool = False
-        self._current_jackpot: int = 0
         self._screen_width: int = 0
         self._screen_height: int = 0
         self._req_width: int = 0
         self._req_height: int = 0
+        self._is_running: bool = False
+        self._current_jackpot: int = 0
 
         # Callback functions for UI updates and notifications
-        self._close_browser: Optional[Callable[[], None]] = None
-        self._add_message: Optional[Callable[[MessageTag, str], None]] = None
-        self._add_notification: Optional[Callable[[str, str], None]] = None
-        self._update_current_jackpot: Optional[Callable[[int], None]] = None
-        self._update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None
-        self._update_mini_prize_winner: Optional[Callable[[str, str], None]] = None
+        self._on_account_won: Optional[Callable[[str], None]] = None
+        self._on_add_message: Optional[Callable[[MessageTag, str], None]] = None
+        self._on_add_notification: Optional[Callable[[str, str], None]] = None
+        self._on_update_current_jackpot: Optional[Callable[[int], None]] = None
+        self._on_update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None
+        self._on_update_mini_prize_winner: Optional[Callable[[str, str], None]] = None
 
         # Browser automation components
         self._session: Optional[BrowserSession] = None
@@ -68,17 +66,16 @@ class MainTool:
             # Setup websocket handler for real-time jackpot monitoring
             websocket_handler = WebsocketHandler(
                 page=self._page,
-                event_config=self._event_config,
+                username=self._username,
                 spin_action=self._spin_action,
                 current_jackpot=self._current_jackpot,
                 target_special_jackpot=self._target_special_jackpot,
-                close_when_jackpot_won=self._close_when_jackpot_won,
-                add_message=self._add_message,
-                add_notification=self._add_notification,
-                update_current_jackpot=self._update_current_jackpot,
-                update_ultimate_prize_winner=self._update_ultimate_prize_winner,
-                update_mini_prize_winner=self._update_mini_prize_winner,
-                close_browser=self._close_browser,
+                on_account_won=self._on_account_won,
+                on_add_message=self._on_add_message,
+                on_add_notification=self._on_add_notification,
+                on_update_current_jackpot=self._on_update_current_jackpot,
+                on_update_ultimate_prize_winner=self._on_update_ultimate_prize_winner,
+                on_update_mini_prize_winner=self._on_update_mini_prize_winner,
             )
             websocket_handler.setup_websocket()
 
@@ -88,7 +85,7 @@ class MainTool:
                 event_config=self._event_config,
                 username=self._username,
                 password=self._password,
-                add_message=self._add_message,
+                on_add_message=self._on_add_message,
             )
             login_handler.websocket_handler = websocket_handler
             await login_handler.ensure_logged_in()
@@ -99,9 +96,9 @@ class MainTool:
                 base_url=self._event_config.base_url,
                 user_endpoint=self._event_config.user_endpoint,
                 spin_endpoint=self._event_config.spin_endpoint,
-                add_message=self._add_message,
-                update_ultimate_prize_winner=self._update_ultimate_prize_winner,
-                update_mini_prize_winner=self._update_mini_prize_winner,
+                on_add_message=self._on_add_message,
+                on_update_ultimate_prize_winner=self._on_update_ultimate_prize_winner,
+                on_update_mini_prize_winner=self._on_update_mini_prize_winner,
             )
             await fconline_client.prepare_resources()
             self._user_info = await fconline_client.lookup(username=self._username)
@@ -120,7 +117,7 @@ class MainTool:
 
         finally:
             await self.close()
-            md.should_execute_callback(self._add_message, MessageTag.INFO, f"{PROGRAM_NAME} stopped")
+            md.should_execute_callback(self._on_add_message, MessageTag.INFO, f"{PROGRAM_NAME} stopped")
 
     async def close(self) -> None:
         if not self._page or not self._session:
@@ -147,52 +144,50 @@ class MainTool:
         req_width: Optional[int] = None,
         req_height: Optional[int] = None,
         is_running: Optional[bool] = None,
+        current_jackpot: Optional[int] = None,
         event_config: Optional[EventConfig] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
         spin_action: Optional[int] = None,
         target_special_jackpot: Optional[int] = None,
-        close_when_jackpot_won: Optional[bool] = None,
-        current_jackpot: Optional[int] = None,
-        close_browser: Optional[Callable[[], None]] = None,
-        add_message: Optional[Callable[[MessageTag, str], None]] = None,
-        add_notification: Optional[Callable[[str, str], None]] = None,
-        update_current_jackpot: Optional[Callable[[int], None]] = None,
-        update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
-        update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
+        on_account_won: Optional[Callable[[str], None]] = None,
+        on_add_message: Optional[Callable[[MessageTag, str], None]] = None,
+        on_add_notification: Optional[Callable[[str, str], None]] = None,
+        on_update_current_jackpot: Optional[Callable[[int], None]] = None,
+        on_update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
+        on_update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self._screen_width = screen_width if screen_width is not None else self._screen_width
         self._screen_height = screen_height if screen_height is not None else self._screen_height
         self._req_width = req_width if req_width is not None else self._req_width
         self._req_height = req_height if req_height is not None else self._req_height
+
         self._is_running = is_running if is_running is not None else self._is_running
+        self._current_jackpot = current_jackpot or self._current_jackpot
+
         self._event_config = event_config or self._event_config
         self._username = username or self._username
         self._password = password or self._password
         self._spin_action = spin_action or self._spin_action
         self._target_special_jackpot = target_special_jackpot or self._target_special_jackpot
-        self._close_when_jackpot_won = (
-            close_when_jackpot_won if close_when_jackpot_won is not None else self._close_when_jackpot_won
-        )
-        self._current_jackpot = current_jackpot or self._current_jackpot
 
-        if close_browser:
-            self._close_browser = close_browser
+        if on_account_won:
+            self._on_account_won = on_account_won
 
-        if add_message:
-            self._add_message = add_message
+        if on_add_message:
+            self._on_add_message = on_add_message
 
-        if add_notification:
-            self._add_notification = add_notification
+        if on_add_notification:
+            self._on_add_notification = on_add_notification
 
-        if update_current_jackpot:
-            self._update_current_jackpot = update_current_jackpot
+        if on_update_current_jackpot:
+            self._on_update_current_jackpot = on_update_current_jackpot
 
-        if update_ultimate_prize_winner:
-            self._update_ultimate_prize_winner = update_ultimate_prize_winner
+        if on_update_ultimate_prize_winner:
+            self._on_update_ultimate_prize_winner = on_update_ultimate_prize_winner
 
-        if update_mini_prize_winner:
-            self._update_mini_prize_winner = update_mini_prize_winner
+        if on_update_mini_prize_winner:
+            self._on_update_mini_prize_winner = on_update_mini_prize_winner
 
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("🌐 Setting up browser context...")

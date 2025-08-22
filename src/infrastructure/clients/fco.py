@@ -18,9 +18,9 @@ class FCOnlineClient:
         base_url: str,
         user_endpoint: str,
         spin_endpoint: str,
-        add_message: Optional[Callable[[MessageTag, str], None]],
-        update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
-        update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
+        on_add_message: Optional[Callable[[MessageTag, str], None]],
+        on_update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
+        on_update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self._page = page
 
@@ -28,9 +28,9 @@ class FCOnlineClient:
         self._user_endpoint = user_endpoint
         self._spin_endpoint = spin_endpoint
 
-        self._add_message = add_message
-        self._update_ultimate_prize_winner = update_ultimate_prize_winner
-        self._update_mini_prize_winner = update_mini_prize_winner
+        self._add_message = on_add_message
+        self._update_ultimate_prize_winner = on_update_ultimate_prize_winner
+        self._update_mini_prize_winner = on_update_mini_prize_winner
 
         # HTTP request configuration extracted from browser session
         self._cookies: Dict[str, str] = {}

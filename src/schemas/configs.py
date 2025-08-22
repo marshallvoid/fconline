@@ -17,6 +17,7 @@ class Account(BaseModel):
     spin_action: int = 1
     target_special_jackpot: int = 19000
     close_when_jackpot_won: bool = True
+    has_won: bool = False
 
 
 class Configs(BaseModel):

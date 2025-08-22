@@ -12,7 +12,6 @@ from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
 from src.utils import methods as md
 from src.utils import sounds
-from src.utils.contants import EventConfig
 
 
 class WebsocketHandler:
@@ -23,32 +22,30 @@ class WebsocketHandler:
     def __init__(
         self,
         page: Page,
-        event_config: EventConfig,
+        username: str,
         spin_action: int,
         current_jackpot: int,
         target_special_jackpot: int,
-        close_when_jackpot_won: bool,
-        add_message: Optional[Callable[[MessageTag, str], None]] = None,
-        add_notification: Optional[Callable[[str, str], None]] = None,
-        update_current_jackpot: Optional[Callable[[int], None]] = None,
-        update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
-        update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
-        close_browser: Optional[Callable[[], None]] = None,
+        on_account_won: Optional[Callable[[str], None]] = None,
+        on_add_message: Optional[Callable[[MessageTag, str], None]] = None,
+        on_add_notification: Optional[Callable[[str, str], None]] = None,
+        on_update_current_jackpot: Optional[Callable[[int], None]] = None,
+        on_update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
+        on_update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self._page = page
 
-        self._event_config = event_config
+        self._username = username
         self._spin_action = spin_action
         self._current_jackpot = current_jackpot
         self._target_special_jackpot = target_special_jackpot
-        self._close_when_jackpot_won = close_when_jackpot_won
 
-        self._close_browser = close_browser
-        self._add_message = add_message
-        self._add_notification = add_notification
-        self._update_current_jackpot = update_current_jackpot
-        self._update_ultimate_prize_winner = update_ultimate_prize_winner
-        self._update_mini_prize_winner = update_mini_prize_winner
+        self._on_account_won = on_account_won
+        self._on_add_message = on_add_message
+        self._on_add_notification = on_add_notification
+        self._on_update_current_jackpot = on_update_current_jackpot
+        self._on_update_ultimate_prize_winner = on_update_ultimate_prize_winner
+        self._on_update_mini_prize_winner = on_update_mini_prize_winner
 
         self._is_logged_in: bool = False
         self._user_info: Optional[UserReponse] = None
@@ -166,7 +163,7 @@ class WebsocketHandler:
                     # Check if special jackpot target reached
                     if new_value >= self._target_special_jackpot:
                         md.should_execute_callback(
-                            self._add_message,
+                            self._on_add_message,
                             MessageTag.REACHED_GOAL,
                             f"Special Jackpot has reached {self._target_special_jackpot:,}",
                         )
@@ -176,12 +173,9 @@ class WebsocketHandler:
                             epoch_snapshot = self._jackpot_epoch
                             self._spin_task = asyncio.create_task(self._attempt_spin(epoch_snapshot))
 
-                    md.should_execute_callback(self._update_current_jackpot, new_value)
+                    md.should_execute_callback(self._on_update_current_jackpot, new_value)
 
                 case "jackpot" | "mini_jackpot":
-                    # Stop auto spin when any jackpot is won by anyone
-                    self._cancel_spin_task()
-
                     # Check if the winner is the current user
                     try:
                         user = self._user_info and self._user_info.payload.user
@@ -196,10 +190,10 @@ class WebsocketHandler:
                         self._current_jackpot = 0
 
                         # Update ultimate prize winner display
-                        md.should_execute_callback(self._update_ultimate_prize_winner, nickname, str(value))
+                        md.should_execute_callback(self._on_update_ultimate_prize_winner, nickname, str(value))
                     else:
                         # Update mini prize winner display
-                        md.should_execute_callback(self._update_mini_prize_winner, nickname, str(value))
+                        md.should_execute_callback(self._on_update_mini_prize_winner, nickname, str(value))
 
                     # Determine message tag based on jackpot type and winner
                     tag = MessageTag.OTHER_PLAYER
@@ -211,10 +205,16 @@ class WebsocketHandler:
                         tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT
                         # Play sound notification and show notification for user wins
                         audio_name = "coin-1" if is_jackpot else "coin-2"
-                        md.should_execute_callback(self._add_notification, nickname, value)
+                        md.should_execute_callback(self._on_add_notification, nickname, value)
                         sounds.send_notification(msg, audio_name=audio_name)
 
-                    md.should_execute_callback(self._add_message, tag, msg)
+                        # Notify that this account has won
+                        md.should_execute_callback(self._on_account_won, self._username)
+
+                    md.should_execute_callback(self._on_add_message, tag, msg)
+
+                    # Stop auto spin when any jackpot is won by anyone
+                    self._cancel_spin_task()
 
                 case _:
                     logger.warning("Unknown event type: {}", kind)
@@ -224,7 +224,7 @@ class WebsocketHandler:
 
         except Exception as e:
             logger.error(f"Spin API error: {e}")
-            md.should_execute_callback(self._add_message, MessageTag.ERROR, f"Spin API error: {e}")
+            md.should_execute_callback(self._on_add_message, MessageTag.ERROR, f"Spin API error: {e}")
 
     async def _attempt_spin(self, epoch_snapshot: int) -> None:
         if not self._fconline_client:
@@ -250,7 +250,7 @@ class WebsocketHandler:
 
         except Exception as e:
             logger.error(f"Spin API error: {e}")
-            md.should_execute_callback(self._add_message, MessageTag.ERROR, f"Spin API error: {e}")
+            md.should_execute_callback(self._on_add_message, MessageTag.ERROR, f"Spin API error: {e}")
 
         finally:
             self._spin_task = None

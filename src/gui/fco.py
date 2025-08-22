@@ -233,7 +233,6 @@ class MainWindow:
             password=password,
             spin_action=spin_action,
             target_special_jackpot=target_special_jackpot,
-            close_when_jackpot_won=close_when_jackpot_won,
         )
 
         # Announce start in activity log
@@ -243,9 +242,12 @@ class MainWindow:
         )
         self._activity_log_tab.add_message(tag=MessageTag.INFO, message=message)
 
-        def on_close_browser() -> None:
+        def on_account_won(username: str) -> None:
             def _cb() -> None:
-                self._stop_account(username)
+                self._accounts_tab.mark_account_as_won(username)
+
+                if close_when_jackpot_won:
+                    self._stop_account(username)
 
             self._root.after(0, _cb)
 
@@ -285,19 +287,18 @@ class MainWindow:
             req_width=self._root.winfo_reqwidth(),
             req_height=self._root.winfo_reqheight(),
             is_running=True,
+            current_jackpot=0,
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
             username=username,
             password=password,
             spin_action=spin_action,
             target_special_jackpot=target_special_jackpot,
-            close_when_jackpot_won=close_when_jackpot_won,
-            current_jackpot=0,
-            close_browser=on_close_browser,
-            add_message=on_add_message,
-            add_notification=on_add_notification,
-            update_current_jackpot=on_update_current_jackpot,
-            update_ultimate_prize_winner=on_update_ultimate_prize_winner,
-            update_mini_prize_winner=on_update_mini_prize_winner,
+            on_account_won=on_account_won,
+            on_add_message=on_add_message,
+            on_add_notification=on_add_notification,
+            on_update_current_jackpot=on_update_current_jackpot,
+            on_update_ultimate_prize_winner=on_update_ultimate_prize_winner,
+            on_update_mini_prize_winner=on_update_mini_prize_winner,
         )
 
         # Runner thread
