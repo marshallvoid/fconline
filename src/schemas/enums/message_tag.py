@@ -1,6 +1,7 @@
-from enum import Enum
+from enum import Enum, unique
 
 
+@unique
 class MessageTag(Enum):
     # System messages
     DEFAULT = "#d1d5db"

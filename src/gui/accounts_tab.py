@@ -3,6 +3,7 @@ from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from src.schemas.configs import Account
+from src.schemas.enums.account_tag import AccountTag
 from src.utils.contants import EVENT_CONFIGS_MAP
 from src.utils.user_config import UserConfigManager
 
@@ -45,6 +46,15 @@ class AccountsTab:
     @running_usernames.setter
     def running_usernames(self, new_running_usernames: Set[str]) -> None:
         self._running_usernames = new_running_usernames
+        self._refresh_accounts_list()
+
+    def mark_account_as_won(self, username: str) -> None:
+        account = next((a for a in self._accounts if a.username == username), None)
+        if not account:
+            return
+
+        account.has_won = True
+        self._save_accounts_to_config()
         self._refresh_accounts_list()
 
     def _build(self) -> None:
@@ -141,6 +151,15 @@ class AccountsTab:
         )
         self._stop_all_btn.pack(fill="x", pady=(0, 20))
 
+        # Reset Winners button
+        self._reset_winners_btn = ttk.Button(
+            action_buttons_frame,
+            text="Reset Winners",
+            width=15,
+            command=self._reset_winners,
+        )
+        self._reset_winners_btn.pack(fill="x", pady=(0, 20))
+
         # Frame for Delete buttons
         self._delete_frame = ttk.Frame(action_buttons_frame)
         self._delete_frame.pack(fill="x")
@@ -178,14 +197,15 @@ class AccountsTab:
             return
 
         # Create Run/Edit/Delete buttons reflecting enabled state and running status
-        is_running = username in self._running_usernames
+        is_running = selected_account.username in self._running_usernames
+        is_winning = selected_account.has_won
 
         run_btn = ttk.Button(
             self._delete_frame,
             text="Run",
             style="Accent.TButton",
             width=15,
-            state="disabled" if is_running else "normal",
+            state="disabled" if is_running or is_winning else "normal",
             command=lambda: self._run_account(selected_account),
         )
         run_btn.pack(fill="x", pady=(0, 10))
@@ -204,7 +224,7 @@ class AccountsTab:
             self._delete_frame,
             text="Edit",
             width=15,
-            state="disabled" if is_running else "normal",
+            state="disabled" if is_running or is_winning else "normal",
             command=lambda: self._edit_account(selected_account),
         )
         edit_btn.pack(fill="x", pady=(0, 10))
@@ -213,7 +233,7 @@ class AccountsTab:
             self._delete_frame,
             text="Delete",
             width=15,
-            state="disabled" if is_running else "normal",
+            state="disabled" if is_running or is_winning else "normal",
             command=lambda: self._delete_account(selected_account),
         )
         delete_btn.pack(fill="x")
@@ -250,6 +270,10 @@ class AccountsTab:
             messagebox.showinfo("Info", f"Account '{account.username}' is already running.")
             return "break"
 
+        if account.has_won:
+            messagebox.showinfo("Info", f"Account '{account.username}' has already won; cannot run winning accounts.")
+            return "break"
+
         self._run_account(account=account)
 
         return "break"
@@ -272,11 +296,18 @@ class AccountsTab:
         self._no_accounts_label.pack_forget()
 
         # Configure tags for colors
-        self._accounts_tree.tag_configure("running", background="#90EE90", foreground="#000000")
-        self._accounts_tree.tag_configure("stopped", background="#FFB6C1", foreground="#000000")
+        for tag in AccountTag:
+            self._accounts_tree.tag_configure(tag.name, background=tag.value[0], foreground=tag.value[1])
 
         # Add accounts to treeview
         for account in self._accounts:
+            if account.has_won:
+                tags = (AccountTag.WINNER.name,)
+            elif account.username in self._running_usernames:
+                tags = (AccountTag.RUNNING.name,)
+            else:
+                tags = (AccountTag.STOPPED.name,)
+
             self._accounts_tree.insert(
                 "",
                 "end",
@@ -286,18 +317,23 @@ class AccountsTab:
                     EVENT_CONFIGS_MAP[self._selected_event].spin_actions[account.spin_action - 1],
                     account.close_when_jackpot_won,
                 ),
-                tags=("running" if account.username in self._running_usernames else "stopped",),
+                tags=tags,
             )
 
         # Enable if there is at least one account not running
-        any_pending = any(a.username not in self._running_usernames for a in self._accounts)
+        # Check if there are any accounts that can be run (not running and not winning)
+        any_pending = any(a.username not in self._running_usernames and not a.has_won for a in self._accounts)
         self._run_all_btn.config(state="normal" if any_pending else "disabled")
 
         any_running = any(a.username in self._running_usernames for a in self._accounts)
         self._stop_all_btn.config(state="normal" if any_running else "disabled")
 
+        # Enable Reset Winners button only if there are winning accounts
+        any_winning = any(a.has_won for a in self._accounts)
+        self._reset_winners_btn.config(state="normal" if any_winning else "disabled")
+
     def _run_all_account(self) -> None:
-        pending_accounts = [a for a in self._accounts if a.username not in self._running_usernames]
+        pending_accounts = [a for a in self._accounts if a.username not in self._running_usernames and not a.has_won]
         if not pending_accounts:
             messagebox.showinfo("Info", "No accounts to run.")
             return
@@ -315,6 +351,10 @@ class AccountsTab:
         self._refresh_accounts_list()
 
     def _run_account(self, account: Account) -> None:
+        if account.has_won:
+            messagebox.showinfo("Info", f"Account '{account.username}' has already won; cannot run winning accounts.")
+            return
+
         self._on_account_run(
             account.username,
             account.password,
@@ -342,6 +382,32 @@ class AccountsTab:
 
         self._running_usernames.remove(username)
         self._refresh_accounts_list()
+
+    def _reset_winners(self) -> None:
+        winning_accounts = {a for a in self._accounts if a.has_won}
+        if not winning_accounts:
+            messagebox.showinfo("Info", "No winning accounts to reset.")
+            return
+
+        result = messagebox.askyesno(
+            "Confirm Reset",
+            (
+                f"Are you sure you want to reset {len(winning_accounts)} winning account(s)?\n"
+                "This will allow them to run again."
+            ),
+            icon="warning",
+        )
+
+        if not result:
+            return
+
+        for account in winning_accounts:
+            account.has_won = False
+
+        self._save_accounts_to_config()
+        self._refresh_accounts_list()
+
+        messagebox.showinfo("Success", "All winning accounts have been reset.")
 
     def _open_account_dialog(
         self,
