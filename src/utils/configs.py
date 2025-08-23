@@ -4,19 +4,21 @@ import os
 from typing import Optional
 
 from cryptography.fernet import Fernet
+from loguru import logger
 
 from src.schemas.configs import Configs
 from src.utils import files
 from src.utils.platforms import PlatformManager
 
 
-class UserConfigManager:
+class ConfigsManager:
     @classmethod
     def load_configs(cls) -> Configs:
+        configs = Configs()
         try:
             configs_file = os.path.join(files.get_config_data_directory(), "configs.json")
             if not os.path.exists(configs_file):
-                return Configs()
+                return configs
 
             with open(configs_file, "r", encoding="utf-8") as f:
                 encrypted_configs = json.load(f)
@@ -31,39 +33,35 @@ class UserConfigManager:
                     for account in encrypted_configs["accounts"]
                 ]
 
-            configs = Configs.model_validate(encrypted_configs)
-
-            return configs
+            return Configs.model_validate(encrypted_configs)
 
         except Exception:
-            pass
+            logger.error("Failed to load configs")
 
-        return Configs()
+        return configs
 
     @classmethod
     def save_configs(cls, configs: Configs) -> None:
         try:
-            encrypted_accounts = [
-                {
-                    "username": cls._encrypt_data(value=account.username),
-                    "password": cls._encrypt_data(value=account.password),
-                    **account.model_dump(exclude={"username", "password"}),
-                }
-                for account in configs.accounts
-            ]
-
             encrypted_configs = {
                 "event": configs.event,
-                "accounts": encrypted_accounts,
+                "accounts": [
+                    {
+                        "username": cls._encrypt_data(value=account.username),
+                        "password": cls._encrypt_data(value=account.password),
+                        **account.model_dump(exclude={"username", "password"}),
+                    }
+                    for account in configs.accounts
+                ],
                 "notifications": [notification.model_dump() for notification in configs.notifications],
             }
 
-            config_file = os.path.join(files.get_config_data_directory(), "configs.json")
-            with open(config_file, "w", encoding="utf-8") as f:
+            configs_file = os.path.join(files.get_config_data_directory(), "configs.json")
+            with open(configs_file, "w", encoding="utf-8") as f:
                 json.dump(encrypted_configs, f, indent=2, ensure_ascii=False)
 
         except Exception:
-            pass
+            logger.error("Failed to save configs")
 
     @classmethod
     def _encrypt_data(cls, value: Optional[str] = None) -> str:
@@ -86,6 +84,7 @@ class UserConfigManager:
             return ""
 
         try:
+            # Use Fernet symmetric encryption for sensitive data
             f = Fernet(cls._get_encryption_key())
             decrypted_data = f.decrypt(base64.urlsafe_b64decode(value.encode()))
             return decrypted_data.decode()

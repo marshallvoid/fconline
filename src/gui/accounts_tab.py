@@ -1,3 +1,4 @@
+import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional, Set
@@ -6,8 +7,8 @@ from src.schemas.configs import Account
 from src.schemas.enums.account_tag import AccountTag
 from src.schemas.user_response import UserDetail
 from src.utils import helpers as hp
+from src.utils.configs import ConfigsManager
 from src.utils.contants import EVENT_CONFIGS_MAP
-from src.utils.user_config import UserConfigManager
 
 
 class AccountsTab:
@@ -17,16 +18,19 @@ class AccountsTab:
         selected_event: str,
         on_account_run: Callable[[str, str, int, int, bool], None],
         on_account_stop: Callable[[str], None],
+        on_refresh_page: Callable[[str], None],
     ) -> None:
         self._frame = ttk.Frame(parent)
 
         self._selected_event = selected_event
         self._on_account_run = on_account_run
         self._on_account_stop = on_account_stop
+        self._on_refresh_page = on_refresh_page
 
         self._accounts: List[Account] = self._load_accounts_from_config()
         self._running_usernames: Set[str] = set()
         self._users_info: Dict[str, UserDetail] = {}
+        self._browser_positions: Dict[str, int] = {}
 
         self._build()
 
@@ -59,18 +63,17 @@ class AccountsTab:
         self._users_info[username] = user
         self._update_info_display(account=account, is_running=username in self._running_usernames)
 
+    def update_browser_position(self, username: str, browser_index: int) -> None:
+        account = next((a for a in self._accounts if a.username == username), None)
+        if not account:
+            return
+
+        self._browser_positions[username] = browser_index
+        self._update_info_display(account=account, is_running=username in self._running_usernames)
+
     def _build(self) -> None:
         container = ttk.Frame(self._frame)
         container.pack(fill="both", expand=True, padx=20, pady=(20, 10))
-
-        # No accounts message
-        self._no_accounts_label = ttk.Label(
-            container,
-            font=("Arial", 14),
-            foreground="#6b7280",
-            justify="center",
-            text="No accounts saved yet.\nAdd some accounts and select an event.",
-        )
 
         # Main content area with treeview and action buttons side by side
         main_content_frame = ttk.Frame(container)
@@ -128,11 +131,14 @@ class AccountsTab:
             width=15,
             command=self._add_account,
         )
-        self._add_account_btn.pack(fill="x", pady=(0, 20))
+        self._add_account_btn.pack(fill="x", pady=(0, 10))
+
+        separator_add = ttk.Separator(right_frame, orient="horizontal")
+        separator_add.pack(fill="x", pady=(0, 10))
 
         # Run All and Stop All buttons on the same row
         control_all_container = ttk.Frame(right_frame)
-        control_all_container.pack(fill="x", pady=(0, 20))
+        control_all_container.pack(fill="x", pady=(0, 10))
 
         self._run_all_btn = ttk.Button(
             control_all_container,
@@ -154,14 +160,18 @@ class AccountsTab:
         )
         self._stop_all_btn.pack(side="right", fill="x", expand=True)
 
-        # Reset Winners button
-        self._reset_winners_btn = ttk.Button(
+        self._refresh_all_page_btn = ttk.Button(
             right_frame,
-            text="Reset Winners",
+            text="Refresh All Page",
+            style="Accent.TButton",
             width=15,
-            command=self._reset_winners,
+            command=self._refresh_all_page,
         )
-        self._reset_winners_btn.pack(fill="x", pady=(0, 20))
+        self._refresh_all_page_btn.pack(fill="x", pady=(0, 10))
+
+        # Separator between All buttons and Individual buttons
+        separator_all = ttk.Separator(right_frame, orient="horizontal")
+        separator_all.pack(fill="x", pady=(0, 10))
 
         # Frame for hidden buttons
         self._hidden_frame = ttk.Frame(right_frame)
@@ -228,6 +238,20 @@ class AccountsTab:
         )
         stop_btn.pack(side="right", fill="x", expand=True)
 
+        refresh_btn = ttk.Button(
+            self._hidden_frame,
+            text="Refresh Page",
+            style="Accent.TButton",
+            width=15,
+            state="normal" if is_running else "disabled",
+            command=lambda: self._on_refresh_page(selected_account.username),
+        )
+        refresh_btn.pack(fill="x", pady=(0, 10))
+
+        # Separator between Individual buttons and Management buttons
+        separator_individual = ttk.Separator(self._hidden_frame, orient="horizontal")
+        separator_individual.pack(fill="x", pady=(0, 10))
+
         # Management buttons group (Mark/Edit)
         management_container = ttk.Frame(self._hidden_frame)
         management_container.pack(fill="x", pady=(0, 10))
@@ -261,12 +285,12 @@ class AccountsTab:
         delete_btn.pack(fill="x")
 
         # Frame for browser and user information
-        self._info_frame = ttk.LabelFrame(self._hidden_frame, text="Information", padding=10)
-        self._info_frame.pack(fill="x", pady=(20, 0))
+        info_frame = ttk.LabelFrame(self._hidden_frame, text="Information", padding=10)
+        info_frame.pack(fill="x", pady=(10, 0))
 
         # Browser position info
         self._browser_position_label = ttk.Label(
-            self._info_frame,
+            info_frame,
             text="Browser Position: -",
             font=("Arial", 14),
             foreground="#6b7280",
@@ -275,7 +299,7 @@ class AccountsTab:
 
         # User info
         self._user_info_label = ttk.Label(
-            self._info_frame,
+            info_frame,
             text="User: -",
             font=("Arial", 14),
             foreground="#6b7280",
@@ -284,7 +308,7 @@ class AccountsTab:
 
         # FC info
         self._fc_info_label = ttk.Label(
-            self._info_frame,
+            info_frame,
             text="FC: -",
             font=("Arial", 14),
             foreground="#6b7280",
@@ -293,6 +317,73 @@ class AccountsTab:
 
         # Update information display
         self._update_info_display(account=selected_account, is_running=is_running)
+
+    def _update_info_display(self, account: Account, is_running: bool) -> None:
+        green, gray = "#22c55e", "#6b7280"
+        positions = ("Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right")
+
+        def set_ok_or_unknown(label: ttk.Label, build_text: Callable[[], str], unknown_text: str) -> None:
+            try:
+                text = build_text()
+                if text:
+                    label.config(text=text, foreground=green)
+                    return
+
+            except Exception:
+                pass
+
+            label.config(text=unknown_text, foreground=gray)
+
+        if not is_running:
+            if hasattr(self, "_browser_position_label"):
+                self._browser_position_label.config(text="Browser Position: Not Running", foreground=gray)
+
+            if hasattr(self, "_user_info_label"):
+                self._user_info_label.config(text="User: Unknown", foreground=gray)
+
+            if hasattr(self, "_fc_info_label"):
+                self._fc_info_label.config(text="FC: Unknown", foreground=gray)
+
+            return
+
+        def browser_pos_text() -> str:
+            if account.username in self._browser_positions:
+                browser_index = self._browser_positions[account.username]
+                pos = positions[browser_index] if browser_index < len(positions) else "Center"
+                return f"Browser Position: {pos}"
+
+            return "Browser Position: Unknown"
+
+        def pick_display_name() -> Optional[str]:
+            u = self._users_info[account.username]
+            uname = account.username.casefold()
+
+            for c in (u.nickname, u.account_name):
+                if c and c.casefold() != uname:
+                    return c
+
+            return None
+
+        if hasattr(self, "_browser_position_label"):
+            set_ok_or_unknown(
+                label=self._browser_position_label,
+                build_text=browser_pos_text,
+                unknown_text="Browser Position: Unknown",
+            )
+
+        if hasattr(self, "_user_info_label"):
+            set_ok_or_unknown(
+                label=self._user_info_label,
+                build_text=lambda: f"User: {pick_display_name()}",
+                unknown_text="User: Unknown",
+            )
+
+        if hasattr(self, "_fc_info_label"):
+            set_ok_or_unknown(
+                label=self._fc_info_label,
+                build_text=lambda: f"FC: {self._users_info[account.username].fc}",
+                unknown_text="FC: Unknown",
+            )
 
     def _get_account_at_event(self, event: tk.Event) -> Optional[Account]:
         iid = self._accounts_tree.identify_row(event.y)
@@ -349,14 +440,6 @@ class AccountsTab:
         for widget in self._hidden_frame.winfo_children():
             widget.destroy()
 
-        if not self._accounts and self._accounts_tree.master.master:
-            # Show no accounts message above the accounts frame
-            self._no_accounts_label.pack(before=self._accounts_tree.master.master, pady=(0, 20))
-            return
-
-        # Hide no accounts message
-        self._no_accounts_label.pack_forget()
-
         # Configure tags for colors
         for tag in AccountTag:
             self._accounts_tree.tag_configure(tag.name, background=tag.value[0], foreground=tag.value[1])
@@ -384,8 +467,6 @@ class AccountsTab:
                 tags=tags,
             )
 
-        # Enable if there is at least one account not running
-        # Check if there are any accounts that can be run (not running, not winning, and not marked not run)
         any_pending = any(
             a.username not in self._running_usernames and not a.has_won and not a.marked_not_run for a in self._accounts
         )
@@ -393,10 +474,6 @@ class AccountsTab:
 
         any_running = any(a.username in self._running_usernames for a in self._accounts)
         self._stop_all_btn.config(state="normal" if any_running else "disabled")
-
-        # Enable Reset Winners button only if there are winning accounts
-        any_winning = any(a.has_won for a in self._accounts)
-        self._reset_winners_btn.config(state="normal" if any_winning else "disabled")
 
     def _open_account_dialog(
         self,
@@ -567,6 +644,7 @@ class AccountsTab:
             for a in self._accounts
             if a.username not in self._running_usernames and not a.has_won and not a.marked_not_run
         ]
+
         if not pending_accounts:
             messagebox.showinfo("Info", "No accounts to run.")
             return
@@ -579,6 +657,7 @@ class AccountsTab:
                 account.target_special_jackpot,
                 account.close_when_jackpot_won,
             )
+            time.sleep(1)
 
         self._running_usernames.update(a.username for a in pending_accounts)
         self._refresh_accounts_list()
@@ -594,31 +673,13 @@ class AccountsTab:
         self._running_usernames.clear()
         self._refresh_accounts_list()
 
-    def _reset_winners(self) -> None:
-        winning_accounts = {a for a in self._accounts if a.has_won}
-        if not winning_accounts:
-            messagebox.showinfo("Info", "No winning accounts to reset.")
+    def _refresh_all_page(self) -> None:
+        if not self._running_usernames:
+            messagebox.showinfo("Info", "No accounts to refresh.")
             return
 
-        result = messagebox.askyesno(
-            "Confirm Reset",
-            (
-                f"Are you sure you want to reset {len(winning_accounts)} winning account(s)?\n"
-                "This will allow them to run again."
-            ),
-            icon="warning",
-        )
-
-        if not result:
-            return
-
-        for account in winning_accounts:
-            account.has_won = False
-
-        self._save_accounts_to_config()
-        self._refresh_accounts_list()
-
-        messagebox.showinfo("Success", "All winning accounts have been reset.")
+        for username in self._running_usernames:
+            self._on_refresh_page(username)
 
     def _run_account(self, account: Account) -> None:
         if account.has_won:
@@ -693,60 +754,11 @@ class AccountsTab:
         self._refresh_accounts_list()
 
     def _load_accounts_from_config(self) -> List[Account]:
-        try:
-            configs = UserConfigManager.load_configs()
-            return configs.accounts
-
-        except Exception:
-            return []
+        configs = ConfigsManager.load_configs()
+        return configs.accounts
 
     def _save_accounts_to_config(self) -> None:
-        try:
-            configs = UserConfigManager.load_configs()
-            configs.event = self._selected_event
-            configs.accounts = self._accounts
-            UserConfigManager.save_configs(configs)
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save accounts: {e}")
-
-    def _update_info_display(self, account: Account, is_running: bool) -> None:
-        green, gray = "#22c55e", "#6b7280"
-        positions = ("Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right")
-
-        def set_ok_or_unknown(label: ttk.Label, build_text: Callable[[], str], unknown_text: str) -> None:
-            try:
-                text = build_text()
-                if text:
-                    label.config(text=text, foreground=green)
-                    return
-
-            except Exception:
-                pass
-
-            label.config(text=unknown_text, foreground=gray)
-
-        if not is_running:
-            self._browser_position_label.config(text="Browser Position: Not Running", foreground=gray)
-            self._user_info_label.config(text="User: Unknown", foreground=gray)
-            self._fc_info_label.config(text="FC: Unknown", foreground=gray)
-            return
-
-        def browser_pos_text() -> str:
-            idx = list(self._running_usernames).index(account.username)
-            pos = positions[idx] if idx < len(positions) else "Center"
-            return f"Browser Position: {pos}"
-
-        def pick_display_name() -> Optional[str]:
-            u = self._users_info[account.username]
-            uname = account.username.casefold()
-
-            for c in (u.nickname, u.account_name):
-                if c and c.casefold() != uname:
-                    return c
-
-            return None
-
-        set_ok_or_unknown(self._browser_position_label, browser_pos_text, "Browser Position: Unknown")
-        set_ok_or_unknown(self._user_info_label, lambda: f"User: {pick_display_name()}", "User: Unknown")
-        set_ok_or_unknown(self._fc_info_label, lambda: f"FC: {self._users_info[account.username].fc}", "FC: Unknown")
+        configs = ConfigsManager.load_configs()
+        configs.event = self._selected_event
+        configs.accounts = self._accounts
+        ConfigsManager.save_configs(configs)

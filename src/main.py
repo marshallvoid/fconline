@@ -21,7 +21,6 @@ try:
 
 except ImportError as e:
     error_msg = f"{e}\nMake sure you have installed all required dependencies:\npip install -r requirements.txt"
-    logger.error(traceback.format_exc())
     logger.error(f"Import error: {error_msg}")
 
     root = tk.Tk()
@@ -29,9 +28,8 @@ except ImportError as e:
     messagebox.showerror("Import Error", error_msg)
     sys.exit(1)
 
-except Exception as e:
-    error_msg = f"Failed to start GUI application: {e}"
-    logger.error(traceback.format_exc())
+except Exception as error:
+    error_msg = f"Failed to start GUI application: {error}"
     logger.error(error_msg)
 
     root = tk.Tk()

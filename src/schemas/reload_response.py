@@ -4,14 +4,14 @@ from pydantic import BaseModel
 
 
 class ReloadPayload(BaseModel):
-    fc: int
-    mc: int
+    fc: Optional[int] = None
+    mc: Optional[int] = None
+    error_code: Optional[str] = None
 
 
 class ReloadResponse(BaseModel):
     status: str
-    payload: Optional[ReloadPayload] = None
-    error_code: Optional[str] = None
+    payload: ReloadPayload
 
     @property
     def is_successful(self) -> bool:

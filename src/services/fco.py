@@ -10,9 +10,11 @@ from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserDetail, UserReponse
 from src.services.login_handler import LoginHandler
 from src.services.websocket_handler import WebsocketHandler
+from src.utils import files
 from src.utils import helpers as hp
 from src.utils.contants import PROGRAM_NAME, EventConfig
 from src.utils.platforms import PlatformManager
+from src.utils.requests import RequestManager
 
 
 class MainTool:
@@ -46,7 +48,7 @@ class MainTool:
 
         # Callback functions for UI updates and notifications
         self._on_account_won: Optional[Callable[[str], None]] = None
-        self._on_add_message: Optional[Callable[[MessageTag, str], None]] = None
+        self._on_add_message: Optional[Callable[[MessageTag, str, bool], None]] = None
         self._on_add_notification: Optional[Callable[[str, str], None]] = None
         self._on_update_current_jackpot: Optional[Callable[[int], None]] = None
         self._on_update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None
@@ -56,17 +58,22 @@ class MainTool:
         # Browser automation components
         self._session: Optional[BrowserSession] = None
         self._page: Optional[Page] = None
+        self._user_agent: Optional[str] = None
         self._user_data_dir: Optional[str] = None
 
         # User authentication and profile data
         self._user_info: Optional[UserReponse] = None
 
+    @property
+    def page(self) -> Optional[Page]:
+        return self._page
+
     async def run(self) -> None:
         try:
             # Initialize browser session and navigate to target URL
-            self._session, self._page = await self._setup_browser()
+            self._session, self._page, self._user_agent = await self._setup_browser()
 
-            logger.info(f"🌐 Navigating to: {self._event_config.base_url}")
+            logger.info(f"Navigating to: {self._event_config.base_url}")
             await self._page.goto(url=self._event_config.base_url)
             await self._page.wait_for_load_state(state="networkidle")
 
@@ -103,13 +110,13 @@ class MainTool:
             # Initialize API client and fetch user profile information
             fconline_client = FCOnlineClient(
                 page=self._page,
+                user_agent=self._user_agent,
                 event_config=self._event_config,
-                username=self._username,
                 on_add_message=self._on_add_message,
                 on_update_user_info=self._on_update_user_info,
             )
             await fconline_client.prepare_resources()
-            self._user_info = await fconline_client.lookup(username=self._username)
+            self._user_info = await fconline_client.lookup()
 
             self._update_ui()
 
@@ -121,29 +128,31 @@ class MainTool:
             while self._is_running:
                 await asyncio.sleep(delay=0.1)
 
-        except Exception as e:
-            logger.error(f"❌ Error during execution: {e}")
-            raise e
+        except Exception as error:
+            logger.error(f"Error during execution: {error}")
+            raise error
 
         finally:
             await self.close()
-            hp.maybe_callback(self._on_add_message, MessageTag.INFO, f"{PROGRAM_NAME} stopped")
+            hp.maybe_execute(self._on_add_message, MessageTag.INFO, f"{PROGRAM_NAME} stopped", True)
 
     async def close(self) -> None:
-        if not self._page or not self._session:
-            return
-
-        logger.info("🔒 Closing browser context and cleaning up resources...")
+        logger.info("Closing browser context and cleaning up resources...")
         try:
-            await self._page.close()
-            await self._session.kill()
-            logger.success("✅ Browser resources cleaned up successfully")
+            if self._page:
+                await self._page.close()
 
-        except Exception as e:
-            logger.error(f"❌ Failed to clean up browser resource: {e}")
+            if self._session:
+                await self._session.kill()
+
+            logger.success("Browser resources cleaned up successfully")
+
+        except Exception as error:
+            logger.error(f"Failed to clean up browser resource: {error}")
 
         finally:
-            self._user_data_dir = PlatformManager.cleanup_user_data_directory(user_data_dir=self._user_data_dir)
+            files.cleanup_user_data_directory(user_data_dir=self._user_data_dir)
+            self._user_data_dir = None
             self._session = None
             self._page = None
 
@@ -157,7 +166,7 @@ class MainTool:
         spin_action: Optional[int] = None,
         target_special_jackpot: Optional[int] = None,
         on_account_won: Optional[Callable[[str], None]] = None,
-        on_add_message: Optional[Callable[[MessageTag, str], None]] = None,
+        on_add_message: Optional[Callable[[MessageTag, str, bool], None]] = None,
         on_add_notification: Optional[Callable[[str, str], None]] = None,
         on_update_current_jackpot: Optional[Callable[[int], None]] = None,
         on_update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
@@ -186,20 +195,20 @@ class MainTool:
         if self._user_info and (jackpot_billboard := self._user_info.payload.jackpot_billboard):
             nickname = jackpot_billboard.nickname
             value = jackpot_billboard.value
-            hp.maybe_callback(self._on_update_ultimate_prize_winner, nickname, value)
+            hp.maybe_execute(self._on_update_ultimate_prize_winner, nickname, value)
 
         # Update mini prize winner display
         if self._user_info and (mini_jackpot_billboard := self._user_info.payload.mini_jackpot_billboard):
             nickname = mini_jackpot_billboard.nickname
             value = mini_jackpot_billboard.value
-            hp.maybe_callback(self._on_update_mini_prize_winner, nickname, value)
+            hp.maybe_execute(self._on_update_mini_prize_winner, nickname, value)
 
         # Update UI with user info
         if self._user_info and (user := self._user_info.payload.user):
-            hp.maybe_callback(self._on_update_user_info, self._username, user)
+            hp.maybe_execute(self._on_update_user_info, self._username, user)
 
-    async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
-        logger.info("🌐 Setting up browser context...")
+    async def _setup_browser(self) -> Tuple[BrowserSession, Page, str]:
+        logger.info("Setting up browser context...")
 
         # Chrome arguments to disable security features and optimize for automation
         extra_chromium_args = [
@@ -238,20 +247,17 @@ class MainTool:
                     "--use-mock-keychain",
                 ]
             )
-            logger.info("🪟 Applied Windows-specific browser arguments")
 
         # Ensure Chrome is available for consistent automation behavior
         if not (chrome_path := PlatformManager.get_chrome_executable_path()):
             msg = "Chrome/Chromium not found. Please install Chrome or Chromium."
             raise Exception(msg)
 
-        logger.info(f"🌐 Using Chrome browser: {chrome_path}")
-
         # Retry mechanism with different profile strategies for reliability
         for attempt in range(3):
             try:
                 # Use persistent profile on first attempt, temporary on retries
-                user_data_dir = None if attempt > 0 else PlatformManager.get_user_data_directory()
+                user_data_dir = None if attempt > 0 else files.get_user_data_directory()
                 # Store for cleanup later
                 if user_data_dir:
                     self._user_data_dir = user_data_dir
@@ -262,6 +268,7 @@ class MainTool:
                     screen_width=self._screen_width,
                     screen_height=self._screen_height,
                 )
+                user_agent = RequestManager.get_random_user_agent()
                 browser_profile = BrowserProfile(
                     stealth=True,
                     ignore_https_errors=True,
@@ -273,7 +280,7 @@ class MainTool:
                     executable_path=chrome_path,
                     window_position={"width": x, "height": y},
                     window_size={"width": width, "height": height},
-                    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                    user_agent=user_agent,
                 )
 
                 # Start browser session and get initial page
@@ -281,16 +288,16 @@ class MainTool:
                 await asyncio.wait_for(browser_session.start(), timeout=60000 * 3)
                 page = await browser_session.get_current_page()
 
-                logger.success("✅ Browser context setup completed successfully")
-                return browser_session, page
+                logger.success("Browser context setup completed successfully")
+                return browser_session, page, user_agent
 
             except asyncio.TimeoutError:
-                logger.warning(f"⚠️ Browser startup timeout on attempt {attempt + 1}/3")
+                logger.warning(f"Browser startup timeout on attempt {attempt + 1}/3")
                 await asyncio.sleep(2)  # Wait before retry
                 continue
 
-            except Exception as e:
-                logger.warning(f"⚠️ Browser setup failed on attempt {attempt + 1}/3: {e}")
+            except Exception as error:
+                logger.warning(f"Browser setup failed on attempt {attempt + 1}/3: {error}")
                 await asyncio.sleep(2)  # Wait before retry
                 continue
 

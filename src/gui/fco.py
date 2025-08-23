@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -16,9 +17,9 @@ from src.schemas.user_response import UserDetail
 from src.services.fco import MainTool
 from src.utils import files
 from src.utils import helpers as hp
+from src.utils.configs import ConfigsManager
 from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME
 from src.utils.platforms import PlatformManager
-from src.utils.user_config import UserConfigManager
 
 
 class MainWindow:
@@ -44,7 +45,7 @@ class MainWindow:
                 pass
 
         # Track per-account running tool instances
-        configs = UserConfigManager.load_configs()
+        configs = ConfigsManager.load_configs()
         self._selected_event = configs.event or list(EVENT_CONFIGS_MAP.keys())[0]
         self._running_tools: Dict[str, MainTool] = {}
 
@@ -54,10 +55,58 @@ class MainWindow:
         logger.info(f"Running {PROGRAM_NAME}")
 
         def on_close() -> None:
+            if not self._running_tools:
+                self._root.destroy()
+                return
+
+            # Mark all tools as not running first
             for running_tool in self._running_tools.values():
                 running_tool.update_configs(is_running=False)
-                asyncio.run(running_tool.close())
 
+            def close_tool_safely(tool: MainTool) -> None:
+                try:
+                    # Create new event loop for this thread
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+
+                    # Run close with timeout
+                    loop.run_until_complete(asyncio.wait_for(tool.close(), timeout=3.0))
+
+                except asyncio.TimeoutError:
+                    logger.warning("Tool close timeout, forcing shutdown")
+
+                except Exception as error:
+                    logger.error(f"Error closing tool: {error}")
+
+                finally:
+                    try:
+                        loop.close()
+                    except Exception:
+                        pass
+
+            # Close tools in separate threads to avoid blocking the UI
+            def close_tools_concurrently() -> None:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=len(self._running_tools)) as executor:
+                    # Submit all close tasks
+                    future_to_tool = {
+                        executor.submit(close_tool_safely, tool): tool for tool in self._running_tools.values()
+                    }
+
+                    # Wait for all to complete with timeout
+                    try:
+                        concurrent.futures.wait(future_to_tool.keys(), timeout=5.0)  # 5 second timeout
+                    except Exception:
+                        pass  # Ignore timeout errors
+
+                    # Cancel any remaining tasks
+                    for future in future_to_tool:
+                        if not future.done():
+                            future.cancel()
+
+            # Start closing process in background thread
+            threading.Thread(target=close_tools_concurrently, daemon=True).start()
+
+            # Destroy the root window immediately
             self._root.destroy()
 
         self._root.protocol("WM_DELETE_WINDOW", on_close)
@@ -146,9 +195,9 @@ class MainWindow:
             # Update the accounts tab with new event configuration
             self._accounts_tab.selected_event = self._selected_event
 
-            configs = UserConfigManager.load_configs()
+            configs = ConfigsManager.load_configs()
             configs.event = self._selected_event
-            UserConfigManager.save_configs(configs)
+            ConfigsManager.save_configs(configs)
 
         event_combobox.bind("<<ComboboxSelected>>", on_event_changed)
 
@@ -166,6 +215,7 @@ class MainWindow:
             selected_event=self._selected_event,
             on_account_run=self._run_account,
             on_account_stop=self._stop_account,
+            on_refresh_page=self._refresh_page,
         )
         self._notebook.add(self._accounts_tab.frame, text="Accounts")
 
@@ -226,8 +276,9 @@ class MainWindow:
             return
 
         # Build a dedicated tool instance for this account
+        browser_index = len(self._running_tools)
         new_tool = MainTool(
-            browser_index=len(self._running_tools),
+            browser_index=browser_index,
             screen_width=self._root.winfo_screenwidth(),
             screen_height=self._root.winfo_screenheight(),
             req_width=self._root.winfo_reqwidth(),
@@ -238,6 +289,8 @@ class MainWindow:
             spin_action=spin_action,
             target_special_jackpot=target_special_jackpot,
         )
+
+        self._accounts_tab.update_browser_position(username=username, browser_index=browser_index)
 
         # Announce start in activity log
         spin_action_name = EVENT_CONFIGS_MAP[self._selected_event].spin_actions[spin_action - 1]
@@ -254,9 +307,9 @@ class MainWindow:
 
             self._root.after(0, _cb)
 
-        def on_add_message(tag: MessageTag, message: str) -> None:
+        def on_add_message(tag: MessageTag, message: str, compact: bool = False) -> None:
             def _cb() -> None:
-                self._activity_log_tab.add_message(tag=tag, message=f"[{username}] {message}")
+                self._activity_log_tab.add_message(tag=tag, message=f"[{username}] {message}", compact=compact)
 
             self._root.after(0, _cb)
 
@@ -307,36 +360,56 @@ class MainWindow:
         )
 
         # Runner thread
-        def handle_account_task() -> None:
+        def handle_run_account() -> None:
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 loop.run_until_complete(new_tool.run())
 
             except Exception as error:
-                self._root.after(0, messagebox.showerror, "❌ Error", f"Account '{username}': {error}")
+                self._root.after(0, messagebox.showerror, "❌ Error", f"Failed to run account: {error}")
 
         self._running_tools[username] = new_tool
-        threading.Thread(target=handle_account_task, daemon=True).start()
+        threading.Thread(target=handle_run_account, daemon=True).start()
 
     def _stop_account(self, username: str) -> None:
         if username not in self._running_tools:
-            self._activity_log_tab.add_message(
-                tag=MessageTag.WARNING,
-                message=f"Account '{username}' is not running",
-            )
+            message = f"Account '{username}' is not running"
+            self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
             return
 
         running_tool = self._running_tools.pop(username)
         running_tool.update_configs(is_running=False)
 
-        def handle_account_task() -> None:
+        def handle_stop_account() -> None:
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 loop.run_until_complete(running_tool.close())
 
             except Exception as error:
-                self._root.after(0, messagebox.showerror, "❌ Error", f"Account '{username}': {error}")
+                self._root.after(0, messagebox.showerror, "❌ Error", f"Failed to stop account: {error}")
 
-        threading.Thread(target=handle_account_task, daemon=True).start()
+        threading.Thread(target=handle_stop_account, daemon=True).start()
+
+    def _refresh_page(self, username: str) -> None:
+        if username not in self._running_tools:
+            message = f"Account '{username}' is not running"
+            self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
+            return
+
+        running_tool = self._running_tools[username]
+
+        def handle_page_reload() -> None:
+            if not running_tool.page:
+                return
+
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(running_tool.page.reload())
+
+            except Exception as error:
+                self._root.after(0, messagebox.showerror, "❌ Error", f"Failed to refresh page: {error}")
+
+        threading.Thread(target=handle_page_reload, daemon=True).start()

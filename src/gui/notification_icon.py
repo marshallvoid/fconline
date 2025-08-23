@@ -1,10 +1,10 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 from typing import List, Optional
 
 from src.schemas.configs import Notification
 from src.utils import helpers as hp
-from src.utils.user_config import UserConfigManager
+from src.utils.configs import ConfigsManager
 
 
 class NotificationIcon:
@@ -226,18 +226,10 @@ class NotificationIcon:
             self._menu_window.destroy()
 
     def _load_notifications_from_config(self) -> List[Notification]:
-        try:
-            configs = UserConfigManager.load_configs()
-            return configs.notifications
-
-        except Exception:
-            return []
+        configs = ConfigsManager.load_configs()
+        return configs.notifications
 
     def _save_notifications_to_config(self) -> None:
-        try:
-            configs = UserConfigManager.load_configs()
-            configs.notifications = self._notifications
-            UserConfigManager.save_configs(configs)
-
-        except Exception:
-            messagebox.showerror("Error", "Failed to save notifications to config!")
+        configs = ConfigsManager.load_configs()
+        configs.notifications = self._notifications
+        ConfigsManager.save_configs(configs)

@@ -1,6 +1,6 @@
 import logging
-import os
 import sys
+import traceback
 from types import FrameType
 from typing import Optional, cast
 
@@ -44,10 +44,15 @@ class InterceptHandler(logging.Handler):
             frame = cast(FrameType, frame.f_back)
             depth += 1
 
-        logger.opt(depth=depth, exception=record.exc_info).log(
-            level,
-            record.getMessage(),
-        )
+        # Auto-append traceback for ERROR and CRITICAL levels
+        message = record.getMessage()
+        if record.levelno >= logging.ERROR and record.exc_info is None:
+            # If no exception info but it's an error level, add current traceback
+            tb = traceback.format_exc()
+            if tb != "NoneType: None\n":  # Only add if there's actual traceback
+                message = f"{message}\n{tb}"
+
+        logger.opt(depth=depth, exception=record.exc_info).log(level, message)
 
 
 def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMAT) -> None:
@@ -116,4 +121,4 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
 
 
 # Auto-initialize logger on module import with default settings
-init_logger(debug=os.environ.get("DEBUG", "false").lower() == "true")
+init_logger()

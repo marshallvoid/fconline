@@ -17,14 +17,14 @@ class FCOnlineClient:
     def __init__(
         self,
         page: Page,
+        user_agent: str,
         event_config: EventConfig,
-        username: str,
-        on_add_message: Optional[Callable[[MessageTag, str], None]],
+        on_add_message: Optional[Callable[[MessageTag, str, bool], None]],
         on_update_user_info: Optional[Callable[[str, UserDetail], None]],
     ) -> None:
         self._page = page
+        self._user_agent = user_agent
         self._event_config = event_config
-        self._username = username
 
         self._on_add_message = on_add_message
         self._on_update_user_info = on_update_user_info
@@ -50,47 +50,34 @@ class FCOnlineClient:
         self._cookies = await self._build_cookies()
         self._headers = self._build_headers()
 
-    async def lookup(self, username: str) -> Optional[UserReponse]:
+    async def lookup(self) -> Optional[UserReponse]:
         try:
             async with aiohttp.ClientSession(
                 cookies=self._cookies,
                 headers=self._headers,
                 connector=RequestManager.connector(),
             ) as session:
-                # Make API request to get user information
                 async with session.get(self._user_api) as response:
                     if not response.ok:
-                        hp.maybe_callback(
-                            self._on_add_message,
-                            MessageTag.ERROR,
-                            f"User API request failed with status: {response.status} for user '{username}'",
-                        )
+                        message = f"User API request failed with status: {response.status}"
+                        hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
                         return None
 
-                    # Parse and validate API response
-                    user_response = UserReponse.model_validate(await response.json())
-                    if not user_response.is_successful or user_response.payload.error_code:
-                        hp.maybe_callback(
-                            self._on_add_message,
-                            MessageTag.ERROR,
-                            f"Get user info failed: {user_response.payload.error_code or 'Unknown error'}",
-                        )
+                    self._user_info = UserReponse.model_validate(await response.json())
+                    if not self._user_info.is_successful or self._user_info.payload.error_code:
+                        message = f"Lookup user info failed: {self._user_info.payload.error_code or 'Unknown error'}"
+                        hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
                         return None
 
-                    self._user_info = user_response
-                    hp.maybe_callback(
-                        self._on_add_message,
-                        MessageTag.SUCCESS,
-                        f"Get user info successfully for user '{username}'",
-                    )
+                    hp.maybe_execute(self._on_add_message, MessageTag.SUCCESS, "Lookup user info successfully")
 
-                    return user_response
+                    return self._user_info
 
-        except Exception as e:
-            hp.maybe_callback(self._on_add_message, MessageTag.ERROR, f"Failed to get user info: {e}")
+        except Exception as error:
+            logger.error(f"Failed to lookup user info: {error}")
             return None
 
-    async def reload_balance(self) -> None:
+    async def reload_balance(self, username: str) -> None:
         try:
             async with aiohttp.ClientSession(
                 cookies=self._cookies,
@@ -99,36 +86,25 @@ class FCOnlineClient:
             ) as session:
                 async with session.post(url=self._reload_api) as response:
                     if not response.ok:
-                        hp.maybe_callback(
-                            self._on_add_message,
-                            MessageTag.ERROR,
-                            f"Reload balance API request failed with status: {response.status}",
-                        )
+                        message = f"Reload balance API request failed with status: {response.status}"
+                        hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
                         return
 
                     reload_response = ReloadResponse.model_validate(await response.json())
-                    if not reload_response.payload or not reload_response.is_successful or reload_response.error_code:
-                        hp.maybe_callback(
-                            self._on_add_message,
-                            MessageTag.ERROR,
-                            f"Reload balance failed: {reload_response.error_code or 'Unknown error'}",
-                        )
+                    if not reload_response.is_successful or reload_response.payload.error_code:
+                        message = f"Reload balance failed: {reload_response.payload.error_code or 'Unknown error'}"
+                        hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
                         return
 
-                    hp.maybe_callback(
-                        self._on_add_message,
-                        MessageTag.SUCCESS,
-                        f"Reload balance successfully for user '{self._username}'",
-                    )
-
                     if self._user_info and (user_detail := self._user_info.payload.user):
-                        user_detail.fc = reload_response.payload.fc
-                        user_detail.mc = reload_response.payload.mc
+                        user_detail.fc = reload_response.payload.fc or user_detail.fc
+                        user_detail.mc = reload_response.payload.mc or user_detail.mc
 
-                        hp.maybe_callback(self._on_update_user_info, self._username, user_detail)
+                        hp.maybe_execute(self._on_update_user_info, username, user_detail)
+                        hp.maybe_execute(self._on_add_message, MessageTag.SUCCESS, "Reload balance successfully", True)
 
-        except Exception as e:
-            hp.maybe_callback(self._on_add_message, MessageTag.ERROR, f"Failed to reload balance: {e}")
+        except Exception as error:
+            logger.error(f"Failed to reload balance: {error}")
 
     async def spin(self, spin_type: int, payment_type: int = 1, params: Dict[str, Any] = {}) -> None:
         try:
@@ -137,63 +113,54 @@ class FCOnlineClient:
                 headers=self._headers,
                 connector=RequestManager.connector(),
             ) as session:
-                # Prepare spin request payload
                 payload = {"spin_type": spin_type, "payment_type": payment_type, **params}
 
-                # Execute spin API call
                 async with session.post(url=self._spin_api, json=payload) as response:
                     if not response.ok:
-                        hp.maybe_callback(
-                            self._on_add_message,
-                            MessageTag.ERROR,
-                            f"Spin API request failed with status: {response.status}",
-                        )
+                        message = f"Spin API request failed with status: {response.status}"
+                        hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
                         return
 
-                    # Parse and validate spin response
                     spin_response = SpinResponse.model_validate(await response.json())
                     if not spin_response.payload or not spin_response.is_successful or spin_response.error_code:
-                        hp.maybe_callback(
-                            self._on_add_message,
-                            MessageTag.ERROR,
-                            f"Spin failed: {spin_response.error_code or 'Unknown error'}",
-                        )
+                        message = f"Spin failed: {spin_response.error_code or 'Unknown error'}"
+                        hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
                         return
 
-                    hp.maybe_callback(
-                        self._on_add_message,
-                        MessageTag.REWARD,
-                        hp.format_spin_results_block(spin_results=spin_response.payload.spin_results),
-                    )
+                    message = hp.format_spin_results_block(spin_results=spin_response.payload.spin_results)
+                    hp.maybe_execute(self._on_add_message, MessageTag.REWARD, message)
 
-        except Exception as e:
-            hp.maybe_callback(self._on_add_message, MessageTag.ERROR, f"Failed to spin: {e}")
+        except Exception as error:
+            logger.error(f"Failed to spin: {error}")
 
     async def _build_cookies(self) -> Dict[str, str]:
         try:
             cookies = await self._page.context.cookies()
-            return {name: value for c in cookies if (name := c.get("name")) and (value := c.get("value"))}
+            return {
+                name: value
+                for c in cookies
+                if (name := c.get("name")) is not None and (value := c.get("value")) is not None
+            }
 
-        except Exception as e:
-            logger.error(f"❌ Failed to extract cookies: {e}")
+        except Exception as error:
+            logger.error(f"Failed to extract cookies: {error}")
             return {}
 
     def _build_headers(self) -> Dict[str, str]:
         return {
-            "x-csrftoken": self._cookies.get("csrftoken", ""),
             "Cookie": "; ".join([f"{name}={value}" for name, value in self._cookies.items()]),
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "x-csrftoken": self._cookies.get("csrftoken", ""),
             "Referer": self._event_config.base_url,
             "Origin": self._event_config.base_url,
+            "User-Agent": self._user_agent,
             "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": "gzip, deflate, br, zstd",
-            "content-type": "application/json",
-            "foo": "bar",
+            "Content-Type": "application/json",
             "Connection": "keep-alive",
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
-            "Priority": "u=0",
             "TE": "trailers",
+            "Priority": "u=0",
         }
