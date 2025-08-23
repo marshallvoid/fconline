@@ -1,27 +1,15 @@
 import tkinter as tk
-from inspect import isawaitable
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Counter, List, Optional, Tuple, TypeVar, Union
-
-from loguru import logger
+from typing import TYPE_CHECKING, Any, Callable, Counter, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from src.schemas.spin_response import SpinResult
 
 
-T = TypeVar("T")
-
-
-async def maybe_awaitable(func: Union[T, Awaitable[T]]) -> T:
-    if isawaitable(func):
-        return await func
-    return func
-
-
-def maybe_callback(callback: Optional[Callable], *args: Any, **kwargs: Any) -> None:
-    if callback is None:
+def maybe_execute(func: Optional[Callable], *args: Any, **kwargs: Any) -> None:
+    if func is None:
         return
 
-    callback(*args, **kwargs)
+    func(*args, **kwargs)
 
 
 def format_spin_results_block(spin_results: List["SpinResult"]) -> str:
@@ -69,7 +57,6 @@ def get_browser_position(
     screen_height: int,
 ) -> Tuple[int, int, int, int]:
     if screen_width <= 0 or screen_height <= 0:
-        logger.warning("⚠️ Invalid screen dimensions, using default values")
         screen_width = 1920
         screen_height = 1080
 
@@ -89,7 +76,6 @@ def get_browser_position(
         width = grid_width
         height = grid_height
 
-        logger.info(f"📍 Browser {browser_index}: Grid position ({row}, {col}) -> ({x}, {y}) {width}x{height}")
         return x, y, width, height
 
     else:
@@ -102,5 +88,4 @@ def get_browser_position(
         x = (screen_width - width) // 2
         y = (screen_height - height) // 2
 
-        logger.info(f"📍 Browser {browser_index}: Center position ({x}, {y}) {width}x{height}")
         return x, y, width, height

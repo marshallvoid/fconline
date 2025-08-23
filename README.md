@@ -2,36 +2,6 @@
 
 A Python-based automation tool for FC Online events featuring a modern GUI interface and intelligent browser automation with anti-detection capabilities.
 
-## 🏗️ Architecture
-
-### Core Components
-
-```
-├── src/
-│   ├── main.py              # Main application entry point
-│   ├── manage.py            # Alternative entry point (recommended)
-│   ├── core/
-│   │   ├── main_tool.py     # Core automation engine
-│   │   ├── event_config.py  # Event configuration system
-│   │   ├── login_handler.py # Login automation and form handling
-│   │   └── websocket_handler.py # WebSocket monitoring and auto-spin logic
-│   ├── gui/
-│   │   ├── main_window.py   # Main GUI application
-│   │   └── components/      # Modular GUI components
-│   │       ├── event_tab.py # Event-specific configuration tabs
-│   │       └── activity_log_tab.py # Real-time activity logging
-│   ├── infrastructure/
-│   │   ├── logger.py        # Logging configuration with Loguru
-│   ├── utils/
-│   │   ├── credentials.py   # Secure credential management
-│   │   ├── contants.py      # Event configurations and constants
-│   │   └── platforms.py     # Cross-platform browser detection
-│   └── schemas.py           # Pydantic data models
-├── build.spec              # PyInstaller build configuration
-├── build.sh / build.bat    # Build scripts for different platforms
-├── pyproject.toml          # Project configuration and dependencies
-```
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -78,7 +48,7 @@ playwright install chromium
 
 ### Running the Application
 
-#### GUI Application (Primary Method)
+#### GUI Application
 
 ```bash
 # Recommended entry point
@@ -86,80 +56,6 @@ uv run python manage.py
 
 # Alternative entry point
 uv run python src/main.py
-```
-
-#### CLI Application
-
-The CLI application provides a command-line interface for automated FC Online jackpot monitoring and spinning. It's ideal for headless servers, automation scripts, or when you prefer command-line tools over the GUI.
-
-**CLI Options:**
-
-| Option                     | Type    | Required | Default       | Description                                                      |
-| -------------------------- | ------- | -------- | ------------- | ---------------------------------------------------------------- |
-| `--base-url`               | string  | Yes      | -             | FC Online event URL (e.g., https://typhu.fconline.garena.vn)     |
-| `--username, -u`           | string  | No       | -             | Account username (can be omitted to read from ENV FC_USERNAME)   |
-| `--password, -p`           | string  | No       | -             | Account password (can be omitted to read from ENV FC_PASSWORD)   |
-| `--spin-action`            | integer | No       | 1             | Spin type (default: 1)                                           |
-| `--target-special-jackpot` | integer | No       | 10000         | Special Jackpot threshold to stop auto (default: 10000)          |
-| `--user-endpoint`          | string  | No       | api/user/get  | User info endpoint (default: api/user/get)                       |
-| `--spin-endpoint`          | string  | No       | api/user/spin | Spin endpoint (default: api/user/spin)                           |
-| `--duration`               | integer | No       | -             | Run for N seconds then exit (default: run until Ctrl+C)          |
-| `--log-level`              | string  | No       | INFO          | Log level: TRACE, DEBUG, INFO, SUCCESS, WARNING, ERROR, CRITICAL |
-
-**Examples:**
-
-1. **Basic monitoring with default settings:**
-
-```bash
-uv run fconline \
-  --base-url https://typhu.fconline.garena.vn \
-  --username player123 \
-  --password mypass123 \
-  --spin-action 1 \
-  --target-special-jackpot 15000
-```
-
-2. **Custom endpoints with duration limit:**
-
-```bash
-uv run fconline \
-  --base-url https://typhu.fconline.garena.vn \
-  --username player123 \
-  --password mypass123 \
-  --spin-action 2 \
-  --target-special-jackpot 8000 \
-  --duration 3600 \
-  --log-level DEBUG
-```
-
-3. **Environment variables with minimal logging:**
-
-```bash
-# Set environment variables
-export FC_USERNAME=player123
-export FC_PASSWORD=mypass123
-
-# Run without username/password arguments
-uv run fconline \
-  --base-url https://typhu.fconline.garena.vn \
-  --spin-action 1 \
-  --target-special-jackpot 20000 \
-  --log-level WARNING
-```
-
-4. **Interactive credential input:**
-
-```bash
-# Run without username/password arguments or environment variables
-# The tool will prompt you to enter them interactively
-uv run fconline \
-  --base-url https://typhu.fconline.garena.vn \
-  --spin-action 1 \
-  --target-special-jackpot 15000
-
-# You'll see prompts like:
-# Username:
-# Password: (hidden input)
 ```
 
 ## ⚙️ Configuration

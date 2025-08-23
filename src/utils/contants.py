@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-# Application name displayed in UI and notifications
 PROGRAM_NAME = "FC Online Automation Tool"
 
 
@@ -24,8 +23,6 @@ class EventConfig:
     submit_btn_selector: str = "form button[type='submit']"
 
 
-# Configuration mapping for different FC Online game events
-# Each event has specific spin actions and base URL
 EVENT_CONFIGS_MAP: Dict[str, EventConfig] = {
     "Bi Lắc": EventConfig(
         tab_attr_name="_bilac_tab",

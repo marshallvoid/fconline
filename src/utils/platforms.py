@@ -2,11 +2,8 @@ import os
 import platform
 import shutil
 import subprocess
-import tempfile
-import time
 from typing import Optional
 
-import shortuuid
 from loguru import logger
 
 
@@ -29,7 +26,7 @@ class PlatformManager:
 
     @classmethod
     def is_unix(cls) -> bool:
-        return cls.platform() in ["linux", "darwin"]
+        return cls.is_linux() or cls.is_macos()
 
     @classmethod
     def node(cls) -> str:
@@ -78,52 +75,6 @@ class PlatformManager:
         return next((p for p in chrome_paths if os.path.exists(p)), None)
 
     @classmethod
-    def get_user_data_directory(cls) -> str:
-        # Generate a unique directory name with timestamp and UUID
-        timestamp, unique_id = int(time.time()), shortuuid.uuid()
-        dir_name = f"fconline-automation-{timestamp}-{unique_id}"
-
-        user_data_dir = os.path.join(tempfile.gettempdir(), dir_name)  # default: macos and linux
-
-        if cls.is_windows():  # Windows
-            # Use TEMP directory on Windows
-            temp_dir = os.environ.get("TEMP", os.environ.get("TMP", tempfile.gettempdir()))
-            user_data_dir = os.path.join(temp_dir, dir_name)
-
-        # Create directory if it doesn't exist
-        try:
-            os.makedirs(user_data_dir, exist_ok=True)
-            logger.info(f"📁 Created user data directory: {user_data_dir}")
-
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to create user data directory: {e}")
-            # Fallback to system temporary directory with different name
-            fallback_dir = os.path.join(tempfile.gettempdir(), f"fconline-automation-fallback-{unique_id}")
-            try:
-                os.makedirs(fallback_dir, exist_ok=True)
-                logger.info(f"📁 Fallback user data directory: {fallback_dir}")
-                user_data_dir = fallback_dir
-
-            except Exception as fallback_error:
-                logger.error(f"❌ Failed to create fallback directory: {fallback_error}")
-                # Last resort: use system temp directory directly
-                user_data_dir = tempfile.gettempdir()
-
-        return user_data_dir
-
-    @classmethod
-    def cleanup_user_data_directory(cls, user_data_dir: Optional[str] = None) -> None:
-        if not user_data_dir or not os.path.exists(user_data_dir):
-            return
-
-        try:
-            shutil.rmtree(user_data_dir, ignore_errors=True)
-            logger.info(f"🧹 Cleaned up user data directory: {user_data_dir}")
-
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to cleanup user data directory: {e}")
-
-    @classmethod
     def get_default_browser_path(cls, fallback_browser: str = "chrome") -> Optional[str]:
         match cls.platform():
             case "darwin":
@@ -137,7 +88,7 @@ class PlatformManager:
 
         # If default browser detection failed or browser not found, fallback to Chrome
         if not default_browser_path or not os.path.exists(default_browser_path):
-            logger.warning(f"🔍 Default browser not detected, falling back to {fallback_browser.title()}")
+            logger.warning(f"Default browser not detected, falling back to {fallback_browser.title()}")
             match fallback_browser:
                 case "chrome":
                     default_browser_path = cls.get_chrome_executable_path()
@@ -149,9 +100,6 @@ class PlatformManager:
                     default_browser_path = shutil.which("brave")
                 case _:
                     default_browser_path = None
-
-        if default_browser_path:
-            logger.info(f"🌐 Using default browser: {default_browser_path}")
 
         return default_browser_path
 
@@ -181,7 +129,7 @@ class PlatformManager:
                     return shutil.which("msedge")
 
         except (ImportError, Exception):
-            logger.warning("🔍 Failed to detect default browser on Windows")
+            logger.error("Failed to detect default browser on Windows")
 
         return None
 
@@ -210,7 +158,7 @@ class PlatformManager:
                 return "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
 
         except Exception:
-            logger.warning("🔍 Failed to detect default browser on macOS")
+            logger.error("Failed to detect default browser on macOS")
 
         return None
 
@@ -241,6 +189,6 @@ class PlatformManager:
                 return shutil.which("firefox")
 
         except Exception:
-            logger.warning("🔍 Failed to detect default browser on Linux")
+            logger.error("Failed to detect default browser on Linux")
 
         return None

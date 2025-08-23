@@ -30,13 +30,25 @@ class ActivityLogTab:
     def frame(self) -> ttk.Frame:
         return self._frame
 
-    def add_message(self, tag: MessageTag, message: str) -> None:
+    def add_message(self, tag: MessageTag, message: str, compact: bool = False) -> None:
         if not message.strip():
             return
 
         # Add timestamp to message for logging purposes
         timestamp = datetime.now().strftime("%H:%M:%S")
-        timestamped_message = f"[{timestamp}] {message.strip()}"
+
+        # If compact mode is enabled, remove username prefix and check for duplicates
+        if compact:
+            # Remove username prefix if present (e.g., "[username] message" -> "message")
+            message_content = self._extract_message_content(message=message)
+            if self._is_message_duplicate(message_content=message_content):
+                return  # Skip duplicate message
+
+            # Use message content without username prefix for compact mode
+            timestamped_message = f"[{timestamp}] {message_content}"
+        else:
+            # Keep original message with username prefix for non-compact mode
+            timestamped_message = f"[{timestamp}] {message.strip()}"
 
         # Distribute message to relevant tabs based on message type
         if tag != MessageTag.WEBSOCKET:
@@ -219,3 +231,56 @@ class ActivityLogTab:
         self._notebook.bind("<<NotebookTabChanged>>", _on_tab_changed)
         self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
         self._frame.after_idle(_schedule_focus_current_tab)
+
+    def _extract_message_content(self, message: str) -> str:
+        # Remove username prefix if present (e.g., "[username] message" -> "message")
+        if "]" in message and message.startswith("["):
+            # Find the first "]" and extract content after it
+            end_bracket = message.find("]")
+            if end_bracket != -1:
+                content = message[end_bracket + 1 :].strip()
+                return content
+
+        # If no username prefix, return the message as is
+        return message.strip()
+
+    def _is_message_duplicate(self, message_content: str) -> bool:
+        for tab_info in self._message_tabs.values():
+            text_widget = tab_info["text_widget"]
+            current_text = text_widget.get("1.0", tk.END)
+
+            # Check if message content exists in current tab
+            if self._contains_message_content(tab_text=current_text, message_content=message_content):
+                return True
+
+        return False
+
+    def _contains_message_content(self, tab_text: str, message_content: str) -> bool:
+        # Split tab text into lines and check each line
+        lines = tab_text.split("\n")
+
+        for line in lines:
+            if not line.strip():
+                continue
+
+            # Extract content from line (remove timestamp and username)
+            line_content = self._extract_line_content(line=line)
+            if line_content == message_content:
+                return True
+
+        return False
+
+    def _extract_line_content(self, line: str) -> str:
+        # Remove timestamp prefix [HH:MM:SS]
+        if line.startswith("[") and "]" in line:
+            first_bracket_end = line.find("]")
+            if first_bracket_end != -1:
+                line = line[first_bracket_end + 1 :].strip()
+
+        # Remove username prefix [username] if present
+        if line.startswith("[") and "]" in line:
+            second_bracket_end = line.find("]")
+            if second_bracket_end != -1:
+                line = line[second_bracket_end + 1 :].strip()
+
+        return line.strip()

@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -4490,6 +4490,15 @@ wheels = [
 ]
 
 [[package]]
+name = "random-user-agent"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ab/29/7bfe8fec7002a62ebf3317af6c52251f229516d7ff405ea9b168f8417404/random_user_agent-1.0.1.tar.gz", hash = "sha256:8f8ca26ec8cb1d24ad1758d8b8f700d154064d641dbe9a255cfec42960fbd012", size = 8237117, upload-time = "2018-12-26T08:12:58.56Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/61/88/8a953b6f08d7cc709695be1a640cdd3a50996636e675381c2b3ec2d7ec44/random_user_agent-1.0.1-py3-none-any.whl", hash = "sha256:535636a55fb63fe3d74fd0260d854c241d9f2946447026464e578e68eac17dac", size = 8235140, upload-time = "2018-12-26T08:12:33.069Z" },
+]
+
+[[package]]
 name = "referencing"
 version = "0.36.2"
 source = { registry = "https://pypi.org/simple" }
@@ -4753,6 +4762,7 @@ dependencies = [
     { name = "loguru" },
     { name = "notify-py" },
     { name = "pydantic" },
+    { name = "random-user-agent" },
     { name = "shortuuid" },
     { name = "sv-ttk" },
     { name = "watchdog" },
@@ -4788,6 +4798,7 @@ requires-dist = [
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "notify-py", specifier = ">=0.3.2" },
     { name = "pydantic", specifier = ">=2.11.7" },
+    { name = "random-user-agent", specifier = ">=1.0.1" },
     { name = "shortuuid", specifier = ">=1.0.13" },
     { name = "sv-ttk", specifier = ">=2.6.1" },
     { name = "watchdog", specifier = ">=6.0.0" },
