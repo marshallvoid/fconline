@@ -61,6 +61,11 @@ class WebsocketHandler:
         # Epoch counter to track jackpot resets and prevent stale spin operations
         self._jackpot_epoch: int = 0
 
+        # Extract FC amount from spin action
+        spin_action_text = self._event_config.spin_actions[self._spin_action - 1]
+        fc_match = re.search(r"(\d+)", spin_action_text)
+        self._spin_fc_amount = int(fc_match.group(1)) if fc_match else 0
+
     @property
     def is_logged_in(self) -> bool:
         return self._is_logged_in
@@ -171,7 +176,7 @@ class WebsocketHandler:
                     # Check if special jackpot target reached
                     if new_value >= self._target_special_jackpot:
                         message = f"Special Jackpot has reached {self._target_special_jackpot:,}"
-                        hp.maybe_execute(self._on_add_message, MessageTag.REACHED_GOAL, message, True)
+                        hp.maybe_execute(self._on_add_message, MessageTag.REACHED_GOAL, message)
 
                         # Trigger immediate spin when target is reached
                         if not self._spin_task or self._spin_task.done():
@@ -192,7 +197,7 @@ class WebsocketHandler:
 
                     await self._check_winner(is_jackpot=is_jackpot, target_nickname=nickname, target_value=value)
 
-                    if self._fconline_client:
+                    if self._fconline_client and self._is_logged_in:
                         asyncio.create_task(self._delayed_reload_balance(delay=5.0))
 
                 case _:
@@ -270,9 +275,9 @@ class WebsocketHandler:
             tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT
             audio_name = "coin-1" if is_jackpot else "coin-2"
 
-            hp.maybe_execute(self._on_add_notification, target_nickname, str(target_value))
             hp.maybe_execute(self._on_account_won, self._username)
-            threading.Thread(target=sounds.send_notification, args=(message, f"{audio_name}.wav"), daemon=True).start()
+            hp.maybe_execute(self._on_add_notification, target_nickname, str(target_value))
+            threading.Thread(target=sounds.send_notification, args=(f"{audio_name}.wav"), daemon=True).start()
 
         hp.maybe_execute(self._on_add_message, tag, message, True)
 
