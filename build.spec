@@ -18,6 +18,7 @@ a = Analysis(
         'sv_ttk',
         'darkdetect',
         'notify-py',
+        'playsound3',
 
         # Networking and automation
         'aiohttp',

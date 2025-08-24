@@ -1,8 +1,7 @@
 import tkinter as tk
-from typing import TYPE_CHECKING, Any, Callable, Counter, List, Optional, Tuple
+from typing import Any, Callable, Counter, List, Optional, Tuple
 
-if TYPE_CHECKING:
-    from src.schemas.spin_response import SpinResult
+from src.schemas.spin_response import SpinResult
 
 
 def maybe_execute(func: Optional[Callable], *args: Any, **kwargs: Any) -> None:

@@ -12,6 +12,10 @@ from src.utils.contants import EVENT_CONFIGS_MAP
 
 
 class AccountsTab:
+    BROWSER_POS_TEXT = "Browser Position: {position}"
+    USER_INFO_TEXT = "Nickname: {nickname}"
+    FC_INFO_TEXT = "FC: {fc}"
+
     def __init__(
         self,
         parent: tk.Misc,
@@ -80,8 +84,8 @@ class AccountsTab:
         main_content_frame.pack(fill="both", expand=True)
 
         # Left side: Accounts list frame
-        left_frame = ttk.LabelFrame(main_content_frame, text="Saved Accounts", padding=10)
-        left_frame.pack(side="left", fill="both", expand=True)
+        self._left_frame = ttk.LabelFrame(main_content_frame, text="Saved Accounts", padding=10)
+        self._left_frame.pack(side="left", fill="both", expand=True)
 
         # Configure columns for Treeview
         columns: Dict[str, Dict[str, Any]] = {
@@ -92,7 +96,7 @@ class AccountsTab:
         }
 
         # Create a frame to constrain treeview width
-        tree_container = ttk.Frame(left_frame, width=300)
+        tree_container = ttk.Frame(self._left_frame, width=300)
         tree_container.pack_propagate(False)  # Prevent frame from expanding
 
         self._accounts_tree = ttk.Treeview(
@@ -121,25 +125,29 @@ class AccountsTab:
             self._accounts_tree.column(column, **config)
 
         # Right side: Action buttons frame
-        right_frame = ttk.LabelFrame(main_content_frame, text="Actions", padding=10)
-        right_frame.pack(side="right", fill="y", padx=(10, 0))
+        self._right_frame = ttk.LabelFrame(main_content_frame, text="Actions", padding=10)
+        self._right_frame.pack(side="right", fill="y", padx=(10, 0))
 
+        # Add Account button
         self._add_account_btn = ttk.Button(
-            right_frame,
+            self._right_frame,
             text="Add Account",
             style="Accent.TButton",
             width=15,
+            state="normal",
             command=self._add_account,
         )
-        self._add_account_btn.pack(fill="x", pady=(0, 10))
+        self._add_account_btn.pack(fill="x")
 
-        separator_add = ttk.Separator(right_frame, orient="horizontal")
-        separator_add.pack(fill="x", pady=(0, 10))
+        # Separator between Add Account button and All buttons group
+        separator_add = ttk.Separator(self._right_frame, orient="horizontal")
+        separator_add.pack(fill="x", pady=15)
 
-        # Run All and Stop All buttons on the same row
-        control_all_container = ttk.Frame(right_frame)
+        # All buttons group (Run All/Stop All/Refresh All Page)
+        control_all_container = ttk.Frame(self._right_frame)
         control_all_container.pack(fill="x", pady=(0, 10))
 
+        # Run All button
         self._run_all_btn = ttk.Button(
             control_all_container,
             text="Run All",
@@ -150,6 +158,7 @@ class AccountsTab:
         )
         self._run_all_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
+        # Stop All button
         self._stop_all_btn = ttk.Button(
             control_all_container,
             text="Stop All",
@@ -160,22 +169,120 @@ class AccountsTab:
         )
         self._stop_all_btn.pack(side="right", fill="x", expand=True)
 
+        # Refresh All Page button
         self._refresh_all_page_btn = ttk.Button(
-            right_frame,
+            self._right_frame,
             text="Refresh All Page",
             style="Accent.TButton",
             width=15,
+            state="disabled",
             command=self._refresh_all_page,
         )
-        self._refresh_all_page_btn.pack(fill="x", pady=(0, 10))
+        self._refresh_all_page_btn.pack(fill="x")
 
-        # Separator between All buttons and Individual buttons
-        separator_all = ttk.Separator(right_frame, orient="horizontal")
-        separator_all.pack(fill="x", pady=(0, 10))
+        # Separator between All buttons group and Single buttons group
+        separator_all = ttk.Separator(self._right_frame, orient="horizontal")
+        separator_all.pack(fill="x", pady=15)
 
-        # Frame for hidden buttons
-        self._hidden_frame = ttk.Frame(right_frame)
-        self._hidden_frame.pack(fill="x")
+        # Single buttons group (Run/Stop/Refresh Page)
+        control_container = ttk.Frame(self._right_frame)
+        control_container.pack(fill="x", pady=(0, 10))
+
+        # Run button
+        self._run_btn = ttk.Button(
+            control_container,
+            text="Run",
+            style="Accent.TButton",
+            width=15,
+            state="disabled",
+        )
+        self._run_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        # Stop button
+        self._stop_btn = ttk.Button(
+            control_container,
+            text="Stop",
+            style="Accent.TButton",
+            width=15,
+            state="disabled",
+        )
+        self._stop_btn.pack(side="right", fill="x", expand=True)
+
+        # Refresh Page button
+        self._refresh_btn = ttk.Button(
+            self._right_frame,
+            text="Refresh Page",
+            style="Accent.TButton",
+            width=15,
+            state="disabled",
+        )
+        self._refresh_btn.pack(fill="x")
+
+        # Separator between Single buttons group and Management buttons group
+        separator_single = ttk.Separator(self._right_frame, orient="horizontal")
+        separator_single.pack(fill="x", pady=15)
+
+        # Management buttons group (Mark/Edit/Delete)
+        management_container = ttk.Frame(self._right_frame)
+        management_container.pack(fill="x", pady=(0, 10))
+
+        # Mark Not Run button
+        self._mark_not_run_btn = ttk.Button(
+            management_container,
+            text="Mark Not Run",
+            width=15,
+            state="disabled",
+        )
+        self._mark_not_run_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        # Edit button
+        self._edit_btn = ttk.Button(
+            management_container,
+            text="Edit",
+            width=15,
+            state="disabled",
+        )
+        self._edit_btn.pack(side="right", fill="x", expand=True)
+
+        # Delete button (Delete button is in the right side of the right frame)
+        self._delete_btn = ttk.Button(
+            self._right_frame,
+            text="Delete",
+            width=15,
+            state="disabled",
+        )
+        self._delete_btn.pack(fill="x")
+
+        # Information frame (Browser Position/Nickname/FC)
+        info_frame = ttk.LabelFrame(self._right_frame, text="Information", padding=10)
+        info_frame.pack(fill="x", pady=(15, 0))
+
+        # Browser position label
+        self._browser_pos_label = ttk.Label(
+            info_frame,
+            text=self.BROWSER_POS_TEXT.format(position="-"),
+            font=("Arial", 14),
+            foreground="#6b7280",
+        )
+        self._browser_pos_label.pack(anchor="w", pady=(0, 5))
+
+        # Nickname label
+        self._user_info_label = ttk.Label(
+            info_frame,
+            text=self.USER_INFO_TEXT.format(nickname="-"),
+            font=("Arial", 14),
+            foreground="#6b7280",
+        )
+        self._user_info_label.pack(anchor="w", pady=(0, 5))
+
+        # FC label
+        self._fc_info_label = ttk.Label(
+            info_frame,
+            text=self.FC_INFO_TEXT.format(fc="-"),
+            font=("Arial", 14),
+            foreground="#6b7280",
+        )
+        self._fc_info_label.pack(anchor="w")
 
         # Bind selection event
         self._accounts_tree.bind("<<TreeviewSelect>>", self._on_account_selected)
@@ -187,19 +294,12 @@ class AccountsTab:
 
     def _on_account_selected(self, _event: tk.Event) -> None:
         selection = self._accounts_tree.selection()
-
-        # Clear previous buttons
-        for widget in self._hidden_frame.winfo_children():
-            widget.destroy()
-
         if not selection:
             return
 
-        # Get selected username
+        # Find the account
         item = self._accounts_tree.item(selection[0])
         username = item["values"][0]
-
-        # Find the account
         selected_account = None
         for account in self._accounts:
             if account.username == username:
@@ -209,111 +309,40 @@ class AccountsTab:
         if not selected_account:
             return
 
-        # Create buttons reflecting enabled state and running status
-        is_running = selected_account.username in self._running_usernames
+        # Update buttons reflecting enabled state and running status
         is_winning = selected_account.has_won
         is_marked_not_run = selected_account.marked_not_run
+        is_running = selected_account.username in self._running_usernames
 
-        # Control buttons group (Run/Stop)
-        control_container = ttk.Frame(self._hidden_frame)
-        control_container.pack(fill="x", pady=(0, 10))
-
-        run_btn = ttk.Button(
-            control_container,
-            text="Run",
-            style="Accent.TButton",
-            width=15,
+        self._run_btn.config(
             state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
             command=lambda: self._run_account(selected_account),
         )
-        run_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
-        stop_btn = ttk.Button(
-            control_container,
-            text="Stop",
-            style="Accent.TButton",
-            width=15,
+        self._stop_btn.config(
             state="disabled" if not is_running else "normal",
             command=lambda: self._stop_account(selected_account.username),
         )
-        stop_btn.pack(side="right", fill="x", expand=True)
 
-        refresh_btn = ttk.Button(
-            self._hidden_frame,
-            text="Refresh Page",
-            style="Accent.TButton",
-            width=15,
+        self._refresh_btn.config(
             state="normal" if is_running else "disabled",
             command=lambda: self._on_refresh_page(selected_account.username),
         )
-        refresh_btn.pack(fill="x", pady=(0, 10))
 
-        # Separator between Individual buttons and Management buttons
-        separator_individual = ttk.Separator(self._hidden_frame, orient="horizontal")
-        separator_individual.pack(fill="x", pady=(0, 10))
-
-        # Management buttons group (Mark/Edit)
-        management_container = ttk.Frame(self._hidden_frame)
-        management_container.pack(fill="x", pady=(0, 10))
-
-        mark_not_run_btn = ttk.Button(
-            management_container,
-            text="Unmark Not Run" if is_marked_not_run else "Mark Not Run",
-            width=15,
+        self._mark_not_run_btn.config(
             state="disabled" if is_running or is_winning else "normal",
             command=lambda: self._toggle_mark_not_run(selected_account),
         )
-        mark_not_run_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
-        edit_btn = ttk.Button(
-            management_container,
-            text="Edit",
-            width=15,
+        self._edit_btn.config(
             state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
             command=lambda: self._edit_account(selected_account),
         )
-        edit_btn.pack(side="right", fill="x", expand=True)
 
-        # Delete button
-        delete_btn = ttk.Button(
-            self._hidden_frame,
-            text="Delete",
-            width=15,
+        self._delete_btn.config(
             state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
             command=lambda: self._delete_account(selected_account),
         )
-        delete_btn.pack(fill="x")
-
-        # Frame for browser and user information
-        info_frame = ttk.LabelFrame(self._hidden_frame, text="Information", padding=10)
-        info_frame.pack(fill="x", pady=(10, 0))
-
-        # Browser position info
-        self._browser_position_label = ttk.Label(
-            info_frame,
-            text="Browser Position: -",
-            font=("Arial", 14),
-            foreground="#6b7280",
-        )
-        self._browser_position_label.pack(anchor="w", pady=(0, 5))
-
-        # User info
-        self._user_info_label = ttk.Label(
-            info_frame,
-            text="User: -",
-            font=("Arial", 14),
-            foreground="#6b7280",
-        )
-        self._user_info_label.pack(anchor="w", pady=(0, 5))
-
-        # FC info
-        self._fc_info_label = ttk.Label(
-            info_frame,
-            text="FC: -",
-            font=("Arial", 14),
-            foreground="#6b7280",
-        )
-        self._fc_info_label.pack(anchor="w")
 
         # Update information display
         self._update_info_display(account=selected_account, is_running=is_running)
@@ -335,14 +364,9 @@ class AccountsTab:
             label.config(text=unknown_text, foreground=gray)
 
         if not is_running:
-            if hasattr(self, "_browser_position_label"):
-                self._browser_position_label.config(text="Browser Position: Not Running", foreground=gray)
-
-            if hasattr(self, "_user_info_label"):
-                self._user_info_label.config(text="User: Unknown", foreground=gray)
-
-            if hasattr(self, "_fc_info_label"):
-                self._fc_info_label.config(text="FC: Unknown", foreground=gray)
+            self._browser_pos_label.config(text=self.BROWSER_POS_TEXT.format(position="Not Running"), foreground=gray)
+            self._user_info_label.config(text=self.USER_INFO_TEXT.format(nickname="Unknown"), foreground=gray)
+            self._fc_info_label.config(text=self.FC_INFO_TEXT.format(fc="Unknown"), foreground=gray)
 
             return
 
@@ -350,9 +374,9 @@ class AccountsTab:
             if account.username in self._browser_positions:
                 browser_index = self._browser_positions[account.username]
                 pos = positions[browser_index] if browser_index < len(positions) else "Center"
-                return f"Browser Position: {pos}"
+                return self.BROWSER_POS_TEXT.format(position=pos)
 
-            return "Browser Position: Unknown"
+            return self.BROWSER_POS_TEXT.format(position="Unknown")
 
         def pick_display_name() -> Optional[str]:
             u = self._users_info[account.username]
@@ -364,26 +388,21 @@ class AccountsTab:
 
             return None
 
-        if hasattr(self, "_browser_position_label"):
-            set_ok_or_unknown(
-                label=self._browser_position_label,
-                build_text=browser_pos_text,
-                unknown_text="Browser Position: Unknown",
-            )
-
-        if hasattr(self, "_user_info_label"):
-            set_ok_or_unknown(
-                label=self._user_info_label,
-                build_text=lambda: f"User: {pick_display_name()}",
-                unknown_text="User: Unknown",
-            )
-
-        if hasattr(self, "_fc_info_label"):
-            set_ok_or_unknown(
-                label=self._fc_info_label,
-                build_text=lambda: f"FC: {self._users_info[account.username].fc}",
-                unknown_text="FC: Unknown",
-            )
+        set_ok_or_unknown(
+            label=self._browser_pos_label,
+            build_text=browser_pos_text,
+            unknown_text=self.BROWSER_POS_TEXT.format(position="Unknown"),
+        )
+        set_ok_or_unknown(
+            label=self._user_info_label,
+            build_text=lambda: self.USER_INFO_TEXT.format(nickname=pick_display_name()),
+            unknown_text=self.USER_INFO_TEXT.format(nickname="Unknown"),
+        )
+        set_ok_or_unknown(
+            label=self._fc_info_label,
+            build_text=lambda: self.FC_INFO_TEXT.format(fc=self._users_info[account.username].fc),
+            unknown_text=self.FC_INFO_TEXT.format(fc="Unknown"),
+        )
 
     def _get_account_at_event(self, event: tk.Event) -> Optional[Account]:
         iid = self._accounts_tree.identify_row(event.y)
@@ -436,10 +455,6 @@ class AccountsTab:
         for item in self._accounts_tree.get_children():
             self._accounts_tree.delete(item)
 
-        # Clear Delete buttons
-        for widget in self._hidden_frame.winfo_children():
-            widget.destroy()
-
         # Configure tags for colors
         for tag in AccountTag:
             self._accounts_tree.tag_configure(tag.name, background=tag.value[0], foreground=tag.value[1])
@@ -474,6 +489,7 @@ class AccountsTab:
 
         any_running = any(a.username in self._running_usernames for a in self._accounts)
         self._stop_all_btn.config(state="normal" if any_running else "disabled")
+        self._refresh_all_page_btn.config(state="normal" if any_running else "disabled")
 
     def _open_account_dialog(
         self,

@@ -301,9 +301,9 @@ class MainWindow:
 
         def on_account_won(won_username: str) -> None:
             def _cb() -> None:
-                self._accounts_tab.mark_account_as_won(won_username)
+                self._accounts_tab.mark_account_as_won(username=won_username)
                 if close_when_jackpot_won:
-                    self._stop_account(won_username)
+                    self._stop_account(username=won_username)
 
             self._root.after(0, _cb)
 

@@ -101,7 +101,7 @@ class FCOnlineClient:
                         user_detail.mc = reload_response.payload.mc or user_detail.mc
 
                         hp.maybe_execute(self._on_update_user_info, username, user_detail)
-                        hp.maybe_execute(self._on_add_message, MessageTag.SUCCESS, "Reload balance successfully", True)
+                        hp.maybe_execute(self._on_add_message, MessageTag.SUCCESS, "Reload balance successfully")
 
         except Exception as error:
             logger.error(f"Failed to reload balance: {error}")
