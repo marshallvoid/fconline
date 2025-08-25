@@ -12,7 +12,8 @@ class NotificationIcon:
         self._parent: tk.Misc = parent
         self._menu_window: Optional[tk.Toplevel] = None
 
-        self._notifications: List[Notification] = self._load_notifications_from_config()
+        self._configs = ConfigsManager.load_configs()
+        self._notifications: List[Notification] = self._configs.notifications
 
         self._build()
 
@@ -225,11 +226,6 @@ class NotificationIcon:
         if self._menu_window:
             self._menu_window.destroy()
 
-    def _load_notifications_from_config(self) -> List[Notification]:
-        configs = ConfigsManager.load_configs()
-        return configs.notifications
-
     def _save_notifications_to_config(self) -> None:
-        configs = ConfigsManager.load_configs()
-        configs.notifications = self._notifications
-        ConfigsManager.save_configs(configs)
+        self._configs.notifications = self._notifications
+        ConfigsManager.save_configs(self._configs)

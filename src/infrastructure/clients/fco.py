@@ -16,39 +16,24 @@ from src.utils.requests import RequestManager
 class FCOnlineClient:
     def __init__(
         self,
-        page: Page,
-        user_agent: str,
         event_config: EventConfig,
+        page: Page,
+        cookies: Dict[str, str],
+        headers: Dict[str, str],
         on_add_message: Optional[Callable[[MessageTag, str, bool], None]],
         on_update_user_info: Optional[Callable[[str, UserDetail], None]],
     ) -> None:
         self._page = page
-        self._user_agent = user_agent
-        self._event_config = event_config
+        self._cookies = cookies
+        self._headers = headers
 
         self._on_add_message = on_add_message
         self._on_update_user_info = on_update_user_info
 
-        # HTTP request configuration extracted from browser session
-        self._cookies: Dict[str, str] = {}
-        self._headers: Dict[str, str] = {}
         self._user_info: Optional[UserReponse] = None
-
-        self._user_api = f"{self._event_config.base_url}/{self._event_config.user_endpoint}"
-        self._spin_api = f"{self._event_config.base_url}/{self._event_config.spin_endpoint}"
-        self._reload_api = f"{self._event_config.base_url}/{self._event_config.reload_endpoint}"
-
-    @property
-    def cookies(self) -> Dict[str, str]:
-        return self._cookies
-
-    @property
-    def headers(self) -> Dict[str, str]:
-        return self._headers
-
-    async def prepare_resources(self) -> None:
-        self._cookies = await self._build_cookies()
-        self._headers = self._build_headers()
+        self._user_api = f"{event_config.base_url}/{event_config.user_endpoint}"
+        self._spin_api = f"{event_config.base_url}/{event_config.spin_endpoint}"
+        self._reload_api = f"{event_config.base_url}/{event_config.reload_endpoint}"
 
     async def lookup(self) -> Optional[UserReponse]:
         try:
@@ -132,35 +117,3 @@ class FCOnlineClient:
 
         except Exception as error:
             logger.error(f"Failed to spin: {error}")
-
-    async def _build_cookies(self) -> Dict[str, str]:
-        try:
-            cookies = await self._page.context.cookies()
-            return {
-                name: value
-                for c in cookies
-                if (name := c.get("name")) is not None and (value := c.get("value")) is not None
-            }
-
-        except Exception as error:
-            logger.error(f"Failed to extract cookies: {error}")
-            return {}
-
-    def _build_headers(self) -> Dict[str, str]:
-        return {
-            "Cookie": "; ".join([f"{name}={value}" for name, value in self._cookies.items()]),
-            "x-csrftoken": self._cookies.get("csrftoken", ""),
-            "Referer": self._event_config.base_url,
-            "Origin": self._event_config.base_url,
-            "User-Agent": self._user_agent,
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Content-Type": "application/json",
-            "Connection": "keep-alive",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "TE": "trailers",
-            "Priority": "u=0",
-        }

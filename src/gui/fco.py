@@ -15,10 +15,10 @@ from src.gui.notification_icon import NotificationIcon
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserDetail
 from src.services.fco import MainTool
-from src.utils import files
 from src.utils import helpers as hp
 from src.utils.configs import ConfigsManager
 from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME
+from src.utils.files import FileManager
 from src.utils.platforms import PlatformManager
 
 
@@ -29,7 +29,7 @@ class MainWindow:
         self._root.resizable(width=False, height=False)
 
         try:
-            png_path = files.get_resource_path("assets/icon.png")
+            png_path = FileManager.get_resource_path("assets/icon.png")
             icon = tk.PhotoImage(file=png_path)
             self._root.iconphoto(True, icon)
 
@@ -38,15 +38,15 @@ class MainWindow:
 
         if PlatformManager.is_windows():
             try:
-                ico_path = files.get_resource_path("assets/icon.ico")
+                ico_path = FileManager.get_resource_path("assets/icon.ico")
                 self._root.iconbitmap(ico_path)
 
             except Exception:
                 pass
 
         # Track per-account running tool instances
-        configs = ConfigsManager.load_configs()
-        self._selected_event = configs.event or list(EVENT_CONFIGS_MAP.keys())[0]
+        self._configs = ConfigsManager.load_configs()
+        self._selected_event = self._configs.event or list(EVENT_CONFIGS_MAP.keys())[0]
         self._running_tools: Dict[str, MainTool] = {}
 
         self._setup_ui()
@@ -195,9 +195,8 @@ class MainWindow:
             # Update the accounts tab with new event configuration
             self._accounts_tab.selected_event = self._selected_event
 
-            configs = ConfigsManager.load_configs()
-            configs.event = self._selected_event
-            ConfigsManager.save_configs(configs)
+            self._configs.event = self._selected_event
+            ConfigsManager.save_configs(self._configs)
 
         event_combobox.bind("<<ComboboxSelected>>", on_event_changed)
 

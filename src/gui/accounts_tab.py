@@ -33,7 +33,8 @@ class AccountsTab:
         self._on_refresh_page = on_refresh_page
         self._on_update_target = on_update_target
 
-        self._accounts: List[Account] = self._load_accounts_from_config()
+        self._configs = ConfigsManager.load_configs()
+        self._accounts: List[Account] = self._configs.accounts
         self._running_usernames: Set[str] = set()
         self._users_info: Dict[str, UserDetail] = {}
         self._browser_positions: Dict[str, int] = {}
@@ -784,12 +785,7 @@ class AccountsTab:
         self._save_accounts_to_config()
         self._refresh_accounts_list()
 
-    def _load_accounts_from_config(self) -> List[Account]:
-        configs = ConfigsManager.load_configs()
-        return configs.accounts
-
     def _save_accounts_to_config(self) -> None:
-        configs = ConfigsManager.load_configs()
-        configs.event = self._selected_event
-        configs.accounts = self._accounts
-        ConfigsManager.save_configs(configs)
+        self._configs.event = self._selected_event
+        self._configs.accounts = self._accounts
+        ConfigsManager.save_configs(self._configs)

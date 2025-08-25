@@ -14,6 +14,7 @@ from src.schemas.user_response import UserReponse
 from src.utils import helpers as hp
 from src.utils import sounds
 from src.utils.contants import EventConfig
+from src.utils.files import FileManager
 
 
 class WebsocketHandler:
@@ -24,11 +25,12 @@ class WebsocketHandler:
     def __init__(
         self,
         page: Page,
-        current_jackpot: int,
+        event_name: str,
         event_config: EventConfig,
         username: str,
         spin_action: int,
         target_special_jackpot: int,
+        current_jackpot: int,
         on_account_won: Optional[Callable[[str], None]] = None,
         on_add_message: Optional[Callable[[MessageTag, str, bool], None]] = None,
         on_add_notification: Optional[Callable[[str, str], None]] = None,
@@ -37,11 +39,12 @@ class WebsocketHandler:
         on_update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self._page = page
-        self._current_jackpot = current_jackpot
+        self._event_name = event_name
         self._event_config = event_config
         self._username = username
         self._spin_action = spin_action
         self._target_special_jackpot = target_special_jackpot
+        self._current_jackpot = current_jackpot
 
         self._on_account_won = on_account_won
         self._on_add_message = on_add_message
@@ -210,6 +213,16 @@ class WebsocketHandler:
 
                     if self._fconline_client and self._is_logged_in:
                         asyncio.create_task(self._delayed_reload_balance(delay=5.0))
+
+                    threading.Thread(
+                        target=FileManager.save_jackpot_history,
+                        kwargs={
+                            "event_name": self._event_name,
+                            "event_kind": kind,
+                            "event_value": str(value),
+                        },
+                        daemon=True,
+                    ).start()
 
                 case _:
                     logger.warning(f"Unknown event type: {kind}")
