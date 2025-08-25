@@ -1,49 +1,6 @@
-try:
-    import os
-    import sys
-    import tkinter as tk
-    import traceback
-    from tkinter import messagebox
+import sys
 
-    import src.infrastructure.logger  # noqa: F401
-    from loguru import logger
-    from src.gui.fco import MainWindow
-    from src.utils import files
+from src.main import main
 
-    def main() -> None:
-        # Create and run main application window
-        app = MainWindow()
-        app.run()
-
-    if __name__ == "__main__":
-        main()
-
-except ImportError as e:
-    error_msg = f"{e}\nMake sure you have installed all required dependencies:\npip install -r requirements.txt"
-    logger.error(f"Import error: {error_msg}")
-
-    root = tk.Tk()
-    root.withdraw()
-    messagebox.showerror("Import Error", error_msg)
-    sys.exit(1)
-
-except Exception as error:
-    error_msg = f"Failed to start GUI application: {error}"
-    logger.error(error_msg)
-
-    root = tk.Tk()
-    root.withdraw()
-    messagebox.showerror("Error", error_msg)
-
-    # Also write to file as backup
-    try:
-        config_dir = files.get_config_data_directory()
-        log_file = os.path.join(config_dir, "app_error.log")
-        with open(log_file, "w", encoding="utf-8") as f:
-            f.write(traceback.format_exc() + "\n")
-            f.write(error_msg)
-
-    except Exception:
-        pass
-
-    sys.exit(1)
+if __name__ == "__main__":
+    sys.exit(main())

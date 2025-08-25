@@ -10,9 +10,9 @@ from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserDetail, UserReponse
 from src.services.login_handler import LoginHandler
 from src.services.websocket_handler import WebsocketHandler
-from src.utils import files
 from src.utils import helpers as hp
-from src.utils.contants import PROGRAM_NAME, EventConfig
+from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME, EventConfig
+from src.utils.files import FileManager
 from src.utils.platforms import PlatformManager
 from src.utils.requests import RequestManager
 
@@ -83,11 +83,19 @@ class MainTool:
             # Setup websocket handler for real-time jackpot monitoring
             self._websocket_handler = WebsocketHandler(
                 page=self._page,
-                current_jackpot=self._current_jackpot,
+                event_name=next(
+                    (
+                        event_name
+                        for event_name, event_config in EVENT_CONFIGS_MAP.items()
+                        if event_config.tab_attr_name == self._event_config.tab_attr_name
+                    ),
+                    "Unknown Event",
+                ),
                 event_config=self._event_config,
                 username=self._username,
                 spin_action=self._spin_action,
                 target_special_jackpot=self._target_special_jackpot,
+                current_jackpot=self._current_jackpot,
                 on_account_won=self._on_account_won,
                 on_add_message=self._on_add_message,
                 on_add_notification=self._on_add_notification,
@@ -112,13 +120,17 @@ class MainTool:
 
             # Initialize API client and fetch user profile information
             fconline_client = FCOnlineClient(
-                page=self._page,
-                user_agent=self._user_agent,
                 event_config=self._event_config,
+                page=self._page,
+                cookies=await RequestManager.get_cookies(page=self._page),
+                headers=await RequestManager.get_headers(
+                    page=self._page,
+                    event_config=self._event_config,
+                    user_agent=self._user_agent,
+                ),
                 on_add_message=self._on_add_message,
                 on_update_user_info=self._on_update_user_info,
             )
-            await fconline_client.prepare_resources()
             self._user_info = await fconline_client.lookup()
 
             self._update_ui()
@@ -154,7 +166,7 @@ class MainTool:
             logger.error(f"Failed to clean up browser resource: {error}")
 
         finally:
-            files.cleanup_user_data_directory(user_data_dir=self._user_data_dir)
+            FileManager.cleanup_user_data_directory(user_data_dir=self._user_data_dir)
             self._user_data_dir = None
             self._session = None
             self._page = None
@@ -265,7 +277,7 @@ class MainTool:
         for attempt in range(3):
             try:
                 # Use persistent profile on first attempt, temporary on retries
-                user_data_dir = None if attempt > 0 else files.get_user_data_directory()
+                user_data_dir = None if attempt > 0 else FileManager.get_user_data_directory()
                 # Store for cleanup later
                 if user_data_dir:
                     self._user_data_dir = user_data_dir

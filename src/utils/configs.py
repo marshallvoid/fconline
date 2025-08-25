@@ -7,7 +7,7 @@ from cryptography.fernet import Fernet
 from loguru import logger
 
 from src.schemas.configs import Configs
-from src.utils import files
+from src.utils.files import FileManager
 from src.utils.platforms import PlatformManager
 
 
@@ -16,7 +16,7 @@ class ConfigsManager:
     def load_configs(cls) -> Configs:
         configs = Configs()
         try:
-            configs_file = os.path.join(files.get_config_data_directory(), "configs.json")
+            configs_file = os.path.join(FileManager.get_config_data_directory(), "configs.json")
             if not os.path.exists(configs_file):
                 return configs
 
@@ -56,7 +56,7 @@ class ConfigsManager:
                 "notifications": [notification.model_dump() for notification in configs.notifications],
             }
 
-            configs_file = os.path.join(files.get_config_data_directory(), "configs.json")
+            configs_file = os.path.join(FileManager.get_config_data_directory(), "configs.json")
             with open(configs_file, "w", encoding="utf-8") as f:
                 json.dump(encrypted_configs, f, indent=2, ensure_ascii=False)
 
@@ -95,7 +95,7 @@ class ConfigsManager:
 
     @classmethod
     def _get_encryption_key(cls) -> bytes:
-        config_data_dir = files.get_config_data_directory()
+        config_data_dir = FileManager.get_config_data_directory()
         key_file = os.path.join(config_data_dir, ".key")
 
         try:
