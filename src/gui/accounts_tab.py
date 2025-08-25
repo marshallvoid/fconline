@@ -23,6 +23,7 @@ class AccountsTab:
         on_account_run: Callable[[str, str, int, int, bool], None],
         on_account_stop: Callable[[str], None],
         on_refresh_page: Callable[[str], None],
+        on_update_target: Callable[[str, int], None],
     ) -> None:
         self._frame = ttk.Frame(parent)
 
@@ -30,6 +31,7 @@ class AccountsTab:
         self._on_account_run = on_account_run
         self._on_account_stop = on_account_stop
         self._on_refresh_page = on_refresh_page
+        self._on_update_target = on_update_target
 
         self._accounts: List[Account] = self._load_accounts_from_config()
         self._running_usernames: Set[str] = set()
@@ -128,6 +130,10 @@ class AccountsTab:
         self._right_frame = ttk.LabelFrame(main_content_frame, text="Actions", padding=10)
         self._right_frame.pack(side="right", fill="y", padx=(10, 0))
 
+        # Management buttons group (Add/Mark Not Run/Edit/Delete)
+        management_container = ttk.Frame(self._right_frame)
+        management_container.pack(fill="x", pady=(0, 10))
+
         # Add Account button
         self._add_account_btn = ttk.Button(
             self._right_frame,
@@ -137,7 +143,34 @@ class AccountsTab:
             state="normal",
             command=self._add_account,
         )
-        self._add_account_btn.pack(fill="x")
+        self._add_account_btn.pack(fill="x", pady=(0, 10))
+
+        # Mark Not Run button
+        self._mark_not_run_btn = ttk.Button(
+            management_container,
+            text="Mark Not Run",
+            width=15,
+            state="disabled",
+        )
+        self._mark_not_run_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        # Edit button
+        self._edit_btn = ttk.Button(
+            management_container,
+            text="Edit",
+            width=15,
+            state="disabled",
+        )
+        self._edit_btn.pack(side="right", fill="x", expand=True)
+
+        # Delete button (Delete button is in the right side of the right frame)
+        self._delete_btn = ttk.Button(
+            self._right_frame,
+            text="Delete",
+            width=15,
+            state="disabled",
+        )
+        self._delete_btn.pack(fill="x")
 
         # Separator between Add Account button and All buttons group
         separator_add = ttk.Separator(self._right_frame, orient="horizontal")
@@ -217,41 +250,6 @@ class AccountsTab:
             state="disabled",
         )
         self._refresh_btn.pack(fill="x")
-
-        # Separator between Single buttons group and Management buttons group
-        separator_single = ttk.Separator(self._right_frame, orient="horizontal")
-        separator_single.pack(fill="x", pady=15)
-
-        # Management buttons group (Mark/Edit/Delete)
-        management_container = ttk.Frame(self._right_frame)
-        management_container.pack(fill="x", pady=(0, 10))
-
-        # Mark Not Run button
-        self._mark_not_run_btn = ttk.Button(
-            management_container,
-            text="Mark Not Run",
-            width=15,
-            state="disabled",
-        )
-        self._mark_not_run_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
-
-        # Edit button
-        self._edit_btn = ttk.Button(
-            management_container,
-            text="Edit",
-            width=15,
-            state="disabled",
-        )
-        self._edit_btn.pack(side="right", fill="x", expand=True)
-
-        # Delete button (Delete button is in the right side of the right frame)
-        self._delete_btn = ttk.Button(
-            self._right_frame,
-            text="Delete",
-            width=15,
-            state="disabled",
-        )
-        self._delete_btn.pack(fill="x")
 
         # Information frame (Browser Position/Nickname/FC)
         info_frame = ttk.LabelFrame(self._right_frame, text="Information", padding=10)
@@ -335,7 +333,7 @@ class AccountsTab:
         )
 
         self._edit_btn.config(
-            state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
+            state="disabled" if is_winning or is_marked_not_run else "normal",
             command=lambda: self._edit_account(selected_account),
         )
 
@@ -421,10 +419,6 @@ class AccountsTab:
         if not account:
             return
 
-        if account.username in self._running_usernames:
-            messagebox.showinfo("Info", f"Account '{account.username}' is running; stop it before editing.")
-            return
-
         self._edit_account(account)
 
     def _on_tree_shift_double_click(self, event: tk.Event) -> object:
@@ -441,9 +435,8 @@ class AccountsTab:
             return "break"
 
         if account.marked_not_run:
-            messagebox.showinfo(
-                "Info", f"Account '{account.username}' is marked as not run; cannot run marked accounts."
-            )
+            message = f"Account '{account.username}' is marked as not run; cannot run marked accounts."
+            messagebox.showinfo("Info", message)
             return "break"
 
         self._run_account(account=account)
@@ -494,6 +487,7 @@ class AccountsTab:
     def _open_account_dialog(
         self,
         title: str,
+        is_running: bool,
         initial: Optional[Account],
         on_submit: Callable[[str, str, int, int, bool], bool],
     ) -> None:
@@ -517,6 +511,10 @@ class AccountsTab:
         username_entry = ttk.Entry(username_frame, textvariable=username_var, width=25, font=("Arial", 12))
         username_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
+        # Disable username when running
+        if is_running:
+            username_entry.config(state="disabled")
+
         # Password
         password_frame = ttk.Frame(main_frame)
         password_frame.pack(fill="x", pady=(0, 15))
@@ -524,6 +522,10 @@ class AccountsTab:
         password_var = tk.StringVar(value=(initial.password if initial else ""))
         password_entry = ttk.Entry(password_frame, textvariable=password_var, show="*", width=25, font=("Arial", 12))
         password_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
+
+        # Disable password when running
+        if is_running:
+            password_entry.config(state="disabled")
 
         # Target Special Jackpot
         target_frame = ttk.Frame(main_frame)
@@ -560,6 +562,10 @@ class AccountsTab:
         )
         spin_action_combobox.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
+        # Disable spin action when running
+        if is_running:
+            spin_action_combobox.config(state="disabled")
+
         # Auto Close
         auto_close_frame = ttk.Frame(main_frame)
         auto_close_frame.pack(fill="x", pady=(0, 25))
@@ -570,6 +576,10 @@ class AccountsTab:
             variable=auto_close_var,
         )
         auto_close_checkbox.pack(anchor="w")
+
+        # Disable auto close when running
+        if is_running:
+            auto_close_checkbox.config(state="disabled")
 
         # Buttons
         buttons_frame = ttk.Frame(main_frame)
@@ -652,7 +662,7 @@ class AccountsTab:
             self._refresh_accounts_list()
             return True
 
-        self._open_account_dialog(title="Add New Account", initial=None, on_submit=on_submit)
+        self._open_account_dialog(title="Add New Account", is_running=False, initial=None, on_submit=on_submit)
 
     def _run_all_account(self) -> None:
         pending_accounts = [
@@ -753,7 +763,12 @@ class AccountsTab:
             self._refresh_accounts_list()
             return True
 
-        self._open_account_dialog(title="Edit Account", initial=account, on_submit=on_submit)
+        self._open_account_dialog(
+            title="Edit Account",
+            initial=account,
+            on_submit=on_submit,
+            is_running=account.username in self._running_usernames,
+        )
 
     def _delete_account(self, account: Account) -> None:
         result = messagebox.askyesno(
