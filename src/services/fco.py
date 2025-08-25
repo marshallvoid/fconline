@@ -64,6 +64,9 @@ class MainTool:
         # User authentication and profile data
         self._user_info: Optional[UserReponse] = None
 
+        # Store websocket handler reference for runtime updates
+        self._websocket_handler: Optional[WebsocketHandler] = None
+
     @property
     def page(self) -> Optional[Page]:
         return self._page
@@ -78,7 +81,7 @@ class MainTool:
             await self._page.wait_for_load_state(state="networkidle")
 
             # Setup websocket handler for real-time jackpot monitoring
-            websocket_handler = WebsocketHandler(
+            self._websocket_handler = WebsocketHandler(
                 page=self._page,
                 current_jackpot=self._current_jackpot,
                 event_config=self._event_config,
@@ -92,7 +95,7 @@ class MainTool:
                 on_update_ultimate_prize_winner=self._on_update_ultimate_prize_winner,
                 on_update_mini_prize_winner=self._on_update_mini_prize_winner,
             )
-            websocket_handler.setup_websocket()
+            self._websocket_handler.setup_websocket()
 
             # Handle user authentication - check if already logged in or perform login
             login_handler = LoginHandler(
@@ -102,7 +105,7 @@ class MainTool:
                 password=self._password,
                 on_add_message=self._on_add_message,
             )
-            login_handler.websocket_handler = websocket_handler
+            login_handler.websocket_handler = self._websocket_handler
             await login_handler.ensure_logged_in()
 
             await self._page.wait_for_load_state(state="networkidle")
@@ -121,8 +124,8 @@ class MainTool:
             self._update_ui()
 
             # Connect websocket handler with API client and user info
-            websocket_handler.fconline_client = fconline_client
-            websocket_handler.user_info = self._user_info
+            self._websocket_handler.fconline_client = fconline_client
+            self._websocket_handler.user_info = self._user_info
 
             # Main monitoring loop - keep running until stopped
             while self._is_running:
@@ -189,6 +192,11 @@ class MainTool:
         self._on_update_ultimate_prize_winner = on_update_ultimate_prize_winner or self._on_update_ultimate_prize_winner
         self._on_update_mini_prize_winner = on_update_mini_prize_winner or self._on_update_mini_prize_winner
         self._on_update_user_info = on_update_user_info or self._on_update_user_info
+
+    def update_target_special_jackpot(self, new_target: int) -> None:
+        self._target_special_jackpot = new_target
+        if self._websocket_handler:
+            self._websocket_handler.update_target_special_jackpot(new_target_special_jackpot=new_target)
 
     def _update_ui(self) -> None:
         # Update ultimate prize winner display

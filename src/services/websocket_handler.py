@@ -90,6 +90,17 @@ class WebsocketHandler:
     def user_info(self, new_user_info: UserReponse) -> None:
         self._user_info = new_user_info
 
+    def update_target_special_jackpot(self, new_target_special_jackpot: int) -> None:
+        self._target_special_jackpot = new_target_special_jackpot
+
+        # If the new target is lower than current jackpot, trigger immediate spin
+        if new_target_special_jackpot <= self._current_jackpot and not self._spin_task:
+            message = f"Special Jackpot has reached {self._target_special_jackpot:,}"
+            hp.maybe_execute(self._on_add_message, MessageTag.REACHED_GOAL, message)
+
+            epoch_snapshot = self._jackpot_epoch
+            self._spin_task = asyncio.create_task(self._attempt_spin(epoch_snapshot))
+
     def setup_websocket(self) -> None:
         logger.info(f"Monitoring WebSocket on {self._page.url}")
 

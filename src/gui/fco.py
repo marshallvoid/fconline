@@ -216,6 +216,7 @@ class MainWindow:
             on_account_run=self._run_account,
             on_account_stop=self._stop_account,
             on_refresh_page=self._refresh_page,
+            on_update_target=self._update_account_target,
         )
         self._notebook.add(self._accounts_tab.frame, text="Accounts")
 
@@ -413,3 +414,12 @@ class MainWindow:
                 self._root.after(0, messagebox.showerror, "❌ Error", f"Failed to refresh page: {error}")
 
         threading.Thread(target=handle_page_reload, daemon=True).start()
+
+    def _update_account_target(self, username: str, new_target: int) -> None:
+        if username not in self._running_tools:
+            message = f"Account '{username}' is not running"
+            self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
+            return
+
+        running_tool = self._running_tools[username]
+        running_tool.update_target_special_jackpot(new_target)
