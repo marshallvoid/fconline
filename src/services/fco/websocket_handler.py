@@ -14,7 +14,6 @@ from src.schemas.user_response import UserReponse
 from src.utils import helpers as hp
 from src.utils import sounds
 from src.utils.contants import EventConfig
-from src.utils.files import FileManager
 
 
 class WebsocketHandler:
@@ -63,11 +62,6 @@ class WebsocketHandler:
 
         # Epoch counter to track jackpot resets and prevent stale spin operations
         self._jackpot_epoch: int = 0
-
-        # Extract FC amount from spin action
-        spin_action_text = self._event_config.spin_actions[self._spin_action - 1]
-        fc_match = re.search(r"(\d+)", spin_action_text)
-        self._spin_fc_amount = int(fc_match.group(1)) if fc_match else 0
 
     @property
     def is_logged_in(self) -> bool:
@@ -214,16 +208,6 @@ class WebsocketHandler:
                     if self._fconline_client and self._is_logged_in:
                         asyncio.create_task(self._delayed_reload_balance(delay=5.0))
 
-                    threading.Thread(
-                        target=FileManager.save_jackpot_history,
-                        kwargs={
-                            "event_name": self._event_name,
-                            "event_kind": kind,
-                            "event_value": str(value),
-                        },
-                        daemon=True,
-                    ).start()
-
                 case _:
                     logger.warning(f"Unknown event type: {kind}")
 
@@ -261,20 +245,6 @@ class WebsocketHandler:
         finally:
             self._spin_task = None
 
-    async def _delayed_reload_balance(self, delay: float = 5.0) -> None:
-        if not self._fconline_client or not self._is_logged_in:
-            return
-
-        try:
-            await asyncio.sleep(delay)
-            await self._fconline_client.reload_balance(username=self._username)
-
-        except asyncio.CancelledError:
-            logger.warning("Delayed reload balance was cancelled")
-
-        except Exception as error:
-            logger.error(f"Error in delayed reload balance: {error}")
-
     async def _check_winner(self, is_jackpot: bool, target_nickname: str, target_value: int | str) -> None:
         try:
             user = self._user_info and self._user_info.payload and self._user_info.payload.user
@@ -309,6 +279,20 @@ class WebsocketHandler:
             hp.maybe_execute(self._on_update_ultimate_prize_winner, target_nickname, str(target_value))
         else:
             hp.maybe_execute(self._on_update_mini_prize_winner, target_nickname, str(target_value))
+
+    async def _delayed_reload_balance(self, delay: float = 5.0) -> None:
+        if not self._fconline_client or not self._is_logged_in:
+            return
+
+        try:
+            await asyncio.sleep(delay)
+            await self._fconline_client.reload_balance(username=self._username)
+
+        except asyncio.CancelledError:
+            logger.warning("Delayed reload balance was cancelled")
+
+        except Exception as error:
+            logger.error(f"Error in delayed reload balance: {error}")
 
     def _cancel_spin_task(self) -> None:
         if self._spin_task and not self._spin_task.done():

@@ -14,12 +14,12 @@ from src.gui.activity_log_tab import ActivityLogTab
 from src.gui.notification_icon import NotificationIcon
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserDetail
-from src.services.fco import MainTool
+from src.services.configs import ConfigsManager
+from src.services.fco.main_tool import MainTool
+from src.services.files import FileManager
+from src.services.platforms import PlatformManager
 from src.utils import helpers as hp
-from src.utils.configs import ConfigsManager
 from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME
-from src.utils.files import FileManager
-from src.utils.platforms import PlatformManager
 
 
 class MainWindow:

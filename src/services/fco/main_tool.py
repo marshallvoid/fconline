@@ -8,13 +8,13 @@ from loguru import logger
 from src.infrastructure.clients.fco import FCOnlineClient
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserDetail, UserReponse
-from src.services.login_handler import LoginHandler
-from src.services.websocket_handler import WebsocketHandler
+from src.services.fco.login_handler import LoginHandler
+from src.services.fco.websocket_handler import WebsocketHandler
+from src.services.files import FileManager
+from src.services.platforms import PlatformManager
+from src.services.requests import RequestManager
 from src.utils import helpers as hp
 from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME, EventConfig
-from src.utils.files import FileManager
-from src.utils.platforms import PlatformManager
-from src.utils.requests import RequestManager
 
 
 class MainTool:
@@ -166,7 +166,7 @@ class MainTool:
             logger.error(f"Failed to clean up browser resource: {error}")
 
         finally:
-            FileManager.cleanup_user_data_directory(user_data_dir=self._user_data_dir)
+            FileManager.cleanup_data_directory(data_dir=self._user_data_dir)
             self._user_data_dir = None
             self._session = None
             self._page = None
@@ -277,7 +277,7 @@ class MainTool:
         for attempt in range(3):
             try:
                 # Use persistent profile on first attempt, temporary on retries
-                user_data_dir = None if attempt > 0 else FileManager.get_user_data_directory()
+                user_data_dir = None if attempt > 0 else FileManager.get_data_directory()
                 # Store for cleanup later
                 if user_data_dir:
                     self._user_data_dir = user_data_dir

@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 PROGRAM_NAME = "FC Online Automation Tool"
+DUPLICATE_WINDOW_SECONDS: int = 60
 
 
 @dataclass
