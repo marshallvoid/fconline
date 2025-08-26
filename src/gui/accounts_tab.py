@@ -6,8 +6,8 @@ from typing import Any, Callable, Dict, List, Optional, Set
 from src.schemas.configs import Account
 from src.schemas.enums.account_tag import AccountTag
 from src.schemas.user_response import UserDetail
+from src.services.configs import ConfigsManager
 from src.utils import helpers as hp
-from src.utils.configs import ConfigsManager
 from src.utils.contants import EVENT_CONFIGS_MAP
 
 
@@ -131,10 +131,6 @@ class AccountsTab:
         self._right_frame = ttk.LabelFrame(main_content_frame, text="Actions", padding=10)
         self._right_frame.pack(side="right", fill="y", padx=(10, 0))
 
-        # Management buttons group (Add/Mark Not Run/Edit/Delete)
-        management_container = ttk.Frame(self._right_frame)
-        management_container.pack(fill="x", pady=(0, 10))
-
         # Add Account button
         self._add_account_btn = ttk.Button(
             self._right_frame,
@@ -145,6 +141,10 @@ class AccountsTab:
             command=self._add_account,
         )
         self._add_account_btn.pack(fill="x", pady=(0, 10))
+
+        # Management buttons group (Add/Mark Not Run/Edit/Delete)
+        management_container = ttk.Frame(self._right_frame)
+        management_container.pack(fill="x", pady=(0, 10))
 
         # Mark Not Run button
         self._mark_not_run_btn = ttk.Button(

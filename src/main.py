@@ -9,7 +9,7 @@ try:
 
     import src.infrastructure.logger  # noqa: F401
     from src.gui.fco import MainWindow
-    from src.utils.files import FileManager
+    from src.services.files import FileManager
 
     def main() -> None:
         # Create and run main application window
@@ -38,7 +38,7 @@ except Exception as error:
 
     # Also write to file as backup
     try:
-        config_dir = FileManager.get_config_data_directory()
+        config_dir = FileManager.get_configs_dicrectory()
         log_file = os.path.join(config_dir, "errors.log")
         with open(log_file, "w", encoding="utf-8") as f:
             f.write(traceback.format_exc() + "\n")

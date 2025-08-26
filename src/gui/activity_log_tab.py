@@ -4,6 +4,7 @@ from tkinter import ttk
 from typing import Dict, Optional, TypedDict
 
 from src.schemas.enums.message_tag import MessageTag
+from src.utils.contants import DUPLICATE_WINDOW_SECONDS
 
 
 class MessageTabInfo(TypedDict):
@@ -22,6 +23,7 @@ class ActivityLogTab:
 
     def __init__(self, parent: tk.Misc) -> None:
         self._frame = ttk.Frame(parent)
+
         self._message_tabs: Dict[str, MessageTabInfo] = {}
 
         self._build()
@@ -35,14 +37,13 @@ class ActivityLogTab:
             return
 
         # Add timestamp to message for logging purposes
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
         # If compact mode is enabled, remove username prefix and check for duplicates
         if compact:
-            # Remove username prefix if present (e.g., "[username] message" -> "message")
             message_content = self._extract_message_content(message=message)
-            if self._is_message_duplicate(message_content=message_content):
-                return  # Skip duplicate message
+            if self._is_message_duplicate(message_content=message_content, now_timestamp=timestamp):
+                return  # Skip duplicate message within time window
 
             # Use message content without username prefix for compact mode
             timestamped_message = f"[{timestamp}] {message_content}"
@@ -244,43 +245,45 @@ class ActivityLogTab:
         # If no username prefix, return the message as is
         return message.strip()
 
-    def _is_message_duplicate(self, message_content: str) -> bool:
+    def _is_message_duplicate(self, message_content: str, now_timestamp: str) -> bool:
+        now_dt = datetime.strptime(now_timestamp, "%d/%m/%Y %H:%M:%S")
         for tab_info in self._message_tabs.values():
             text_widget = tab_info["text_widget"]
             current_text = text_widget.get("1.0", tk.END)
 
-            # Check if message content exists in current tab
-            if self._contains_message_content(tab_text=current_text, message_content=message_content):
-                return True
+            # Check if message content exists in current tab within the time window
+            lines = current_text.split("\n")
+            for line in reversed(lines):
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Extract content and timestamp
+                content, timestamp_str = self._extract_line_content(line=line)
+                if content != message_content or not timestamp_str:
+                    continue
+
+                past_dt = datetime.strptime(timestamp_str, "%d/%m/%Y %H:%M:%S")
+                if abs((now_dt - past_dt).total_seconds()) <= DUPLICATE_WINDOW_SECONDS:
+                    return True
 
         return False
 
-    def _contains_message_content(self, tab_text: str, message_content: str) -> bool:
-        # Split tab text into lines and check each line
-        lines = tab_text.split("\n")
+    def _extract_line_content(self, line: str) -> tuple[str, str]:
+        # Expect format "[dd/mm/yyyy HH:MM:SS][username] message..."
+        if not line.startswith("["):
+            return line.strip(), ""
 
-        for line in lines:
-            if not line.strip():
-                continue
+        try:
+            ts_end = line.index("]")
+            timestamp = line[1:ts_end]
+        except ValueError:  # no closing bracket
+            return line.strip(), ""
 
-            # Extract content from line (remove timestamp and username)
-            line_content = self._extract_line_content(line=line)
-            if line_content == message_content:
-                return True
+        rest = line[ts_end + 1 :]
 
-        return False
+        # Strip optional "[username]"
+        if rest.startswith("[") and "]" in rest:
+            rest = rest[rest.index("]") + 1 :]
 
-    def _extract_line_content(self, line: str) -> str:
-        # Remove timestamp prefix [HH:MM:SS]
-        if line.startswith("[") and "]" in line:
-            first_bracket_end = line.find("]")
-            if first_bracket_end != -1:
-                line = line[first_bracket_end + 1 :].strip()
-
-        # Remove username prefix [username] if present
-        if line.startswith("[") and "]" in line:
-            second_bracket_end = line.find("]")
-            if second_bracket_end != -1:
-                line = line[second_bracket_end + 1 :].strip()
-
-        return line.strip()
+        return rest.strip(), timestamp.strip()

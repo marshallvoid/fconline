@@ -3,8 +3,8 @@ from tkinter import ttk
 from typing import List, Optional
 
 from src.schemas.configs import Notification
+from src.services.configs import ConfigsManager
 from src.utils import helpers as hp
-from src.utils.configs import ConfigsManager
 
 
 class NotificationIcon:

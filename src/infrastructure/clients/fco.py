@@ -8,9 +8,9 @@ from src.schemas.enums.message_tag import MessageTag
 from src.schemas.reload_response import ReloadResponse
 from src.schemas.spin_response import SpinResponse
 from src.schemas.user_response import UserDetail, UserReponse
+from src.services.requests import RequestManager
 from src.utils import helpers as hp
 from src.utils.contants import EventConfig
-from src.utils.requests import RequestManager
 
 
 class FCOnlineClient:

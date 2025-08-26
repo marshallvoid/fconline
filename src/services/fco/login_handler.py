@@ -5,7 +5,7 @@ from browser_use.browser.types import Page
 from loguru import logger
 
 from src.schemas.enums.message_tag import MessageTag
-from src.services.websocket_handler import WebsocketHandler
+from src.services.fco.websocket_handler import WebsocketHandler
 from src.utils import helpers as hp
 from src.utils.contants import EventConfig
 
@@ -83,24 +83,27 @@ class LoginHandler:
             await self._page.wait_for_load_state("networkidle")
 
             # Fill username
-            user_loc = self._page.locator(self._event_config.username_input_selector).first
-            if await user_loc.count() == 0:
+            user_base_loc = self._page.locator(self._event_config.username_input_selector)
+            if await user_base_loc.count() == 0:
                 hp.maybe_execute(self._on_add_message, MessageTag.ERROR, "Username input field not found")
                 return False
+            user_loc = user_base_loc.first
             await user_loc.fill(self._username)
 
             # Fill password
-            pass_loc = self._page.locator(self._event_config.password_input_selector).first
-            if await pass_loc.count() == 0:
+            pass_base_loc = self._page.locator(self._event_config.password_input_selector)
+            if await pass_base_loc.count() == 0:
                 hp.maybe_execute(self._on_add_message, MessageTag.ERROR, "Password input field not found")
                 return False
+            pass_loc = pass_base_loc.first
             await pass_loc.fill(self._password)
 
             # Submit
-            submit_loc = self._page.locator(self._event_config.submit_btn_selector).first
-            if await submit_loc.count() == 0:
+            submit_base_loc = self._page.locator(self._event_config.submit_btn_selector)
+            if await submit_base_loc.count() == 0:
                 hp.maybe_execute(self._on_add_message, MessageTag.ERROR, "Submit button not found")
                 return False
+            submit_loc = submit_base_loc.first
             await submit_loc.click()
 
             base = self._event_config.base_url
@@ -142,8 +145,9 @@ class LoginHandler:
 
     async def _click_if_present(self, selector: str) -> bool:
         try:
-            loc = self._page.locator(selector).first
-            if await loc.count() > 0:
+            base_loc = self._page.locator(selector)
+            if await base_loc.count() > 0:
+                loc = base_loc.first
                 await loc.click()
                 return True
 

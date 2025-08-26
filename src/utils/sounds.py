@@ -4,7 +4,7 @@ from pathlib import Path
 from loguru import logger
 from playsound3 import playsound
 
-from src.utils.files import FileManager
+from src.services.files import FileManager
 
 
 def send_notification(audio_name: str, loop_count: int = 3, extra_pause: float = 0.2) -> None:
