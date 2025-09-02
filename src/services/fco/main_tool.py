@@ -318,12 +318,12 @@ class MainTool:
                 return browser_session, page, user_agent
 
             except asyncio.TimeoutError as error:
-                logger.warning(f"Browser startup timeout on attempt {attempt + 1}/3: {error}")
+                logger.error(f"Browser startup timeout on attempt {attempt + 1}/3: {error}")
                 await asyncio.sleep(2)  # Wait before retry
                 continue
 
             except Exception as error:
-                logger.warning(f"Browser setup failed on attempt {attempt + 1}/3: {error}")
+                logger.error(f"Browser setup failed on attempt {attempt + 1}/3: {error}")
                 await asyncio.sleep(2)  # Wait before retry
                 continue
 

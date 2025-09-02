@@ -47,6 +47,14 @@ class PlatformManager:
                     os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
                     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
                     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                    # Additional fallback paths for Windows
+                    os.path.expandvars(r"%PROGRAMFILES%\Chromium\Application\chrome.exe"),
+                    os.path.expandvars(r"%PROGRAMFILES(X86)%\Chromium\Application\chrome.exe"),
+                    os.path.expandvars(r"%LOCALAPPDATA%\Chromium\Application\chrome.exe"),
+                    # Microsoft Edge as fallback
+                    os.path.expandvars(r"%PROGRAMFILES(X86)%\Microsoft\Edge\Application\msedge.exe"),
+                    os.path.expandvars(r"%PROGRAMFILES%\Microsoft\Edge\Application\msedge.exe"),
+                    os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\Application\msedge.exe"),
                 ]
 
             case "darwin":  # macOS
