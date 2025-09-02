@@ -50,10 +50,19 @@ def get_window_position(
     return window_width, window_height, child_frame_width, child_frame_height, x, y
 
 
+BROWSER_POSITIONS = {
+    (0, 0): "Top-Left",
+    (0, 1): "Top-Right",
+    (1, 0): "Bottom-Left",
+    (1, 1): "Bottom-Right",
+}
+
+
 def get_browser_position(
     browser_index: int,
     screen_width: int,
     screen_height: int,
+    margin: float = 2.5,
 ) -> Tuple[int, int, int, int]:
     if screen_width <= 0 or screen_height <= 0:
         screen_width = 1920
@@ -61,13 +70,13 @@ def get_browser_position(
 
     if browser_index < 4:
         # Divide the screen into 4 equal regions (2x2 grid)
-        grid_width = screen_width // 2
-        grid_height = screen_height // 2
+        grid_width = float(screen_width // 2)
+        grid_height = float(screen_height // 2)
 
         # Calculate position based on index
-        row = browser_index // 2  # 0: top, 1: bottom
-        col = browser_index % 2  # 0: left, 1: right
+        row, col = divmod(browser_index, 2)
 
+        # Browser position
         x = col * grid_width
         y = row * grid_height
 
@@ -75,16 +84,34 @@ def get_browser_position(
         width = grid_width
         height = grid_height
 
-        return x, y, width, height
+        if row == 0 and col == 0:  # Top-left
+            width -= margin
+            height -= margin
 
-    else:
-        # Browser 5+: center on the screen
-        # Fixed size for center browser
-        width = min(800, screen_width // 2)
-        height = min(600, screen_height // 2)
+        elif row == 0 and col == 1:  # Top-right
+            x += margin
+            width -= margin
+            height -= margin
 
-        # Calculate center position
-        x = (screen_width - width) // 2
-        y = (screen_height - height) // 2
+        elif row == 1 and col == 0:  # Bottom-left
+            y += margin
+            width -= margin
+            height -= margin
 
-        return x, y, width, height
+        elif row == 1 and col == 1:  # Bottom-right
+            x += margin
+            y += margin
+            width -= margin
+            height -= margin
+
+        return int(x), int(y), int(width), int(height)
+
+    # Browser 5+: center on the screen, fixed size for center browser
+    width = min(800, screen_width // 2)
+    height = min(600, screen_height // 2)
+
+    # Calculate center position
+    x = (screen_width - width) // 2
+    y = (screen_height - height) // 2
+
+    return int(x), int(y), int(width), int(height)

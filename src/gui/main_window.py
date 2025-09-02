@@ -215,6 +215,7 @@ class MainWindow:
             on_account_run=self._run_account,
             on_account_stop=self._stop_account,
             on_refresh_page=self._refresh_page,
+            on_reload_balance=self._reload_balance,
             on_update_target=self._update_account_target,
         )
         self._notebook.add(self._accounts_tab.frame, text="Accounts")
@@ -397,6 +398,26 @@ class MainWindow:
                 self._root.after(0, messagebox.showerror, "❌ Error", f"Failed to stop account: {error}")
 
         threading.Thread(target=handle_stop_account, daemon=True).start()
+
+    def _reload_balance(self, username: str) -> None:
+        if self._check_account_not_running(username=username):
+            return
+
+        running_tool = self._running_tools[username]
+
+        def handle_reload_balance() -> None:
+            if not running_tool:
+                return
+
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(running_tool.reload_balance())
+
+            except Exception as error:
+                self._root.after(0, messagebox.showerror, "❌ Error", f"Failed to reload balance: {error}")
+
+        threading.Thread(target=handle_reload_balance, daemon=True).start()
 
     def _refresh_page(self, username: str) -> None:
         if self._check_account_not_running(username=username):

@@ -245,14 +245,8 @@ class WebsocketHandler:
     async def _check_winner(self, is_jackpot: bool, target_nickname: str, target_value: int | str) -> None:
         try:
             user = self._user_info and self._user_info.payload and self._user_info.payload.user
-            nickname_lower = target_nickname.lower()
-            is_me = bool(
-                user
-                and (
-                    (user.nickname and nickname_lower == user.nickname.lower())
-                    or (user.account_name and nickname_lower == user.account_name.lower())
-                )
-            )
+            target_nickname_lower = target_nickname.casefold()
+            is_me = bool(user and user.display_name and user.display_name.casefold() == target_nickname_lower)
 
         except Exception:
             is_me = False
@@ -260,7 +254,7 @@ class WebsocketHandler:
         prefix = "You" if is_me else f"User '{target_nickname}'"
         suffix = "Ultimate Prize" if is_jackpot else "Mini Prize"
         message = f"{prefix} won {suffix}: {str(target_value)}"
-        tag = MessageTag.OTHER_PLAYER
+        tag = MessageTag.OTHER_PLAYER_JACKPOT if is_jackpot else MessageTag.OTHER_PLAYER_MINI_JACKPOT
 
         if is_me:
             tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT

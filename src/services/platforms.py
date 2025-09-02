@@ -10,7 +10,7 @@ from loguru import logger
 class PlatformManager:
     @classmethod
     def platform(cls) -> str:
-        return platform.system().lower()
+        return platform.system().casefold()
 
     @classmethod
     def is_windows(cls) -> bool:
@@ -112,7 +112,7 @@ class PlatformManager:
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, registry_path) as key:  # type: ignore[attr-defined]
                 prog_id = winreg.QueryValueEx(key, "Progid")[0]  # type: ignore[attr-defined]
 
-                if "chrome" in prog_id.lower():
+                if "chrome" in prog_id.casefold():
                     chrome_paths = [
                         os.path.expandvars(r"%PROGRAMFILES%\Google\Chrome\Application\chrome.exe"),
                         os.path.expandvars(r"%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe"),
@@ -122,10 +122,10 @@ class PlatformManager:
                         if os.path.exists(path):
                             return path
 
-                if "firefox" in prog_id.lower():
+                if "firefox" in prog_id.casefold():
                     return shutil.which("firefox")
 
-                if "edge" in prog_id.lower():
+                if "edge" in prog_id.casefold():
                     return shutil.which("msedge")
 
         except (ImportError, Exception):
@@ -169,7 +169,7 @@ class PlatformManager:
             if result.returncode != 0:
                 return None
 
-            if "chrome" in result.stdout.strip().lower():
+            if "chrome" in result.stdout.strip().casefold():
                 return next(
                     (
                         path
@@ -185,7 +185,7 @@ class PlatformManager:
                     None,
                 )
 
-            if "firefox" in result.stdout.strip().lower():
+            if "firefox" in result.stdout.strip().casefold():
                 return shutil.which("firefox")
 
         except Exception:
