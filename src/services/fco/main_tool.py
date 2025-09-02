@@ -210,6 +210,12 @@ class MainTool:
         if self._websocket_handler:
             self._websocket_handler.update_target_special_jackpot(new_target_special_jackpot=new_target)
 
+    async def reload_balance(self) -> None:
+        if not self._client:
+            return
+
+        await self._client.lookup(is_reload=True)
+
     def _update_ui(self) -> None:
         # Update ultimate prize winner display
         if self._user_info and (jackpot_billboard := self._user_info.payload.jackpot_billboard):

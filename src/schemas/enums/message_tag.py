@@ -17,37 +17,27 @@ class MessageTag(Enum):
     JACKPOT = "#fbbf24"  # Ultimate Prize
     MINI_JACKPOT = "#34d399"  # Mini Prize
     REWARD = "#a855f7"
-    OTHER_PLAYER = "#3b82f6"
-
-    @property
-    def is_game_event(self) -> bool:
-        return self in [self.REACHED_GOAL, self.JACKPOT, self.MINI_JACKPOT, self.OTHER_PLAYER]
-
-    @property
-    def is_reward(self) -> bool:
-        return self in [self.REWARD]
-
-    @property
-    def is_websocket(self) -> bool:
-        return self in [self.WEBSOCKET]
-
-    @property
-    def is_system(self) -> bool:
-        return self in [self.INFO, self.SUCCESS, self.ERROR, self.WARNING]
+    OTHER_PLAYER_JACKPOT = "#3b82f6"
+    OTHER_PLAYER_MINI_JACKPOT = "#60a5fa"
 
     @property
     def tab_name(self) -> str:
-        if self.is_game_event:
-            return "Game Events"
-
-        if self.is_reward:
-            return "Rewards"
-
-        if self.is_system:
+        if self in [self.INFO, self.SUCCESS, self.ERROR, self.WARNING]:
             return "System"
 
-        if self.is_websocket:
+        if self in [self.WEBSOCKET]:
             return "WebSockets"
 
-        msg = f"Invalid message tag: {self}"
-        raise ValueError(msg)
+        if self in [self.REWARD]:
+            return "Rewards"
+
+        if self in [
+            self.REACHED_GOAL,
+            self.JACKPOT,
+            self.MINI_JACKPOT,
+            self.OTHER_PLAYER_JACKPOT,
+            self.OTHER_PLAYER_MINI_JACKPOT,
+        ]:
+            return "Game Events"
+
+        return "All"

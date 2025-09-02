@@ -13,7 +13,6 @@ class EventConfig:
     base_url: str = ""
     user_endpoint: str = "api/user/get"
     spin_endpoint: str = "api/user/spin"
-    reload_endpoint: str = "api/user/update-balance"
 
     params: Dict[str, Any] = field(default_factory=dict)
 

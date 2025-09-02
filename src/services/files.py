@@ -31,7 +31,7 @@ class FileManager:
             app_data = os.environ.get("APPDATA", os.path.expanduser("~"))
             configs_dir = os.path.join(app_data, PROGRAM_NAME.replace(" ", ""))
         else:  # MacOS and Linux
-            configs_dir = os.path.expanduser(f"~/.{PROGRAM_NAME.lower().replace(' ', '-')}")
+            configs_dir = os.path.expanduser(f"~/.{PROGRAM_NAME.casefold().replace(' ', '-')}")
 
         try:
             os.makedirs(configs_dir, exist_ok=True)
@@ -44,7 +44,7 @@ class FileManager:
 
     @classmethod
     def get_data_directory(cls) -> str:
-        dir_name = f"{PROGRAM_NAME.lower().replace(' ', '-')}-{int(time.time())}-{shortuuid.uuid()}"
+        dir_name = f"{PROGRAM_NAME.casefold().replace(' ', '-')}-{int(time.time())}-{shortuuid.uuid()}"
 
         if PlatformManager.is_windows():  # Windows
             temp_dir = os.environ.get("TEMP", os.environ.get("TMP", tempfile.gettempdir()))

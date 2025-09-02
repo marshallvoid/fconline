@@ -18,6 +18,10 @@ class UserDetail(BaseModel):
     nickname: Optional[str] = None
     account_name: Optional[str] = None
 
+    @property
+    def display_name(self) -> Optional[str]:
+        return self.nickname or self.account_name
+
 
 class UserPayload(BaseModel):
     user: Optional[UserDetail] = None

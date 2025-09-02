@@ -23,6 +23,7 @@ class AccountsTab:
         on_account_run: Callable[[str, str, int, int, bool], None],
         on_account_stop: Callable[[str], None],
         on_refresh_page: Callable[[str], None],
+        on_reload_balance: Callable[[str], None],
         on_update_target: Callable[[str, int], None],
     ) -> None:
         self._frame = ttk.Frame(parent)
@@ -31,6 +32,7 @@ class AccountsTab:
         self._on_account_run = on_account_run
         self._on_account_stop = on_account_stop
         self._on_refresh_page = on_refresh_page
+        self._on_reload_balance = on_reload_balance
         self._on_update_target = on_update_target
 
         self._configs = ConfigsManager.load_configs()
@@ -164,7 +166,7 @@ class AccountsTab:
         )
         self._edit_btn.pack(side="right", fill="x", expand=True)
 
-        # Delete button (Delete button is in the right side of the right frame)
+        # Delete button
         self._delete_btn = ttk.Button(
             self._right_frame,
             text="Delete",
@@ -217,6 +219,16 @@ class AccountsTab:
         # Separator between All buttons group and Single buttons group
         separator_all = ttk.Separator(self._right_frame, orient="horizontal")
         separator_all.pack(fill="x", pady=15)
+
+        # Refresh Page button
+        self._reload_balance_btn = ttk.Button(
+            self._right_frame,
+            text="Reload Balance",
+            style="Accent.TButton",
+            width=15,
+            state="disabled",
+        )
+        self._reload_balance_btn.pack(fill="x", pady=(0, 10))
 
         # Single buttons group (Run/Stop/Refresh Page)
         control_container = ttk.Frame(self._right_frame)
@@ -313,21 +325,6 @@ class AccountsTab:
         is_marked_not_run = selected_account.marked_not_run
         is_running = selected_account.username in self._running_usernames
 
-        self._run_btn.config(
-            state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
-            command=lambda: self._run_account(selected_account),
-        )
-
-        self._stop_btn.config(
-            state="disabled" if not is_running else "normal",
-            command=lambda: self._stop_account(selected_account.username),
-        )
-
-        self._refresh_btn.config(
-            state="normal" if is_running else "disabled",
-            command=lambda: self._on_refresh_page(selected_account.username),
-        )
-
         self._mark_not_run_btn.config(
             state="disabled" if is_running or is_winning else "normal",
             command=lambda: self._toggle_mark_not_run(selected_account),
@@ -343,12 +340,31 @@ class AccountsTab:
             command=lambda: self._delete_account(selected_account),
         )
 
+        self._reload_balance_btn.config(
+            state="normal" if is_running else "disabled",
+            command=lambda: self._on_reload_balance(selected_account.username),
+        )
+
+        self._run_btn.config(
+            state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
+            command=lambda: self._run_account(selected_account),
+        )
+
+        self._stop_btn.config(
+            state="disabled" if not is_running else "normal",
+            command=lambda: self._stop_account(selected_account.username),
+        )
+
+        self._refresh_btn.config(
+            state="normal" if is_running else "disabled",
+            command=lambda: self._on_refresh_page(selected_account.username),
+        )
+
         # Update information display
         self._update_info_display(account=selected_account, is_running=is_running)
 
     def _update_info_display(self, account: Account, is_running: bool) -> None:
         green, gray = "#22c55e", "#6b7280"
-        positions = ("Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right")
 
         def set_ok_or_unknown(label: ttk.Label, build_text: Callable[[], str], unknown_text: str) -> None:
             try:
@@ -372,20 +388,11 @@ class AccountsTab:
         def browser_pos_text() -> str:
             if account.username in self._browser_positions:
                 browser_index = self._browser_positions[account.username]
-                pos = positions[browser_index] if browser_index < len(positions) else "Center"
+                row, col = divmod(browser_index, 2)
+                pos = hp.BROWSER_POSITIONS.get((row, col), "Center")
                 return self.BROWSER_POS_TEXT.format(position=pos)
 
             return self.BROWSER_POS_TEXT.format(position="Unknown")
-
-        def pick_display_name() -> Optional[str]:
-            u = self._users_info[account.username]
-            uname = account.username.casefold()
-
-            for c in (u.nickname, u.account_name):
-                if c and c.casefold() != uname:
-                    return c
-
-            return None
 
         set_ok_or_unknown(
             label=self._browser_pos_label,
@@ -394,7 +401,14 @@ class AccountsTab:
         )
         set_ok_or_unknown(
             label=self._user_info_label,
-            build_text=lambda: self.USER_INFO_TEXT.format(nickname=pick_display_name()),
+            build_text=lambda: self.USER_INFO_TEXT.format(
+                nickname=(
+                    self._users_info[account.username].display_name
+                    if (display_name := self._users_info[account.username].display_name)
+                    and display_name.casefold() != account.username.casefold()
+                    else None
+                )
+            ),
             unknown_text=self.USER_INFO_TEXT.format(nickname="Unknown"),
         )
         set_ok_or_unknown(

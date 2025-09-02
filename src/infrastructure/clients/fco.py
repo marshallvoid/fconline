@@ -5,7 +5,6 @@ from browser_use.browser.types import Page
 from loguru import logger
 
 from src.schemas.enums.message_tag import MessageTag
-from src.schemas.reload_response import ReloadResponse
 from src.schemas.spin_response import SpinResponse
 from src.schemas.user_response import UserDetail, UserReponse
 from src.services.requests import RequestManager
@@ -33,9 +32,8 @@ class FCOnlineClient:
         self._user_info: Optional[UserReponse] = None
         self._user_api = f"{event_config.base_url}/{event_config.user_endpoint}"
         self._spin_api = f"{event_config.base_url}/{event_config.spin_endpoint}"
-        self._reload_api = f"{event_config.base_url}/{event_config.reload_endpoint}"
 
-    async def lookup(self) -> Optional[UserReponse]:
+    async def lookup(self, is_reload: bool = False) -> Optional[UserReponse]:
         try:
             async with aiohttp.ClientSession(
                 cookies=self._cookies,
@@ -56,44 +54,22 @@ class FCOnlineClient:
                         hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
                         return None
 
-                    hp.maybe_execute(self._on_add_message, MessageTag.SUCCESS, "Lookup user info successfully")
+                    if is_reload:
+                        if self._user_info and (user_detail := self._user_info.payload.user):
+                            hp.maybe_execute(
+                                self._on_update_user_info,
+                                user_detail.display_name or user_detail.account_id,
+                                user_detail,
+                            )
+                            hp.maybe_execute(self._on_add_message, MessageTag.SUCCESS, "Reload balance successfully")
+                    else:
+                        hp.maybe_execute(self._on_add_message, MessageTag.SUCCESS, "Lookup user info successfully")
 
                     return self._user_info
 
         except Exception as error:
             logger.error(f"Failed to lookup user info: {error}")
             return None
-
-    async def reload_balance(self, username: str) -> None:
-        try:
-            async with aiohttp.ClientSession(
-                cookies=self._cookies,
-                headers=self._headers,
-                connector=RequestManager.connector(),
-            ) as session:
-                async with session.post(url=self._reload_api) as response:
-                    if not response.ok:
-                        message = f"Reload balance API request failed with status: {response.status}"
-                        hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
-
-                        logger.error(f"{message} - {await response.text(encoding='utf-8')}")
-                        return
-
-                    reload_response = ReloadResponse.model_validate(await response.json())
-                    if not reload_response.is_successful or reload_response.payload.error_code:
-                        message = f"Reload balance failed: {reload_response.payload.error_code or 'Unknown error'}"
-                        hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
-                        return
-
-                    if self._user_info and (user_detail := self._user_info.payload.user):
-                        user_detail.fc = reload_response.payload.fc or user_detail.fc
-                        user_detail.mc = reload_response.payload.mc or user_detail.mc
-
-                        hp.maybe_execute(self._on_update_user_info, username, user_detail)
-                        hp.maybe_execute(self._on_add_message, MessageTag.SUCCESS, "Reload balance successfully")
-
-        except Exception as error:
-            logger.error(f"Failed to reload balance: {error}")
 
     async def spin(self, spin_type: int, payment_type: int = 1, params: Dict[str, Any] = {}) -> None:
         try:
