@@ -205,9 +205,6 @@ class WebsocketHandler:
 
                     await self._check_winner(is_jackpot=is_jackpot, target_nickname=nickname, target_value=value)
 
-                    if self._fconline_client and self._is_logged_in:
-                        asyncio.create_task(self._delayed_reload_balance(delay=5.0))
-
                 case _:
                     logger.warning(f"Unknown event type: {kind}")
 
@@ -279,20 +276,6 @@ class WebsocketHandler:
             hp.maybe_execute(self._on_update_ultimate_prize_winner, target_nickname, str(target_value))
         else:
             hp.maybe_execute(self._on_update_mini_prize_winner, target_nickname, str(target_value))
-
-    async def _delayed_reload_balance(self, delay: float = 5.0) -> None:
-        if not self._fconline_client or not self._is_logged_in:
-            return
-
-        try:
-            await asyncio.sleep(delay)
-            await self._fconline_client.reload_balance(username=self._username)
-
-        except asyncio.CancelledError:
-            logger.warning("Delayed reload balance was cancelled")
-
-        except Exception as error:
-            logger.error(f"Error in delayed reload balance: {error}")
 
     def _cancel_spin_task(self) -> None:
         if self._spin_task and not self._spin_task.done():

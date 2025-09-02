@@ -46,6 +46,8 @@ class FCOnlineClient:
                     if not response.ok:
                         message = f"User API request failed with status: {response.status}"
                         hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
+
+                        logger.error(f"{message} - {await response.text(encoding='utf-8')}")
                         return None
 
                     self._user_info = UserReponse.model_validate(await response.json())
@@ -73,6 +75,8 @@ class FCOnlineClient:
                     if not response.ok:
                         message = f"Reload balance API request failed with status: {response.status}"
                         hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
+
+                        logger.error(f"{message} - {await response.text(encoding='utf-8')}")
                         return
 
                     reload_response = ReloadResponse.model_validate(await response.json())
@@ -104,6 +108,8 @@ class FCOnlineClient:
                     if not response.ok:
                         message = f"Spin API request failed with status: {response.status}"
                         hp.maybe_execute(self._on_add_message, MessageTag.ERROR, message)
+
+                        logger.error(f"{message} - {await response.text(encoding='utf-8')}")
                         return
 
                     spin_response = SpinResponse.model_validate(await response.json())
