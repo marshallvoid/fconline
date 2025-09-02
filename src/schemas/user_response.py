@@ -4,6 +4,9 @@ from pydantic import AliasChoices, BaseModel, Field
 
 from src.schemas.billboard import Billboard
 
+JACKPOT_BILLBOARD_ALIASES = ("jackpot_billboard", "last_jackpot_infos")
+MINI_JACKPOT_BILLBOARD_ALIASES = ("mini_jackpot_billboard", "last_mini_jackpot_infos")
+
 
 class UserDetail(BaseModel):
     id: int
@@ -18,8 +21,11 @@ class UserDetail(BaseModel):
 
 class UserPayload(BaseModel):
     user: Optional[UserDetail] = None
-    jackpot_billboard: Optional[Billboard] = Field(None, validation_alias=AliasChoices("last_jackpot_infos"))
-    mini_jackpot_billboard: Optional[Billboard] = Field(None, validation_alias=AliasChoices("last_mini_jackpot_infos"))
+    jackpot_billboard: Optional[Billboard] = Field(None, validation_alias=AliasChoices(*JACKPOT_BILLBOARD_ALIASES))
+    mini_jackpot_billboard: Optional[Billboard] = Field(
+        None,
+        validation_alias=AliasChoices(*MINI_JACKPOT_BILLBOARD_ALIASES),
+    )
 
     error_code: Optional[str] = None
 

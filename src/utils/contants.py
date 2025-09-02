@@ -13,7 +13,7 @@ class EventConfig:
     base_url: str = ""
     user_endpoint: str = "api/user/get"
     spin_endpoint: str = "api/user/spin"
-    reload_endpoint: str = "api/user/reload"
+    reload_endpoint: str = "api/user/update-balance"
 
     params: Dict[str, Any] = field(default_factory=dict)
 
@@ -34,7 +34,6 @@ EVENT_CONFIGS_MAP: Dict[str, EventConfig] = {
         tab_attr_name="_typhu_tab",
         spin_actions=["20 FC Spin", "190 FC Spin", "900 FC Spin", "1800 FC Spin"],
         base_url="https://typhu.fconline.garena.vn",
-        reload_endpoint="api/user/update-balance",
     ),
     "Vòng Quanh Thế Giới": EventConfig(
         tab_attr_name="_vqtg_tab",
@@ -43,5 +42,11 @@ EVENT_CONFIGS_MAP: Dict[str, EventConfig] = {
         spin_endpoint="api/reward/spin",
         reload_endpoint="api/user/reload-fc",
         params={"is_free": False, "use_topup_deal": False},
+    ),
+    "Tuyển Chọn Siêu Sao": EventConfig(
+        tab_attr_name="_tcss_tab",
+        spin_actions=["20 FC Spin", "190 FC Spin", "900 FC Spin", "1800 FC Spin"],
+        base_url="https://tcss.fconline.garena.vn",
+        login_btn_selector='header a:has-text("Đăng nhập")',
     ),
 }

@@ -1,11 +1,11 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import AliasChoices, AliasPath, BaseModel, Field
 
 
 class ReloadPayload(BaseModel):
-    fc: Optional[int] = None
-    mc: Optional[int] = None
+    fc: Optional[int] = Field(None, validation_alias=AliasChoices("fc", AliasPath("user", "fc")))
+    mc: Optional[int] = Field(None, validation_alias=AliasChoices("mc", AliasPath("user", "mc")))
     error_code: Optional[str] = None
 
 
