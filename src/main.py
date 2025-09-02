@@ -8,7 +8,7 @@ try:
     from loguru import logger
 
     import src.infrastructure.logger  # noqa: F401
-    from src.gui.fco import MainWindow
+    from src.gui.main_window import MainWindow
     from src.services.files import FileManager
 
     def main() -> None:

@@ -64,11 +64,8 @@ class MainTool:
         # User authentication and profile data
         self._user_info: Optional[UserReponse] = None
 
-        # Store websocket handler reference for runtime updates
-        self._websocket_handler: Optional[WebsocketHandler] = None
-
-        # API client reference for later actions (e.g., reload balance)
         self._client: Optional[FCOnlineClient] = None
+        self._websocket_handler: Optional[WebsocketHandler] = None
 
     @property
     def page(self) -> Optional[Page]:
@@ -327,13 +324,3 @@ class MainTool:
         # This should never be reached due to the raise statements above
         msg = "Failed to setup browser context after all attempts"
         raise Exception(msg)
-
-    async def reload_balance(self) -> None:
-        if not self._client:
-            return
-
-        try:
-            await self._client.reload_balance(username=self._username)
-
-        except Exception as error:
-            logger.error(f"Failed to reload balance: {error}")
