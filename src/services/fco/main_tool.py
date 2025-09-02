@@ -67,6 +67,9 @@ class MainTool:
         # Store websocket handler reference for runtime updates
         self._websocket_handler: Optional[WebsocketHandler] = None
 
+        # API client reference for later actions (e.g., reload balance)
+        self._client: Optional[FCOnlineClient] = None
+
     @property
     def page(self) -> Optional[Page]:
         return self._page
@@ -119,7 +122,7 @@ class MainTool:
             await self._page.wait_for_load_state(state="networkidle")
 
             # Initialize API client and fetch user profile information
-            fconline_client = FCOnlineClient(
+            self._client = FCOnlineClient(
                 event_config=self._event_config,
                 page=self._page,
                 cookies=await RequestManager.get_cookies(page=self._page),
@@ -131,12 +134,12 @@ class MainTool:
                 on_add_message=self._on_add_message,
                 on_update_user_info=self._on_update_user_info,
             )
-            self._user_info = await fconline_client.lookup()
+            self._user_info = await self._client.lookup()
 
             self._update_ui()
 
             # Connect websocket handler with API client and user info
-            self._websocket_handler.fconline_client = fconline_client
+            self._websocket_handler.fconline_client = self._client
             self._websocket_handler.user_info = self._user_info
 
             # Main monitoring loop - keep running until stopped
@@ -324,3 +327,13 @@ class MainTool:
         # This should never be reached due to the raise statements above
         msg = "Failed to setup browser context after all attempts"
         raise Exception(msg)
+
+    async def reload_balance(self) -> None:
+        if not self._client:
+            return
+
+        try:
+            await self._client.reload_balance(username=self._username)
+
+        except Exception as error:
+            logger.error(f"Failed to reload balance: {error}")
