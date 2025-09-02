@@ -258,13 +258,12 @@ class WebsocketHandler:
 
         if is_me:
             tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT
-            audio_name = "coin-1" if is_jackpot else "coin-2"
 
             hp.maybe_execute(self._on_account_won, self._username)
             hp.maybe_execute(self._on_add_notification, target_nickname, str(target_value))
-            threading.Thread(target=sounds.send_notification, args=(f"{audio_name}.wav"), daemon=True).start()
 
         hp.maybe_execute(self._on_add_message, tag, message, True)
+        threading.Thread(target=sounds.send_notification, args=(tag.sound_name,), daemon=True).start()
 
         if is_jackpot:
             hp.maybe_execute(self._on_update_ultimate_prize_winner, target_nickname, str(target_value))

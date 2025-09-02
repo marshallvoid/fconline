@@ -1,4 +1,5 @@
 from enum import Enum, unique
+from typing import Optional
 
 
 @unique
@@ -19,6 +20,16 @@ class MessageTag(Enum):
     REWARD = "#a855f7"
     OTHER_PLAYER_JACKPOT = "#3b82f6"
     OTHER_PLAYER_MINI_JACKPOT = "#60a5fa"
+
+    @property
+    def sound_name(self) -> Optional[str]:
+        if self == self.JACKPOT:
+            return "coin-1"
+
+        if self == self.MINI_JACKPOT:
+            return "coin-2"
+
+        return None
 
     @property
     def tab_name(self) -> str:
