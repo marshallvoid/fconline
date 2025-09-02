@@ -166,6 +166,16 @@ class AccountsTab:
         )
         self._edit_btn.pack(side="right", fill="x", expand=True)
 
+        # Reload balance button
+        self._reload_balance_btn = ttk.Button(
+            self._right_frame,
+            text="Reload Balance",
+            style="Accent.TButton",
+            width=15,
+            state="disabled",
+        )
+        self._reload_balance_btn.pack(fill="x", pady=(0, 10))
+
         # Delete button
         self._delete_btn = ttk.Button(
             self._right_frame,
@@ -219,16 +229,6 @@ class AccountsTab:
         # Separator between All buttons group and Single buttons group
         separator_all = ttk.Separator(self._right_frame, orient="horizontal")
         separator_all.pack(fill="x", pady=15)
-
-        # Refresh Page button
-        self._reload_balance_btn = ttk.Button(
-            self._right_frame,
-            text="Reload Balance",
-            style="Accent.TButton",
-            width=15,
-            state="disabled",
-        )
-        self._reload_balance_btn.pack(fill="x", pady=(0, 10))
 
         # Single buttons group (Run/Stop/Refresh Page)
         control_container = ttk.Frame(self._right_frame)
