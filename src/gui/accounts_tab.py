@@ -23,7 +23,6 @@ class AccountsTab:
         on_account_run: Callable[[str, str, int, int, bool], None],
         on_account_stop: Callable[[str], None],
         on_refresh_page: Callable[[str], None],
-        on_reload_balance: Callable[[str], None],
         on_update_target: Callable[[str, int], None],
     ) -> None:
         self._frame = ttk.Frame(parent)
@@ -33,7 +32,6 @@ class AccountsTab:
         self._on_account_stop = on_account_stop
         self._on_refresh_page = on_refresh_page
         self._on_update_target = on_update_target
-        self._on_reload_balance = on_reload_balance
 
         self._configs = ConfigsManager.load_configs()
         self._accounts: List[Account] = self._configs.accounts
@@ -220,19 +218,9 @@ class AccountsTab:
         separator_all = ttk.Separator(self._right_frame, orient="horizontal")
         separator_all.pack(fill="x", pady=15)
 
-        # Single buttons group (Reload/Run/Stop/Refresh Page)
+        # Single buttons group (Run/Stop/Refresh Page)
         control_container = ttk.Frame(self._right_frame)
         control_container.pack(fill="x", pady=(0, 10))
-
-        # Reload Balance button
-        self._reload_btn = ttk.Button(
-            self._right_frame,
-            text="Reload Balance",
-            style="Accent.TButton",
-            width=15,
-            state="disabled",
-        )
-        self._reload_btn.pack(fill="x", pady=(0, 10))
 
         # Run button
         self._run_btn = ttk.Button(
@@ -338,11 +326,6 @@ class AccountsTab:
         self._refresh_btn.config(
             state="normal" if is_running else "disabled",
             command=lambda: self._on_refresh_page(selected_account.username),
-        )
-
-        self._reload_btn.config(
-            state="normal" if is_running else "disabled",
-            command=lambda: self._on_reload_balance(selected_account.username),
         )
 
         self._mark_not_run_btn.config(

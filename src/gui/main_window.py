@@ -215,7 +215,6 @@ class MainWindow:
             on_account_run=self._run_account,
             on_account_stop=self._stop_account,
             on_refresh_page=self._refresh_page,
-            on_reload_balance=self._reload_balance,
             on_update_target=self._update_account_target,
         )
         self._notebook.add(self._accounts_tab.frame, text="Accounts")
@@ -262,15 +261,13 @@ class MainWindow:
         self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
         self._root.after_idle(_schedule_focus_current_tab)
 
-    def _check_account_running(self, username: str) -> bool:
-        message = f"Account '{username}' is already running"
-
-        if username not in self._running_tools:
+    def _check_account_not_running(self, username: str) -> bool:
+        is_not_running = username not in self._running_tools
+        if is_not_running:
             message = f"Account '{username}' is not running"
+            self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
 
-        self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
-
-        return username in self._running_tools
+        return is_not_running
 
     def _run_account(
         self,
@@ -281,7 +278,9 @@ class MainWindow:
         close_when_jackpot_won: bool,
     ) -> None:
         # Avoid starting duplicate runner for same username
-        if self._check_account_running(username=username):
+        if username in self._running_tools:
+            message = f"Account '{username}' is already running"
+            self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
             return
 
         # Build a dedicated tool instance for this account
@@ -382,7 +381,7 @@ class MainWindow:
         threading.Thread(target=handle_run_account, daemon=True).start()
 
     def _stop_account(self, username: str) -> None:
-        if not self._check_account_running(username=username):
+        if self._check_account_not_running(username=username):
             return
 
         running_tool = self._running_tools.pop(username)
@@ -400,7 +399,7 @@ class MainWindow:
         threading.Thread(target=handle_stop_account, daemon=True).start()
 
     def _refresh_page(self, username: str) -> None:
-        if not self._check_account_running(username=username):
+        if self._check_account_not_running(username=username):
             return
 
         running_tool = self._running_tools[username]
@@ -419,25 +418,8 @@ class MainWindow:
 
         threading.Thread(target=handle_page_reload, daemon=True).start()
 
-    def _reload_balance(self, username: str) -> None:
-        if not self._check_account_running(username=username):
-            return
-
-        running_tool = self._running_tools[username]
-
-        def handle_reload_balance() -> None:
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(running_tool.reload_balance())
-
-            except Exception as error:
-                self._root.after(0, messagebox.showerror, "❌ Error", f"Failed to reload balance: {error}")
-
-        threading.Thread(target=handle_reload_balance, daemon=True).start()
-
     def _update_account_target(self, username: str, new_target: int) -> None:
-        if not self._check_account_running(username=username):
+        if self._check_account_not_running(username=username):
             return
 
         running_tool = self._running_tools[username]

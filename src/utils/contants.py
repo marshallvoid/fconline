@@ -40,7 +40,6 @@ EVENT_CONFIGS_MAP: Dict[str, EventConfig] = {
         spin_actions=["20 FC Spin", "190 FC Spin", "900 FC Spin"],
         base_url="https://vqtg.fconline.garena.vn",
         spin_endpoint="api/reward/spin",
-        reload_endpoint="api/user/reload-fc",
         params={"is_free": False, "use_topup_deal": False},
     ),
     "Tuyển Chọn Siêu Sao": EventConfig(
