@@ -317,8 +317,8 @@ class MainTool:
                 logger.success("Browser context setup completed successfully")
                 return browser_session, page, user_agent
 
-            except asyncio.TimeoutError:
-                logger.warning(f"Browser startup timeout on attempt {attempt + 1}/3")
+            except asyncio.TimeoutError as error:
+                logger.warning(f"Browser startup timeout on attempt {attempt + 1}/3: {error}")
                 await asyncio.sleep(2)  # Wait before retry
                 continue
 

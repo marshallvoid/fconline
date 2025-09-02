@@ -328,6 +328,7 @@ class AccountsTab:
         self._mark_not_run_btn.config(
             state="disabled" if is_running or is_winning else "normal",
             command=lambda: self._toggle_mark_not_run(selected_account),
+            text="Mark Run" if is_marked_not_run else "Mark Not Run",
         )
 
         self._edit_btn.config(
