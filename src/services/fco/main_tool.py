@@ -74,7 +74,7 @@ class MainTool:
     async def run(self) -> None:
         try:
             # Initialize browser session and navigate to target URL
-            self._session, self._page, self._user_agent = await self._setup_browser()
+            self._session, self._page = await self._setup_browser()
 
             logger.info(f"Navigating to: {self._event_config.base_url}")
             await self._page.goto(url=self._event_config.base_url)
@@ -123,11 +123,7 @@ class MainTool:
                 event_config=self._event_config,
                 page=self._page,
                 cookies=await RequestManager.get_cookies(page=self._page),
-                headers=await RequestManager.get_headers(
-                    page=self._page,
-                    event_config=self._event_config,
-                    user_agent=self._user_agent,
-                ),
+                headers=await RequestManager.get_headers(page=self._page, event_config=self._event_config),
                 on_add_message=self._on_add_message,
                 on_update_user_info=self._on_update_user_info,
             )
@@ -233,7 +229,7 @@ class MainTool:
         if self._user_info and (user := self._user_info.payload.user):
             hp.maybe_execute(self._on_update_user_info, self._username, user)
 
-    async def _setup_browser(self) -> Tuple[BrowserSession, Page, str]:
+    async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("Setting up browser context...")
 
         # Chrome arguments to disable security features and optimize for automation
@@ -294,7 +290,6 @@ class MainTool:
                     screen_width=self._screen_width,
                     screen_height=self._screen_height,
                 )
-                user_agent = RequestManager.get_random_user_agent()
                 browser_profile = BrowserProfile(
                     stealth=True,
                     ignore_https_errors=True,
@@ -306,7 +301,6 @@ class MainTool:
                     executable_path=chrome_path,
                     window_position={"width": x, "height": y},
                     window_size={"width": width, "height": height},
-                    user_agent=user_agent,
                 )
 
                 # Start browser session and get initial page
@@ -315,7 +309,7 @@ class MainTool:
                 page = await browser_session.get_current_page()
 
                 logger.success("Browser context setup completed successfully")
-                return browser_session, page, user_agent
+                return browser_session, page
 
             except asyncio.TimeoutError as error:
                 logger.error(f"Browser startup timeout on attempt {attempt + 1}/3: {error}")
