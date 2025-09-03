@@ -4,15 +4,15 @@ from typing import Any, Callable, Counter, List, Optional, Tuple
 from src.schemas.spin_response import SpinResult
 
 
-def maybe_execute(func: Optional[Callable], *args: Any, **kwargs: Any) -> None:
+def ensure_execute(func: Optional[Callable], *args: Any, **kwargs: Any) -> None:
     if func is None:
         return
 
     func(*args, **kwargs)
 
 
-def format_spin_results_block(spin_results: List["SpinResult"]) -> str:
-    counter = Counter(r.reward_name for r in spin_results)
+def format_results_block(results: List["SpinResult"]) -> str:
+    counter = Counter(r.reward_name for r in results)
     lines: List[str] = ["Auto-spin Results"]
 
     for name, cnt in counter.items():
@@ -26,16 +26,14 @@ def get_window_position(
     child_frame: tk.Misc,
     parent_frame: Optional[tk.Misc] = None,
 ) -> Tuple[int, int, int, int, int, int]:
-    if parent_frame is not None:
-        # Find the root window (main application window)
-        root_window = parent_frame.winfo_toplevel()
-        # Center relative to root window
+    if parent_frame is not None:  # Center relative to root window
+        root_window = parent_frame.winfo_toplevel()  # Find the root window (main application window)
         window_width = root_window.winfo_width()
         window_height = root_window.winfo_height()
         parent_x = root_window.winfo_rootx()
         parent_y = root_window.winfo_rooty()
-    else:
-        # Center relative to screen
+
+    else:  # Center relative to screen
         window_width = child_frame.winfo_screenwidth()
         window_height = child_frame.winfo_screenheight()
         parent_x = 0
@@ -48,14 +46,6 @@ def get_window_position(
     y = parent_y + (window_height // 2) - (child_frame_height // 2)
 
     return window_width, window_height, child_frame_width, child_frame_height, x, y
-
-
-BROWSER_POSITIONS = {
-    (0, 0): "Top-Left",
-    (0, 1): "Top-Right",
-    (1, 0): "Bottom-Left",
-    (1, 1): "Bottom-Right",
-}
 
 
 def get_browser_position(

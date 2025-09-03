@@ -124,6 +124,7 @@ class MainTool:
                 page=self._page,
                 cookies=await RequestManager.get_cookies(page=self._page),
                 headers=await RequestManager.get_headers(page=self._page, event_config=self._event_config),
+                username=self._username,
                 on_add_message=self._on_add_message,
                 on_update_user_info=self._on_update_user_info,
             )
@@ -140,12 +141,12 @@ class MainTool:
                 await asyncio.sleep(delay=0.1)
 
         except Exception as error:
-            logger.error(f"Error during execution: {error}")
+            logger.exception(f"Error during execution: {error}")
             raise error
 
         finally:
             await self.close()
-            hp.maybe_execute(self._on_add_message, MessageTag.INFO, f"{PROGRAM_NAME} stopped", True)
+            hp.ensure_execute(self._on_add_message, MessageTag.INFO, f"{PROGRAM_NAME} stopped", True)
 
     async def close(self) -> None:
         logger.info("Closing browser context and cleaning up resources...")
@@ -159,7 +160,7 @@ class MainTool:
             logger.success("Browser resources cleaned up successfully")
 
         except Exception as error:
-            logger.error(f"Failed to clean up browser resource: {error}")
+            logger.exception(f"Failed to clean up browser resource: {error}")
 
         finally:
             FileManager.cleanup_data_directory(data_dir=self._user_data_dir)
@@ -170,12 +171,6 @@ class MainTool:
     def update_configs(
         self,
         is_running: Optional[bool] = None,
-        current_jackpot: Optional[int] = None,
-        event_config: Optional[EventConfig] = None,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        spin_action: Optional[int] = None,
-        target_special_jackpot: Optional[int] = None,
         on_account_won: Optional[Callable[[str], None]] = None,
         on_add_message: Optional[Callable[[MessageTag, str, bool], None]] = None,
         on_add_notification: Optional[Callable[[str, str], None]] = None,
@@ -185,13 +180,6 @@ class MainTool:
         on_update_user_info: Optional[Callable[[str, UserDetail], None]] = None,
     ) -> None:
         self._is_running = is_running if is_running is not None else self._is_running
-        self._current_jackpot = current_jackpot or self._current_jackpot
-
-        self._event_config = event_config or self._event_config
-        self._username = username or self._username
-        self._password = password or self._password
-        self._spin_action = spin_action or self._spin_action
-        self._target_special_jackpot = target_special_jackpot or self._target_special_jackpot
 
         self._on_account_won = on_account_won or self._on_account_won
         self._on_add_message = on_add_message or self._on_add_message
@@ -217,17 +205,17 @@ class MainTool:
         if self._user_info and (jackpot_billboard := self._user_info.payload.jackpot_billboard):
             nickname = jackpot_billboard.nickname
             value = jackpot_billboard.value
-            hp.maybe_execute(self._on_update_ultimate_prize_winner, nickname, value)
+            hp.ensure_execute(self._on_update_ultimate_prize_winner, nickname, value)
 
         # Update mini prize winner display
         if self._user_info and (mini_jackpot_billboard := self._user_info.payload.mini_jackpot_billboard):
             nickname = mini_jackpot_billboard.nickname
             value = mini_jackpot_billboard.value
-            hp.maybe_execute(self._on_update_mini_prize_winner, nickname, value)
+            hp.ensure_execute(self._on_update_mini_prize_winner, nickname, value)
 
         # Update UI with user info
         if self._user_info and (user := self._user_info.payload.user):
-            hp.maybe_execute(self._on_update_user_info, self._username, user)
+            hp.ensure_execute(self._on_update_user_info, self._username, user)
 
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("Setting up browser context...")
@@ -312,12 +300,12 @@ class MainTool:
                 return browser_session, page
 
             except asyncio.TimeoutError as error:
-                logger.error(f"Browser startup timeout on attempt {attempt + 1}/3: {error}")
+                logger.exception(f"Browser startup timeout on attempt {attempt + 1}/3: {error}")
                 await asyncio.sleep(2)  # Wait before retry
                 continue
 
             except Exception as error:
-                logger.error(f"Browser setup failed on attempt {attempt + 1}/3: {error}")
+                logger.exception(f"Browser setup failed on attempt {attempt + 1}/3: {error}")
                 await asyncio.sleep(2)  # Wait before retry
                 continue
 

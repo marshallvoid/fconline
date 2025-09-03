@@ -18,9 +18,15 @@ class UserDetail(BaseModel):
     nickname: Optional[str] = None
     account_name: Optional[str] = None
 
-    @property
-    def display_name(self) -> Optional[str]:
-        return self.nickname or self.account_name
+    def display_name(self, username: str) -> str:
+        return next(
+            (
+                nickname
+                for nickname in (self.nickname, self.account_name)
+                if nickname and nickname.casefold() != username.casefold()
+            ),
+            "Unknown",
+        )
 
 
 class UserPayload(BaseModel):

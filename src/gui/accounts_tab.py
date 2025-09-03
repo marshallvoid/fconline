@@ -8,12 +8,12 @@ from src.schemas.enums.account_tag import AccountTag
 from src.schemas.user_response import UserDetail
 from src.services.configs import ConfigsManager
 from src.utils import helpers as hp
-from src.utils.contants import EVENT_CONFIGS_MAP
+from src.utils.contants import BROWSER_POSITIONS, EVENT_CONFIGS_MAP
 
 
 class AccountsTab:
     BROWSER_POS_TEXT = "Browser Position: {position}"
-    USER_INFO_TEXT = "Nickname: {nickname}"
+    USER_DISPLAY_NAME_TEXT = "Nickname: {nickname}"
     FC_INFO_TEXT = "FC: {fc}"
 
     def __init__(
@@ -27,8 +27,8 @@ class AccountsTab:
         on_update_target: Callable[[str, int], None],
     ) -> None:
         self._frame = ttk.Frame(parent)
-
         self._selected_event = selected_event
+
         self._on_account_run = on_account_run
         self._on_account_stop = on_account_stop
         self._on_refresh_page = on_refresh_page
@@ -38,8 +38,8 @@ class AccountsTab:
         self._configs = ConfigsManager.load_configs()
         self._accounts: List[Account] = self._configs.accounts
         self._running_usernames: Set[str] = set()
-        self._users_info: Dict[str, UserDetail] = {}
-        self._browser_positions: Dict[str, int] = {}
+        self._users_by_username: Dict[str, UserDetail] = {}
+        self._bpositions_by_username: Dict[str, int] = {}
 
         self._build()
 
@@ -69,7 +69,7 @@ class AccountsTab:
         if not account:
             return
 
-        self._users_info[username] = user
+        self._users_by_username[username] = user
         self._update_info_display(account=account, is_running=username in self._running_usernames)
 
     def update_browser_position(self, username: str, browser_index: int) -> None:
@@ -77,7 +77,7 @@ class AccountsTab:
         if not account:
             return
 
-        self._browser_positions[username] = browser_index
+        self._bpositions_by_username[username] = browser_index
         self._update_info_display(account=account, is_running=username in self._running_usernames)
 
     def _build(self) -> None:
@@ -278,13 +278,13 @@ class AccountsTab:
         self._browser_pos_label.pack(anchor="w", pady=(0, 5))
 
         # Nickname label
-        self._user_info_label = ttk.Label(
+        self._display_name_label = ttk.Label(
             info_frame,
-            text=self.USER_INFO_TEXT.format(nickname="-"),
+            text=self.USER_DISPLAY_NAME_TEXT.format(nickname="-"),
             font=("Arial", 14),
             foreground="#6b7280",
         )
-        self._user_info_label.pack(anchor="w", pady=(0, 5))
+        self._display_name_label.pack(anchor="w", pady=(0, 5))
 
         # FC label
         self._fc_info_label = ttk.Label(
@@ -367,56 +367,42 @@ class AccountsTab:
     def _update_info_display(self, account: Account, is_running: bool) -> None:
         green, gray = "#22c55e", "#6b7280"
 
-        def set_ok_or_unknown(label: ttk.Label, build_text: Callable[[], str], unknown_text: str) -> None:
-            try:
-                text = build_text()
-                if text:
-                    label.config(text=text, foreground=green)
-                    return
-
-            except Exception:
-                pass
-
-            label.config(text=unknown_text, foreground=gray)
-
         if not is_running:
             self._browser_pos_label.config(text=self.BROWSER_POS_TEXT.format(position="Not Running"), foreground=gray)
-            self._user_info_label.config(text=self.USER_INFO_TEXT.format(nickname="Unknown"), foreground=gray)
+            self._display_name_label.config(
+                text=self.USER_DISPLAY_NAME_TEXT.format(nickname="Unknown"), foreground=gray
+            )
             self._fc_info_label.config(text=self.FC_INFO_TEXT.format(fc="Unknown"), foreground=gray)
 
             return
 
         def browser_pos_text() -> str:
-            if account.username in self._browser_positions:
-                browser_index = self._browser_positions[account.username]
+            if account.username in self._bpositions_by_username:
+                browser_index = self._bpositions_by_username[account.username]
                 row, col = divmod(browser_index, 2)
-                pos = hp.BROWSER_POSITIONS.get((row, col), "Center")
+                pos = BROWSER_POSITIONS.get((row, col), "Center")
                 return self.BROWSER_POS_TEXT.format(position=pos)
 
             return self.BROWSER_POS_TEXT.format(position="Unknown")
 
-        set_ok_or_unknown(
-            label=self._browser_pos_label,
-            build_text=browser_pos_text,
-            unknown_text=self.BROWSER_POS_TEXT.format(position="Unknown"),
-        )
-        set_ok_or_unknown(
-            label=self._user_info_label,
-            build_text=lambda: self.USER_INFO_TEXT.format(
-                nickname=(
-                    self._users_info[account.username].display_name
-                    if (display_name := self._users_info[account.username].display_name)
-                    and display_name.casefold() != account.username.casefold()
-                    else None
-                )
-            ),
-            unknown_text=self.USER_INFO_TEXT.format(nickname="Unknown"),
-        )
-        set_ok_or_unknown(
-            label=self._fc_info_label,
-            build_text=lambda: self.FC_INFO_TEXT.format(fc=self._users_info[account.username].fc),
-            unknown_text=self.FC_INFO_TEXT.format(fc="Unknown"),
-        )
+        self._browser_pos_label.config(text=browser_pos_text(), foreground=green)
+
+        if account.username in self._users_by_username:
+            self._display_name_label.config(
+                text=self.USER_DISPLAY_NAME_TEXT.format(
+                    nickname=self._users_by_username[account.username].display_name(username=account.username)
+                ),
+                foreground=green,
+            )
+            self._fc_info_label.config(
+                text=self.FC_INFO_TEXT.format(fc=self._users_by_username[account.username].fc or "Unknown"),
+                foreground=green,
+            )
+        else:
+            self._display_name_label.config(
+                text=self.USER_DISPLAY_NAME_TEXT.format(nickname="Unknown"), foreground=gray
+            )
+            self._fc_info_label.config(text=self.FC_INFO_TEXT.format(fc="Unknown"), foreground=gray)
 
     def _get_account_at_event(self, event: tk.Event) -> Optional[Account]:
         iid = self._accounts_tree.identify_row(event.y)

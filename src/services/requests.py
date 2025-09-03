@@ -10,6 +10,13 @@ from src.utils.contants import EventConfig
 
 class RequestManager:
     @classmethod
+    def connector(cls) -> aiohttp.TCPConnector:
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        return aiohttp.TCPConnector(ssl=ssl_context)
+
+    @classmethod
     async def get_cookies(cls, page: Page) -> Dict[str, str]:
         try:
             cookies = await page.context.cookies()
@@ -20,7 +27,7 @@ class RequestManager:
             }
 
         except Exception as error:
-            logger.error(f"Failed to extract cookies: {error}")
+            logger.exception(f"Failed to extract cookies: {error}")
             return {}
 
     @classmethod
@@ -43,10 +50,3 @@ class RequestManager:
             "TE": "trailers",
             "Priority": "u=0",
         }
-
-    @classmethod
-    def connector(cls) -> aiohttp.TCPConnector:
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        return aiohttp.TCPConnector(ssl=ssl_context)
