@@ -306,10 +306,10 @@ class MainWindow:
         message = f"Running account '{username}' with action '{spin_action_name}'"
         self._activity_log_tab.add_message(tag=MessageTag.INFO, message=message)
 
-        def on_account_won(won_username: str) -> None:
+        def on_account_won(won_username: str, is_jackpot: bool) -> None:
             def _cb() -> None:
                 self._accounts_tab.mark_account_as_won(username=won_username)
-                if close_when_jackpot_won:
+                if close_when_jackpot_won and is_jackpot:
                     self._stop_account(username=won_username)
 
             self._root.after(0, _cb)

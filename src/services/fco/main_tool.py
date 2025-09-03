@@ -47,7 +47,7 @@ class MainTool:
         self._current_jackpot: int = 0
 
         # Callback functions for UI updates and notifications
-        self._on_account_won: Optional[Callable[[str], None]] = None
+        self._on_account_won: Optional[Callable[[str, bool], None]] = None
         self._on_add_message: Optional[Callable[[MessageTag, str, bool], None]] = None
         self._on_add_notification: Optional[Callable[[str, str], None]] = None
         self._on_update_current_jackpot: Optional[Callable[[int], None]] = None
@@ -171,7 +171,7 @@ class MainTool:
     def update_configs(
         self,
         is_running: Optional[bool] = None,
-        on_account_won: Optional[Callable[[str], None]] = None,
+        on_account_won: Optional[Callable[[str, bool], None]] = None,
         on_add_message: Optional[Callable[[MessageTag, str, bool], None]] = None,
         on_add_notification: Optional[Callable[[str, str], None]] = None,
         on_update_current_jackpot: Optional[Callable[[int], None]] = None,

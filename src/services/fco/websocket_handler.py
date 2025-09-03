@@ -30,7 +30,7 @@ class WebsocketHandler:
         spin_action: int,
         target_special_jackpot: int,
         current_jackpot: int,
-        on_account_won: Optional[Callable[[str], None]] = None,
+        on_account_won: Optional[Callable[[str, bool], None]] = None,
         on_add_message: Optional[Callable[[MessageTag, str, bool], None]] = None,
         on_add_notification: Optional[Callable[[str, str], None]] = None,
         on_update_current_jackpot: Optional[Callable[[int], None]] = None,
@@ -271,7 +271,7 @@ class WebsocketHandler:
         if is_me:
             tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT
 
-            hp.ensure_execute(self._on_account_won, self._username)
+            hp.ensure_execute(self._on_account_won, self._username, is_jackpot)
             hp.ensure_execute(self._on_add_notification, target_nickname, str(target_value))
 
         hp.ensure_execute(self._on_add_message, tag, message, True)
