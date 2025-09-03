@@ -93,7 +93,7 @@ class WebsocketHandler:
         # If the new target is lower than current jackpot, trigger immediate spin
         if new_target_special_jackpot <= self._current_jackpot and not self._spin_task:
             message = f"Special Jackpot has reached {self._target_special_jackpot:,}"
-            hp.maybe_execute(self._on_add_message, MessageTag.REACHED_GOAL, message)
+            hp.ensure_execute(self._on_add_message, MessageTag.REACHED_GOAL, message)
 
             epoch_snapshot = self._jackpot_epoch
             self._spin_task = asyncio.create_task(self._attempt_spin(epoch_snapshot))
@@ -124,6 +124,19 @@ class WebsocketHandler:
 
             def _on_close(ws: WebSocket) -> None:
                 logger.info(f"WebSocket closed: {ws.url}")
+
+                def handle_page_reload() -> None:
+                    logger.info(f"Reloading page for {self._username}")
+
+                    try:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        loop.run_until_complete(self._page.reload())
+
+                    except Exception as error:
+                        logger.exception(f"Error reloading page: {error}")
+
+                threading.Thread(target=handle_page_reload, daemon=True).start()
 
             websocket.on("framereceived", _on_framereceived)
             websocket.on("framesent", _on_framesent)
@@ -161,14 +174,14 @@ class WebsocketHandler:
             return kind, value, nickname
 
         except json.JSONDecodeError:
-            logger.error("Failed to parse JSON from WebSocket frame")
+            logger.exception("Failed to parse JSON from WebSocket frame")
             return None
 
     async def _handle_jackpot_event(self, kind: str, value: int | str, nickname: str = "") -> None:
         try:
             match kind:
                 case "jackpot_value" | "prize_change":
-                    hp.maybe_execute(self._on_add_message, MessageTag.WEBSOCKET, f"Jackpot value: {value}", True)
+                    hp.ensure_execute(self._on_add_message, MessageTag.WEBSOCKET, f"Jackpot value: {value}", True)
 
                     # Handle real-time jackpot value updates
                     new_value = int(value)
@@ -184,14 +197,14 @@ class WebsocketHandler:
                     # Check if special jackpot target reached
                     if new_value >= self._target_special_jackpot:
                         message = f"Special Jackpot has reached {self._target_special_jackpot:,}"
-                        hp.maybe_execute(self._on_add_message, MessageTag.REACHED_GOAL, message)
+                        hp.ensure_execute(self._on_add_message, MessageTag.REACHED_GOAL, message)
 
                         # Trigger immediate spin when target is reached
                         if not self._spin_task or self._spin_task.done():
                             epoch_snapshot = self._jackpot_epoch
                             self._spin_task = asyncio.create_task(self._attempt_spin(epoch_snapshot))
 
-                    hp.maybe_execute(self._on_update_current_jackpot, new_value)
+                    hp.ensure_execute(self._on_update_current_jackpot, new_value)
 
                 case "jackpot" | "mini_jackpot":
                     # Stop auto spin when any jackpot is won by anyone
@@ -212,7 +225,7 @@ class WebsocketHandler:
             logger.warning("Spin aborted: jackpot reset/drop")
 
         except Exception as error:
-            logger.error(f"Error handling jackpot event: {error}")
+            logger.exception(f"Error handling jackpot event: {error}")
 
     async def _attempt_spin(self, epoch_snapshot: int) -> None:
         if not self._fconline_client:
@@ -237,7 +250,7 @@ class WebsocketHandler:
             logger.warning("Spin aborted: jackpot reset/drop")
 
         except Exception as error:
-            logger.error(f"Error attempting spin: {error}")
+            logger.exception(f"Error attempting spin: {error}")
 
         finally:
             self._spin_task = None
@@ -245,8 +258,7 @@ class WebsocketHandler:
     async def _check_winner(self, is_jackpot: bool, target_nickname: str, target_value: int | str) -> None:
         try:
             user = self._user_info and self._user_info.payload and self._user_info.payload.user
-            target_nickname_lower = target_nickname.casefold()
-            is_me = bool(user and user.display_name and user.display_name.casefold() == target_nickname_lower)
+            is_me = bool(user and user.display_name(username=self._username).casefold() == target_nickname.casefold())
 
         except Exception:
             is_me = False
@@ -259,16 +271,16 @@ class WebsocketHandler:
         if is_me:
             tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT
 
-            hp.maybe_execute(self._on_account_won, self._username)
-            hp.maybe_execute(self._on_add_notification, target_nickname, str(target_value))
+            hp.ensure_execute(self._on_account_won, self._username)
+            hp.ensure_execute(self._on_add_notification, target_nickname, str(target_value))
 
-        hp.maybe_execute(self._on_add_message, tag, message, True)
+        hp.ensure_execute(self._on_add_message, tag, message, True)
         threading.Thread(target=sounds.send_notification, args=(tag.sound_name,), daemon=True).start()
 
         if is_jackpot:
-            hp.maybe_execute(self._on_update_ultimate_prize_winner, target_nickname, str(target_value))
+            hp.ensure_execute(self._on_update_ultimate_prize_winner, target_nickname, str(target_value))
         else:
-            hp.maybe_execute(self._on_update_mini_prize_winner, target_nickname, str(target_value))
+            hp.ensure_execute(self._on_update_mini_prize_winner, target_nickname, str(target_value))
 
     def _cancel_spin_task(self) -> None:
         if self._spin_task and not self._spin_task.done():

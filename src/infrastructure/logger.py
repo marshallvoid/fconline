@@ -1,6 +1,5 @@
 import logging
 import sys
-import traceback
 from types import FrameType
 from typing import Optional, cast
 
@@ -44,15 +43,7 @@ class InterceptHandler(logging.Handler):
             frame = cast(FrameType, frame.f_back)
             depth += 1
 
-        # Auto-append traceback for ERROR and CRITICAL levels
-        message = record.getMessage()
-        if record.levelno >= logging.ERROR and record.exc_info is None:
-            # If no exception info but it's an error level, add current traceback
-            tb = traceback.format_exc()
-            if tb != "NoneType: None\n":  # Only add if there's actual traceback
-                message = f"{message}\n{tb}"
-
-        logger.opt(depth=depth, exception=record.exc_info).log(level, message)
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
 def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMAT) -> None:
@@ -62,29 +53,12 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
     if _logger_initialized:
         return
 
-    # Detect production environment (e.g., when running as executable)
-    is_production = getattr(sys, "frozen", False)
-
-    # Reduce logging verbosity in production for performance
-    if is_production:
-        debug = False
-
     # logging configuration
     logging_level = logging.DEBUG if debug else logging.INFO
     loggers = (
-        "gunicorn",
-        "gunicorn.access",
-        "gunicorn.error",
-        "uvicorn",
-        "uvicorn.access",
-        "uvicorn.error",
-        "uvicorn.asgi",
-        "sqlalchemy",
-        "sqlalchemy.engine",
-        "sqlalchemy.engine.Engine",
+        "aiohttp",
         "playwright",
         "browser_use",
-        "aiohttp",
     )
 
     logging.getLogger().handlers = [InterceptHandler()]
@@ -102,18 +76,7 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
         log_file = tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False)
         sink = log_file.name
 
-    # In production, use simpler format and only log errors
-    if is_production:
-        loguru_format = "<level>{level: <8}</level> | <level>{message}</level>"
-        logging_level = logging.ERROR
-
-    handlers = [
-        {
-            "sink": sink,
-            "level": logging_level,
-            "format": loguru_format,
-        },
-    ]
+    handlers = [{"sink": sink, "level": logging_level, "format": loguru_format}]
     logger.configure(handlers=handlers)  # type: ignore
 
     # Mark logger as initialized

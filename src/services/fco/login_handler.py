@@ -39,18 +39,18 @@ class LoginHandler:
         self._websocket_handler = new_websocket_handler
 
     async def ensure_logged_in(self) -> None:
-        hp.maybe_execute(self._on_add_message, MessageTag.INFO, "Checking login status")
+        hp.ensure_execute(self._on_add_message, MessageTag.INFO, "Checking login status")
 
         # Check if user is already authenticated
         if await self._detect_login_status():
-            hp.maybe_execute(self._on_add_message, MessageTag.SUCCESS, "Already logged in")
+            hp.ensure_execute(self._on_add_message, MessageTag.SUCCESS, "Already logged in")
 
             if self._websocket_handler:
                 self._websocket_handler.is_logged_in = True
             return
 
         # Perform login if not already authenticated
-        hp.maybe_execute(self._on_add_message, MessageTag.WARNING, "Not logged in → performing login")
+        hp.ensure_execute(self._on_add_message, MessageTag.WARNING, "Not logged in → performing login")
         if not await self._perform_login():
             msg = "Login failed! Exiting..."
             raise Exception(msg)
@@ -59,7 +59,7 @@ class LoginHandler:
         if self._websocket_handler:
             self._websocket_handler.is_logged_in = True
         await self._ensure_base_url()
-        hp.maybe_execute(self._on_add_message, MessageTag.SUCCESS, "Login completed successfully")
+        hp.ensure_execute(self._on_add_message, MessageTag.SUCCESS, "Login completed successfully")
 
     async def _detect_login_status(self) -> bool:
         # If logout button is visible, user is logged in
@@ -78,14 +78,14 @@ class LoginHandler:
         try:
             # Open login form
             if not await self._click_if_present(self._event_config.login_btn_selector):
-                hp.maybe_execute(self._on_add_message, MessageTag.ERROR, "Login button not found")
+                hp.ensure_execute(self._on_add_message, MessageTag.ERROR, "Login button not found")
                 return False
             await self._page.wait_for_load_state("networkidle")
 
             # Fill username
             user_base_loc = self._page.locator(self._event_config.username_input_selector)
             if await user_base_loc.count() == 0:
-                hp.maybe_execute(self._on_add_message, MessageTag.ERROR, "Username input field not found")
+                hp.ensure_execute(self._on_add_message, MessageTag.ERROR, "Username input field not found")
                 return False
             user_loc = user_base_loc.first
             await user_loc.fill(self._username)
@@ -93,7 +93,7 @@ class LoginHandler:
             # Fill password
             pass_base_loc = self._page.locator(self._event_config.password_input_selector)
             if await pass_base_loc.count() == 0:
-                hp.maybe_execute(self._on_add_message, MessageTag.ERROR, "Password input field not found")
+                hp.ensure_execute(self._on_add_message, MessageTag.ERROR, "Password input field not found")
                 return False
             pass_loc = pass_base_loc.first
             await pass_loc.fill(self._password)
@@ -101,7 +101,7 @@ class LoginHandler:
             # Submit
             submit_base_loc = self._page.locator(self._event_config.submit_btn_selector)
             if await submit_base_loc.count() == 0:
-                hp.maybe_execute(self._on_add_message, MessageTag.ERROR, "Submit button not found")
+                hp.ensure_execute(self._on_add_message, MessageTag.ERROR, "Submit button not found")
                 return False
             submit_loc = submit_base_loc.first
             await submit_loc.click()
@@ -112,13 +112,13 @@ class LoginHandler:
                     return True
 
                 if self._page.is_closed():
-                    hp.maybe_execute(self._on_add_message, MessageTag.ERROR, "Page closed during login")
+                    hp.ensure_execute(self._on_add_message, MessageTag.ERROR, "Page closed during login")
                     return False
 
                 await asyncio.sleep(0.5)
 
         except Exception as error:
-            hp.maybe_execute(self._on_add_message, MessageTag.ERROR, f"Error performing login: {error}")
+            hp.ensure_execute(self._on_add_message, MessageTag.ERROR, f"Error performing login: {error}")
             return False
 
     async def _ensure_base_url(self) -> None:

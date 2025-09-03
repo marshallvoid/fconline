@@ -76,7 +76,7 @@ class MainWindow:
                     logger.warning("Tool close timeout, forcing shutdown")
 
                 except Exception as error:
-                    logger.error(f"Error closing tool: {error}")
+                    logger.exception(f"Error closing tool: {error}")
 
                 finally:
                     try:
@@ -303,9 +303,7 @@ class MainWindow:
 
         # Announce start in activity log
         spin_action_name = EVENT_CONFIGS_MAP[self._selected_event].spin_actions[spin_action - 1]
-        message = (
-            f"Running account '{username}' with action '{spin_action_name}' until target '{target_special_jackpot:,}'"
-        )
+        message = f"Running account '{username}' with action '{spin_action_name}'"
         self._activity_log_tab.add_message(tag=MessageTag.INFO, message=message)
 
         def on_account_won(won_username: str) -> None:
@@ -354,11 +352,6 @@ class MainWindow:
 
         new_tool.update_configs(
             is_running=True,
-            event_config=EVENT_CONFIGS_MAP[self._selected_event],
-            username=username,
-            password=password,
-            spin_action=spin_action,
-            target_special_jackpot=target_special_jackpot,
             on_account_won=on_account_won,
             on_add_message=on_add_message,
             on_add_notification=on_add_notification,
@@ -413,6 +406,8 @@ class MainWindow:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 loop.run_until_complete(running_tool.reload_balance())
+
+                messagebox.showinfo("Success", f"Account '{username}' balance reloaded successfully!")
 
             except Exception as error:
                 self._root.after(0, messagebox.showerror, "❌ Error", f"Failed to reload balance: {error}")

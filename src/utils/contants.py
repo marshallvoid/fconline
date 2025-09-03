@@ -1,8 +1,15 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
-PROGRAM_NAME = "FC Online Automation Tool"
+PROGRAM_NAME: str = "FC Online Automation Tool"
 DUPLICATE_WINDOW_SECONDS: int = 60
+
+BROWSER_POSITIONS: Dict[Tuple[int, int], str] = {
+    (0, 0): "Top-Left",
+    (0, 1): "Top-Right",
+    (1, 0): "Bottom-Left",
+    (1, 1): "Bottom-Right",
+}
 
 
 @dataclass

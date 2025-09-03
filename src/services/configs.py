@@ -36,7 +36,7 @@ class ConfigsManager:
             return Configs.model_validate(encrypted_configs)
 
         except Exception:
-            logger.error("Failed to load configs")
+            logger.exception("Failed to load configs")
 
         return configs
 
@@ -61,7 +61,7 @@ class ConfigsManager:
                 json.dump(encrypted_configs, f, indent=2, ensure_ascii=False)
 
         except Exception:
-            logger.error("Failed to save configs")
+            logger.exception("Failed to save configs")
 
     @classmethod
     def _encrypt_data(cls, value: Optional[str] = None) -> str:

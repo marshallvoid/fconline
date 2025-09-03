@@ -24,4 +24,4 @@ def send_notification(
             time.sleep(extra_pause)
 
     except Exception as error:
-        logger.error(f"Error sending notification: {error}")
+        logger.exception(f"Error sending notification: {error}")
