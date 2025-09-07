@@ -2,17 +2,19 @@ import tkinter as tk
 from tkinter import ttk
 from typing import List, Optional
 
+from src.core.managers.config_manager import ConfigManager
 from src.schemas.configs import Notification
-from src.services.configs import ConfigsManager
 from src.utils import helpers as hp
 
 
 class NotificationIcon:
     def __init__(self, parent: tk.Misc) -> None:
         self._parent: tk.Misc = parent
+
+        self._frame: ttk.Frame = ttk.Frame(parent)
         self._menu_window: Optional[tk.Toplevel] = None
 
-        self._configs = ConfigsManager.load_configs()
+        self._configs = ConfigManager.load_configs()
         self._notifications: List[Notification] = self._configs.notifications
 
         self._build()
@@ -27,8 +29,6 @@ class NotificationIcon:
         self._save_notifications_to_config()
 
     def _build(self) -> None:
-        self._frame: ttk.Frame = ttk.Frame(self._parent)
-
         # Notification icon button
         self._icon_label: ttk.Label = ttk.Label(
             self._frame,
@@ -228,4 +228,4 @@ class NotificationIcon:
 
     def _save_notifications_to_config(self) -> None:
         self._configs.notifications = self._notifications
-        ConfigsManager.save_configs(self._configs)
+        ConfigManager.save_configs(self._configs)

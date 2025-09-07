@@ -8,7 +8,7 @@ from typing import Optional
 import shortuuid
 from loguru import logger
 
-from src.services.platforms import PlatformManager
+from src.core.managers.platform_manager import PlatformManager
 from src.utils.contants import PROGRAM_NAME
 
 

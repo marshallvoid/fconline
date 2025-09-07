@@ -3,6 +3,8 @@ from typing import List
 
 from pydantic import BaseModel
 
+from src.utils.contants import EVENT_CONFIGS_MAP
+
 
 class Notification(BaseModel):
     timestamp: str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
@@ -22,7 +24,7 @@ class Account(BaseModel):
 
 
 class Configs(BaseModel):
-    event: str = ""
+    event: str = list(EVENT_CONFIGS_MAP.keys())[0]
     accounts: List[Account] = []
     notifications: List[Notification] = []
 

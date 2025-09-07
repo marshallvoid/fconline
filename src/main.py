@@ -8,8 +8,8 @@ try:
     from loguru import logger
 
     import src.infrastructure.logger  # noqa: F401
+    from src.core.managers.file_manager import FileManager
     from src.gui.main_window import MainWindow
-    from src.services.files import FileManager
 
     def main() -> None:
         # Create and run main application window
