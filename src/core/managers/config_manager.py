@@ -6,12 +6,12 @@ from typing import Optional
 from cryptography.fernet import Fernet
 from loguru import logger
 
+from src.core.managers.file_manager import FileManager
+from src.core.managers.platform_manager import PlatformManager
 from src.schemas.configs import Configs
-from src.services.files import FileManager
-from src.services.platforms import PlatformManager
 
 
-class ConfigsManager:
+class ConfigManager:
     @classmethod
     def load_configs(cls) -> Configs:
         configs = Configs()

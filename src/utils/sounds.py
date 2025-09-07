@@ -5,7 +5,7 @@ from typing import Optional
 from loguru import logger
 from playsound3 import playsound
 
-from src.services.files import FileManager
+from src.core.managers.file_manager import FileManager
 
 
 def send_notification(

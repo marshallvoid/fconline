@@ -3,10 +3,10 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional, Set
 
+from src.core.managers.config_manager import ConfigManager
 from src.schemas.configs import Account
 from src.schemas.enums.account_tag import AccountTag
 from src.schemas.user_response import UserDetail
-from src.services.configs import ConfigsManager
 from src.utils import helpers as hp
 from src.utils.contants import BROWSER_POSITIONS, EVENT_CONFIGS_MAP
 
@@ -23,19 +23,15 @@ class AccountsTab:
         on_account_run: Callable[[str, str, int, int, bool], None],
         on_account_stop: Callable[[str], None],
         on_refresh_page: Callable[[str], None],
-        on_reload_balance: Callable[[str], None],
-        on_update_target: Callable[[str, int], None],
     ) -> None:
-        self._frame = ttk.Frame(parent)
-        self._selected_event = selected_event
+        self.frame = ttk.Frame(parent)
+        self.selected_event = selected_event
 
         self._on_account_run = on_account_run
         self._on_account_stop = on_account_stop
         self._on_refresh_page = on_refresh_page
-        self._on_reload_balance = on_reload_balance
-        self._on_update_target = on_update_target
 
-        self._configs = ConfigsManager.load_configs()
+        self._configs = ConfigManager.load_configs()
         self._accounts: List[Account] = self._configs.accounts
         self._running_usernames: Set[str] = set()
         self._users_by_username: Dict[str, UserDetail] = {}
@@ -43,17 +39,40 @@ class AccountsTab:
 
         self._build()
 
-    @property
-    def frame(self) -> ttk.Frame:
-        return self._frame
+    def run_all_accounts(self) -> None:
+        pending_accounts = [
+            a
+            for a in self._accounts
+            if a.username not in self._running_usernames and not a.has_won and not a.marked_not_run
+        ]
 
-    @property
-    def selected_event(self) -> str:
-        return self._selected_event
+        if not pending_accounts:
+            messagebox.showinfo("Info", "No accounts to run.")
+            return
 
-    @selected_event.setter
-    def selected_event(self, new_event: str) -> None:
-        self._selected_event = new_event
+        for account in pending_accounts:
+            self._on_account_run(
+                account.username,
+                account.password,
+                account.spin_action,
+                account.target_special_jackpot,
+                account.close_when_jackpot_won,
+            )
+            time.sleep(1)
+
+        self._running_usernames.update(a.username for a in pending_accounts)
+        self._refresh_accounts_list()
+
+    def stop_all_accounts(self) -> None:
+        if not self._running_usernames:
+            messagebox.showinfo("Info", "No accounts to stop.")
+            return
+
+        for username in self._running_usernames:
+            self._on_account_stop(username)
+
+        self._running_usernames.clear()
+        self._refresh_accounts_list()
 
     def mark_account_as_won(self, username: str) -> None:
         account = next((a for a in self._accounts if a.username == username), None)
@@ -81,7 +100,7 @@ class AccountsTab:
         self._update_info_display(account=account, is_running=username in self._running_usernames)
 
     def _build(self) -> None:
-        container = ttk.Frame(self._frame)
+        container = ttk.Frame(self.frame)
         container.pack(fill="both", expand=True, padx=20, pady=(20, 10))
 
         # Main content area with treeview and action buttons side by side
@@ -166,16 +185,6 @@ class AccountsTab:
         )
         self._edit_btn.pack(side="right", fill="x", expand=True)
 
-        # Reload balance button
-        self._reload_balance_btn = ttk.Button(
-            self._right_frame,
-            text="Reload Balance",
-            style="Accent.TButton",
-            width=15,
-            state="disabled",
-        )
-        self._reload_balance_btn.pack(fill="x", pady=(0, 10))
-
         # Delete button
         self._delete_btn = ttk.Button(
             self._right_frame,
@@ -185,50 +194,9 @@ class AccountsTab:
         )
         self._delete_btn.pack(fill="x")
 
-        # Separator between Add Account button and All buttons group
-        separator_add = ttk.Separator(self._right_frame, orient="horizontal")
-        separator_add.pack(fill="x", pady=15)
-
-        # All buttons group (Run All/Stop All/Refresh All Page)
-        control_all_container = ttk.Frame(self._right_frame)
-        control_all_container.pack(fill="x", pady=(0, 10))
-
-        # Run All button
-        self._run_all_btn = ttk.Button(
-            control_all_container,
-            text="Run All",
-            style="Accent.TButton",
-            width=15,
-            state="normal",
-            command=self._run_all_account,
-        )
-        self._run_all_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
-
-        # Stop All button
-        self._stop_all_btn = ttk.Button(
-            control_all_container,
-            text="Stop All",
-            style="Accent.TButton",
-            width=15,
-            state="disabled",
-            command=self._stop_all_account,
-        )
-        self._stop_all_btn.pack(side="right", fill="x", expand=True)
-
-        # Refresh All Page button
-        self._refresh_all_page_btn = ttk.Button(
-            self._right_frame,
-            text="Refresh All Page",
-            style="Accent.TButton",
-            width=15,
-            state="disabled",
-            command=self._refresh_all_page,
-        )
-        self._refresh_all_page_btn.pack(fill="x")
-
-        # Separator between All buttons group and Single buttons group
-        separator_all = ttk.Separator(self._right_frame, orient="horizontal")
-        separator_all.pack(fill="x", pady=15)
+        # Separator between management buttons and single buttons group
+        separator_single = ttk.Separator(self._right_frame, orient="horizontal")
+        separator_single.pack(fill="x", pady=15)
 
         # Single buttons group (Run/Stop/Refresh Page)
         control_container = ttk.Frame(self._right_frame)
@@ -303,7 +271,7 @@ class AccountsTab:
         # Refresh the accounts list
         self._refresh_accounts_list()
 
-    def _on_account_selected(self, _event: tk.Event) -> None:
+    def _on_account_selected(self, _: tk.Event) -> None:
         selection = self._accounts_tree.selection()
         if not selection:
             return
@@ -326,24 +294,19 @@ class AccountsTab:
         is_running = selected_account.username in self._running_usernames
 
         self._mark_not_run_btn.config(
-            state="disabled" if is_running or is_winning else "normal",
+            state="disabled" if is_running else "normal",
             command=lambda: self._toggle_mark_not_run(selected_account),
             text="Mark Run" if is_marked_not_run else "Mark Not Run",
         )
 
         self._edit_btn.config(
-            state="disabled" if is_winning or is_marked_not_run else "normal",
+            state="disabled" if is_winning else "normal",
             command=lambda: self._edit_account(selected_account),
         )
 
         self._delete_btn.config(
-            state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
+            state="disabled" if is_running else "normal",
             command=lambda: self._delete_account(selected_account),
-        )
-
-        self._reload_balance_btn.config(
-            state="normal" if is_running else "disabled",
-            command=lambda: self._on_reload_balance(selected_account.username),
         )
 
         self._run_btn.config(
@@ -471,20 +434,11 @@ class AccountsTab:
                 values=(
                     account.username,
                     account.target_special_jackpot,
-                    EVENT_CONFIGS_MAP[self._selected_event].spin_actions[account.spin_action - 1],
+                    EVENT_CONFIGS_MAP[self.selected_event].spin_actions[account.spin_action - 1],
                     account.close_when_jackpot_won,
                 ),
                 tags=tags,
             )
-
-        any_pending = any(
-            a.username not in self._running_usernames and not a.has_won and not a.marked_not_run for a in self._accounts
-        )
-        self._run_all_btn.config(state="normal" if any_pending else "disabled")
-
-        any_running = any(a.username in self._running_usernames for a in self._accounts)
-        self._stop_all_btn.config(state="normal" if any_running else "disabled")
-        self._refresh_all_page_btn.config(state="normal" if any_running else "disabled")
 
     def _open_account_dialog(
         self,
@@ -493,9 +447,9 @@ class AccountsTab:
         initial: Optional[Account],
         on_submit: Callable[[str, str, int, int, bool], bool],
     ) -> None:
-        dialog = tk.Toplevel(self._frame)
+        dialog = tk.Toplevel(self.frame)
         dialog.title(title)
-        dialog.transient(self._frame)  # type: ignore
+        dialog.transient(self.frame)  # type: ignore
         dialog.grab_set()
 
         main_frame = ttk.Frame(dialog, padding=20)
@@ -544,11 +498,11 @@ class AccountsTab:
 
         spin_action_options = [
             f"{i}. {action_name}"
-            for i, action_name in enumerate(EVENT_CONFIGS_MAP[self._selected_event].spin_actions, start=1)
+            for i, action_name in enumerate(EVENT_CONFIGS_MAP[self.selected_event].spin_actions, start=1)
         ]
 
         initial_spin_display = (
-            (f"{initial.spin_action}. {EVENT_CONFIGS_MAP[self._selected_event].spin_actions[initial.spin_action - 1]}")
+            (f"{initial.spin_action}. {EVENT_CONFIGS_MAP[self.selected_event].spin_actions[initial.spin_action - 1]}")
             if initial
             else spin_action_options[0]
         )
@@ -625,7 +579,7 @@ class AccountsTab:
 
         # Center and focus
         dialog.update_idletasks()
-        _, _, dw, dh, x, y = hp.get_window_position(child_frame=dialog, parent_frame=self._frame)
+        _, _, dw, dh, x, y = hp.get_window_position(child_frame=dialog, parent_frame=self.frame)
         dialog.geometry(f"{dw}x{dh}+{x}+{y}")
         dialog.resizable(False, False)
 
@@ -637,77 +591,6 @@ class AccountsTab:
         auto_close_checkbox.bind("<Return>", lambda e: handle_save())
 
         dialog.wait_window()
-
-    def _add_account(self) -> None:
-        def on_submit(
-            username: str,
-            password: str,
-            spin_action: int,
-            target_special_jackpot: int,
-            auto_close: bool,
-        ) -> bool:
-            # Duplicate username check
-            if username in {a.username for a in self._accounts}:
-                messagebox.showerror("Error", f"Account with username '{username}' already exists!")
-                return False
-
-            self._accounts.append(
-                Account(
-                    username=username,
-                    password=password,
-                    spin_action=spin_action,
-                    target_special_jackpot=target_special_jackpot,
-                    close_when_jackpot_won=auto_close,
-                )
-            )
-            self._save_accounts_to_config()
-            self._refresh_accounts_list()
-            return True
-
-        self._open_account_dialog(title="Add New Account", is_running=False, initial=None, on_submit=on_submit)
-
-    def _run_all_account(self) -> None:
-        pending_accounts = [
-            a
-            for a in self._accounts
-            if a.username not in self._running_usernames and not a.has_won and not a.marked_not_run
-        ]
-
-        if not pending_accounts:
-            messagebox.showinfo("Info", "No accounts to run.")
-            return
-
-        for account in pending_accounts:
-            self._on_account_run(
-                account.username,
-                account.password,
-                account.spin_action,
-                account.target_special_jackpot,
-                account.close_when_jackpot_won,
-            )
-            time.sleep(1)
-
-        self._running_usernames.update(a.username for a in pending_accounts)
-        self._refresh_accounts_list()
-
-    def _stop_all_account(self) -> None:
-        if not self._running_usernames:
-            messagebox.showinfo("Info", "No accounts to stop.")
-            return
-
-        for username in self._running_usernames:
-            self._on_account_stop(username)
-
-        self._running_usernames.clear()
-        self._refresh_accounts_list()
-
-    def _refresh_all_page(self) -> None:
-        if not self._running_usernames:
-            messagebox.showinfo("Info", "No accounts to refresh.")
-            return
-
-        for username in self._running_usernames:
-            self._on_refresh_page(username)
 
     def _run_account(self, account: Account) -> None:
         if account.has_won:
@@ -736,6 +619,34 @@ class AccountsTab:
 
         self._running_usernames.remove(username)
         self._refresh_accounts_list()
+
+    def _add_account(self) -> None:
+        def on_submit(
+            username: str,
+            password: str,
+            spin_action: int,
+            target_special_jackpot: int,
+            auto_close: bool,
+        ) -> bool:
+            # Duplicate username check
+            if username in {a.username for a in self._accounts}:
+                messagebox.showerror("Error", f"Account with username '{username}' already exists!")
+                return False
+
+            self._accounts.append(
+                Account(
+                    username=username,
+                    password=password,
+                    spin_action=spin_action,
+                    target_special_jackpot=target_special_jackpot,
+                    close_when_jackpot_won=auto_close,
+                )
+            )
+            self._save_accounts_to_config()
+            self._refresh_accounts_list()
+            return True
+
+        self._open_account_dialog(title="Add New Account", is_running=False, initial=None, on_submit=on_submit)
 
     def _toggle_mark_not_run(self, account: Account) -> None:
         account.marked_not_run = not account.marked_not_run
@@ -787,6 +698,6 @@ class AccountsTab:
         self._refresh_accounts_list()
 
     def _save_accounts_to_config(self) -> None:
-        self._configs.event = self._selected_event
+        self._configs.event = self.selected_event
         self._configs.accounts = self._accounts
-        ConfigsManager.save_configs(self._configs)
+        ConfigManager.save_configs(self._configs)

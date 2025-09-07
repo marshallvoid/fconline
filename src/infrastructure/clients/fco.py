@@ -4,10 +4,10 @@ import aiohttp
 from browser_use.browser.types import Page
 from loguru import logger
 
+from src.core.managers.request_manager import RequestManager
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.spin_response import SpinResponse
 from src.schemas.user_response import UserDetail, UserReponse
-from src.services.requests import RequestManager
 from src.utils import helpers as hp
 from src.utils.contants import EventConfig
 
@@ -35,12 +35,12 @@ class FCOnlineClient:
         self._user_api = f"{event_config.base_url}/{event_config.user_endpoint}"
         self._spin_api = f"{event_config.base_url}/{event_config.spin_endpoint}"
 
-    async def lookup(self, is_reload: bool = False) -> Optional[UserReponse]:
+    async def lookup(self) -> Optional[UserReponse]:
         try:
             async with aiohttp.ClientSession(
                 cookies=self._cookies,
                 headers=self._headers,
-                connector=RequestManager.connector(),
+                connector=await RequestManager.connector(),
             ) as session:
                 async with session.get(self._user_api) as response:
                     if not response.ok:
@@ -56,17 +56,7 @@ class FCOnlineClient:
                         hp.ensure_execute(self._on_add_message, MessageTag.ERROR, message)
                         return None
 
-                    if is_reload:
-                        if self._user_info and (user_detail := self._user_info.payload.user):
-                            hp.ensure_execute(
-                                self._on_update_user_info,
-                                user_detail.display_name(username=self._username),
-                                user_detail,
-                            )
-                            hp.ensure_execute(self._on_add_message, MessageTag.SUCCESS, "Reload balance successfully")
-                    else:
-                        hp.ensure_execute(self._on_add_message, MessageTag.SUCCESS, "Lookup user info successfully")
-
+                    hp.ensure_execute(self._on_add_message, MessageTag.SUCCESS, "Lookup user info successfully")
                     return self._user_info
 
         except Exception as error:
@@ -74,18 +64,11 @@ class FCOnlineClient:
             return None
 
     async def spin(self, spin_type: int, payment_type: int = 1, params: Dict[str, Any] = {}) -> None:
-        if (
-            self._user_info
-            and self._user_info.payload.user
-            and self._user_info.payload.user.display_name(username=self._username) != "Unknown"
-        ):
-            logger.info(f"User {self._user_info.payload.user.display_name(username=self._username)} spinning...")
-
         try:
             async with aiohttp.ClientSession(
                 cookies=self._cookies,
                 headers=self._headers,
-                connector=RequestManager.connector(),
+                connector=await RequestManager.connector(),
             ) as session:
                 payload = {"spin_type": spin_type, "payment_type": payment_type, **params}
 

@@ -9,15 +9,15 @@ import darkdetect
 import sv_ttk
 from loguru import logger
 
+from src.core.managers.config_manager import ConfigManager
+from src.core.managers.file_manager import FileManager
+from src.core.managers.platform_manager import PlatformManager
 from src.gui.accounts_tab import AccountsTab
 from src.gui.activity_log_tab import ActivityLogTab
 from src.gui.notification_icon import NotificationIcon
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserDetail
-from src.services.configs import ConfigsManager
 from src.services.fco.main_tool import MainTool
-from src.services.files import FileManager
-from src.services.platforms import PlatformManager
 from src.utils import helpers as hp
 from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME
 
@@ -44,9 +44,9 @@ class MainWindow:
             except Exception:
                 pass
 
-        # Track per-account running tool instances
-        self._configs = ConfigsManager.load_configs()
-        self._selected_event = self._configs.event or list(EVENT_CONFIGS_MAP.keys())[0]
+        self._configs = ConfigManager.load_configs()
+        self._selected_event = self._configs.event
+
         self._running_tools: Dict[str, MainTool] = {}
 
         self._setup_ui()
@@ -55,56 +55,53 @@ class MainWindow:
         logger.info(f"Running {PROGRAM_NAME}")
 
         def on_close() -> None:
-            if not self._running_tools:
-                self._root.destroy()
-                return
+            if self._running_tools:
+                # Mark all tools as not running first
+                for running_tool in self._running_tools.values():
+                    running_tool.is_running = False
 
-            # Mark all tools as not running first
-            for running_tool in self._running_tools.values():
-                running_tool.update_configs(is_running=False)
-
-            def close_tool_safely(tool: MainTool) -> None:
-                try:
-                    # Create new event loop for this thread
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-
-                    # Run close with timeout
-                    loop.run_until_complete(asyncio.wait_for(tool.close(), timeout=3.0))
-
-                except asyncio.TimeoutError:
-                    logger.warning("Tool close timeout, forcing shutdown")
-
-                except Exception as error:
-                    logger.exception(f"Error closing tool: {error}")
-
-                finally:
+                def close_tool_safely(tool: MainTool) -> None:
                     try:
-                        loop.close()
-                    except Exception:
-                        pass
+                        # Create new event loop for this thread
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
 
-            # Close tools in separate threads to avoid blocking the UI
-            def close_tools_concurrently() -> None:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=len(self._running_tools)) as executor:
-                    # Submit all close tasks
-                    future_to_tool = {
-                        executor.submit(close_tool_safely, tool): tool for tool in self._running_tools.values()
-                    }
+                        # Run close with timeout
+                        loop.run_until_complete(asyncio.wait_for(tool.close(), timeout=3.0))
 
-                    # Wait for all to complete with timeout
-                    try:
-                        concurrent.futures.wait(future_to_tool.keys(), timeout=5.0)  # 5 second timeout
-                    except Exception:
-                        pass  # Ignore timeout errors
+                    except asyncio.TimeoutError:
+                        logger.warning("Tool close timeout, forcing shutdown")
 
-                    # Cancel any remaining tasks
-                    for future in future_to_tool:
-                        if not future.done():
-                            future.cancel()
+                    except Exception as error:
+                        logger.exception(f"Error closing tool: {error}")
 
-            # Start closing process in background thread
-            threading.Thread(target=close_tools_concurrently, daemon=True).start()
+                    finally:
+                        try:
+                            loop.close()
+                        except Exception:
+                            pass
+
+                # Close tools in separate threads to avoid blocking the UI
+                def close_tools_concurrently() -> None:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=len(self._running_tools)) as executor:
+                        # Submit all close tasks
+                        future_to_tool = {
+                            executor.submit(close_tool_safely, tool): tool for tool in self._running_tools.values()
+                        }
+
+                        # Wait for all to complete with timeout
+                        try:
+                            concurrent.futures.wait(future_to_tool.keys(), timeout=5.0)  # 5 second timeout
+                        except Exception:
+                            pass  # Ignore timeout errors
+
+                        # Cancel any remaining tasks
+                        for future in future_to_tool:
+                            if not future.done():
+                                future.cancel()
+
+                # Start closing process in background thread
+                threading.Thread(target=close_tools_concurrently, daemon=True).start()
 
             # Destroy the root window immediately
             self._root.destroy()
@@ -152,60 +149,82 @@ class MainWindow:
         self._root.mainloop()
 
     def _setup_ui(self) -> None:
-        self._setup_notification_icon()
-        self._setup_event_selection()
-        self._setup_main_content()
-
-        self._root.update_idletasks()
-        _, _, width, height, x, y = hp.get_window_position(child_frame=self._root)
-        self._root.geometry(f"{width}x{height}+{x}+{y}")
-
-    def _setup_notification_icon(self) -> None:
-        notification_frame = ttk.Frame(self._root)
+        # ==================== Notification Icon ====================
+        notification_frame = ttk.Frame(master=self._root)
         notification_frame.pack(side="top", fill="x", padx=10, pady=(10, 0))
 
         # Spacer to push icon to right
-        spacer = ttk.Frame(notification_frame)
+        spacer = ttk.Frame(master=notification_frame)
         spacer.pack(side="left", fill="x", expand=True)
 
-        # Notification icon
-        self._notification_icon = NotificationIcon(notification_frame)
+        self._notification_icon = NotificationIcon(parent=notification_frame)
         self._notification_icon.frame.pack(side="right")
 
-    def _setup_event_selection(self) -> None:
-        event_selection_frame = ttk.LabelFrame(self._root, padding=10, text="Select Event:")
+        # ==================== Event Selection ====================
+        event_selection_frame = ttk.LabelFrame(master=self._root, padding=10, text="Select Event:")
         event_selection_frame.pack(fill="x", padx=10, pady=(10, 5))
 
-        event_var = tk.StringVar(value=self._selected_event)
-
-        # Create dropdown menu for event selection
-        event_combobox = ttk.Combobox(
-            event_selection_frame,
-            textvariable=event_var,
+        # Event selection combobox
+        self._event_var = tk.StringVar(value=self._selected_event)
+        self._event_combobox = ttk.Combobox(
+            master=event_selection_frame,
+            textvariable=self._event_var,
             values=list(EVENT_CONFIGS_MAP.keys()),
             state="readonly",
             width=30,
         )
-        event_combobox.pack(anchor="w", fill="x")
 
-        def on_event_changed(_event: Optional[tk.Event] = None) -> None:
+        def on_event_changed(_: Optional[tk.Event] = None) -> None:
             # Get the selected event from combobox
-            self._selected_event = event_var.get()
+            self._selected_event = self._event_var.get()
 
             # Update the accounts tab with new event configuration
             self._accounts_tab.selected_event = self._selected_event
 
             self._configs.event = self._selected_event
-            ConfigsManager.save_configs(self._configs)
+            ConfigManager.save_configs(self._configs)
 
-        event_combobox.bind("<<ComboboxSelected>>", on_event_changed)
+        self._event_combobox.bind("<<ComboboxSelected>>", on_event_changed)
+        self._event_combobox.pack(anchor="w", fill="x", pady=(0, 10))
 
-    def _setup_main_content(self) -> None:
-        main_container = ttk.Frame(self._root)
-        main_container.pack(fill="both", expand=True, padx=10, pady=5)
+        # ==================== All Control Buttons ====================
+        all_control_buttons_frame = ttk.Frame(master=event_selection_frame)
+        all_control_buttons_frame.pack(fill="x")
+
+        # Run All button
+        self._run_all_btn = ttk.Button(
+            master=all_control_buttons_frame,
+            text="Run All",
+            style="Accent.TButton",
+            state="normal",
+            command=self._run_all_accounts,
+        )
+        self._run_all_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        # Stop All button
+        self._stop_all_btn = ttk.Button(
+            master=all_control_buttons_frame,
+            text="Stop All",
+            state="disabled",
+            command=self._stop_all_accounts,
+        )
+        self._stop_all_btn.pack(side="left", fill="x", expand=True, padx=2.5)
+
+        # Refresh All Page button
+        self._refresh_all_page_btn = ttk.Button(
+            master=all_control_buttons_frame,
+            text="Refresh All",
+            state="disabled",
+            command=self._refresh_all_pages,
+        )
+        self._refresh_all_page_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
+
+        # ==================== Tabs Content ====================
+        tabs_container = ttk.Frame(master=self._root)
+        tabs_container.pack(fill="both", expand=True, padx=10, pady=5)
 
         # Notebook for tabs
-        self._notebook = ttk.Notebook(main_container, takefocus=False)
+        self._notebook = ttk.Notebook(master=tabs_container, takefocus=False)
         self._notebook.pack(fill="both", expand=True)
 
         # Accounts tab
@@ -215,18 +234,13 @@ class MainWindow:
             on_account_run=self._run_account,
             on_account_stop=self._stop_account,
             on_refresh_page=self._refresh_page,
-            on_reload_balance=self._reload_balance,
-            on_update_target=self._update_account_target,
         )
-        self._notebook.add(self._accounts_tab.frame, text="Accounts")
+        self._notebook.add(child=self._accounts_tab.frame, text="Accounts")
 
         # Activity log tab
         self._activity_log_tab = ActivityLogTab(parent=self._notebook)
-        self._notebook.add(self._activity_log_tab.frame, text="Activity Log")
+        self._notebook.add(child=self._activity_log_tab.frame, text="Activity Log")
 
-        self._setup_focus_handling()
-
-    def _setup_focus_handling(self) -> None:
         self._focus_after_id: Optional[str] = None
 
         def _schedule_focus_current_tab() -> None:
@@ -259,16 +273,19 @@ class MainWindow:
             _schedule_focus_current_tab()
 
         self._notebook.bind("<<NotebookTabChanged>>", _on_tab_changed)
-        self._notebook.bind("<ButtonRelease-1>", lambda e: _schedule_focus_current_tab())
+        self._notebook.bind("<ButtonRelease-1>", lambda _: _schedule_focus_current_tab())
         self._root.after_idle(_schedule_focus_current_tab)
 
-    def _check_account_not_running(self, username: str) -> bool:
-        is_not_running = username not in self._running_tools
-        if is_not_running:
-            message = f"Account '{username}' is not running"
-            self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
+        # ==================== Adjust Window Size ====================
+        self._root.update_idletasks()
+        _, _, width, height, x, y = hp.get_window_position(child_frame=self._root)
+        self._root.geometry(f"{width}x{height}+{x}+{y}")
 
-        return is_not_running
+    def _update_all_buttons_state(self) -> None:
+        has_running_accounts = bool(self._running_tools)
+
+        self._stop_all_btn.config(state="normal" if has_running_accounts else "disabled")
+        self._refresh_all_page_btn.config(state="normal" if has_running_accounts else "disabled")
 
     def _run_account(
         self,
@@ -286,19 +303,6 @@ class MainWindow:
 
         # Build a dedicated tool instance for this account
         browser_index = len(self._running_tools)
-        new_tool = MainTool(
-            browser_index=browser_index,
-            screen_width=self._root.winfo_screenwidth(),
-            screen_height=self._root.winfo_screenheight(),
-            req_width=self._root.winfo_reqwidth(),
-            req_height=self._root.winfo_reqheight(),
-            event_config=EVENT_CONFIGS_MAP[self._selected_event],
-            username=username,
-            password=password,
-            spin_action=spin_action,
-            target_special_jackpot=target_special_jackpot,
-        )
-
         self._accounts_tab.update_browser_position(username=username, browser_index=browser_index)
 
         # Announce start in activity log
@@ -350,8 +354,17 @@ class MainWindow:
 
             self._root.after(0, _cb)
 
-        new_tool.update_configs(
-            is_running=True,
+        new_tool = MainTool(
+            browser_index=browser_index,
+            screen_width=self._root.winfo_screenwidth(),
+            screen_height=self._root.winfo_screenheight(),
+            req_width=self._root.winfo_reqwidth(),
+            req_height=self._root.winfo_reqheight(),
+            event_config=EVENT_CONFIGS_MAP[self._selected_event],
+            username=username,
+            password=password,
+            spin_action=spin_action,
+            target_special_jackpot=target_special_jackpot,
             on_account_won=on_account_won,
             on_add_message=on_add_message,
             on_add_notification=on_add_notification,
@@ -374,12 +387,20 @@ class MainWindow:
         self._running_tools[username] = new_tool
         threading.Thread(target=handle_run_account, daemon=True).start()
 
+        self._update_all_buttons_state()
+
+    def _run_all_accounts(self) -> None:
+        self._accounts_tab.run_all_accounts()
+        self._update_all_buttons_state()
+
     def _stop_account(self, username: str) -> None:
-        if self._check_account_not_running(username=username):
+        if username not in self._running_tools:
+            message = f"Account '{username}' is not running"
+            self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
             return
 
         running_tool = self._running_tools.pop(username)
-        running_tool.update_configs(is_running=False)
+        running_tool.is_running = False
 
         def handle_stop_account() -> None:
             try:
@@ -392,30 +413,16 @@ class MainWindow:
 
         threading.Thread(target=handle_stop_account, daemon=True).start()
 
-    def _reload_balance(self, username: str) -> None:
-        if self._check_account_not_running(username=username):
-            return
+        self._update_all_buttons_state()
 
-        running_tool = self._running_tools[username]
-
-        def handle_reload_balance() -> None:
-            if not running_tool:
-                return
-
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(running_tool.reload_balance())
-
-                messagebox.showinfo("Success", f"Account '{username}' balance reloaded successfully!")
-
-            except Exception as error:
-                self._root.after(0, messagebox.showerror, "❌ Error", f"Failed to reload balance: {error}")
-
-        threading.Thread(target=handle_reload_balance, daemon=True).start()
+    def _stop_all_accounts(self) -> None:
+        self._accounts_tab.stop_all_accounts()
+        self._update_all_buttons_state()
 
     def _refresh_page(self, username: str) -> None:
-        if self._check_account_not_running(username=username):
+        if username not in self._running_tools:
+            message = f"Account '{username}' is not running"
+            self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
             return
 
         running_tool = self._running_tools[username]
@@ -434,9 +441,10 @@ class MainWindow:
 
         threading.Thread(target=handle_page_reload, daemon=True).start()
 
-    def _update_account_target(self, username: str, new_target: int) -> None:
-        if self._check_account_not_running(username=username):
+    def _refresh_all_pages(self) -> None:
+        if not self._running_tools:
+            messagebox.showinfo("Info", "No accounts to refresh.")
             return
 
-        running_tool = self._running_tools[username]
-        running_tool.update_target_special_jackpot(new_target)
+        for username in self._running_tools.keys():
+            self._refresh_page(username=username)
