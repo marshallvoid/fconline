@@ -1,15 +1,14 @@
+import sys
+import tkinter as tk
+from tkinter import messagebox
+
+from loguru import logger
+
 try:
-    import os
-    import sys
-    import tkinter as tk
-    import traceback
-    from tkinter import messagebox
-
-    from loguru import logger
-
-    import src.infrastructure.logger  # noqa: F401
-    from src.core.managers.file_manager import FileManager
     from src.gui.main_window import MainWindow
+    from src.infrastructure.logging import init_logger
+
+    init_logger()
 
     def main() -> None:
         # Create and run main application window
@@ -35,16 +34,5 @@ except Exception as error:
     root = tk.Tk()
     root.withdraw()
     messagebox.showerror("Error", error_msg)
-
-    # Also write to file as backup
-    try:
-        config_dir = FileManager.get_configs_dicrectory()
-        log_file = os.path.join(config_dir, "errors.log")
-        with open(log_file, "w", encoding="utf-8") as f:
-            f.write(traceback.format_exc() + "\n")
-            f.write(error_msg)
-
-    except Exception:
-        pass
 
     sys.exit(1)
