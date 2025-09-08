@@ -1,25 +1,34 @@
 import asyncio
-from typing import Callable, Optional, Tuple
+from typing import Optional, Tuple
 
 from browser_use import BrowserProfile, BrowserSession
 from browser_use.browser.types import Page
 from loguru import logger
 
-from src.core.managers.file_manager import FileManager
-from src.core.managers.platform_manager import PlatformManager
-from src.core.managers.request_manager import RequestManager
-from src.infrastructure.clients.fco import FCOnlineClient
+from src.core.managers.file import FileManager
+from src.core.managers.platform import PlatformManager
+from src.core.managers.request import RequestManager
+from src.infrastructure.client import FCOnlineClient
 from src.schemas.enums.message_tag import MessageTag
-from src.schemas.user_response import UserDetail, UserReponse
-from src.services.fco.login_handler import LoginHandler
-from src.services.fco.websocket_handler import WebsocketHandler
+from src.schemas.user_response import UserReponse
+from src.services.login_handler import LoginHandler
+from src.services.websocket_handler import WebsocketHandler
 from src.utils import helpers as hp
-from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME, EventConfig
+from src.utils.contants import PROGRAM_NAME, EventConfig
+from src.utils.types.callbacks import (
+    OnAccountWonCallback,
+    OnAddMessageCallback,
+    OnAddNotificationCallback,
+    OnUpdateCurrentJackpotCallback,
+    OnUpdateUserInfoCallback,
+    OnUpdateWinnerCallback,
+)
 
 
 class MainTool:
     def __init__(
         self,
+        is_running: bool,
         browser_index: int,
         screen_width: int,
         screen_height: int,
@@ -28,18 +37,16 @@ class MainTool:
         event_config: EventConfig,
         username: str,
         password: str,
-        spin_action: int = 1,
-        target_special_jackpot: int = 19000,
-        is_running: bool = True,
-        on_account_won: Optional[Callable[[str, bool], None]] = None,
-        on_add_message: Optional[Callable[[MessageTag, str, bool], None]] = None,
-        on_add_notification: Optional[Callable[[str, str], None]] = None,
-        on_update_current_jackpot: Optional[Callable[[int], None]] = None,
-        on_update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
-        on_update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
-        on_update_user_info: Optional[Callable[[str, UserDetail], None]] = None,
+        spin_action: int,
+        target_sjp: int,
+        on_account_won: OnAccountWonCallback,
+        on_add_message: OnAddMessageCallback,
+        on_add_notification: OnAddNotificationCallback,
+        on_update_cur_jp: OnUpdateCurrentJackpotCallback,
+        on_update_prize_winner: OnUpdateWinnerCallback,
+        on_update_info_display: OnUpdateUserInfoCallback,
     ) -> None:
-        # Configuration parameters
+        self._is_running = is_running
         self._browser_index = browser_index
         self._screen_width = screen_width
         self._screen_height = screen_height
@@ -49,27 +56,21 @@ class MainTool:
         self._username = username
         self._password = password
         self._spin_action = spin_action
-        self._target_special_jackpot = target_special_jackpot
-        self._is_running = is_running
+        self._target_sjp = target_sjp
 
-        # Callback functions
         self._on_account_won = on_account_won
         self._on_add_message = on_add_message
         self._on_add_notification = on_add_notification
-        self._on_update_current_jackpot = on_update_current_jackpot
-        self._on_update_ultimate_prize_winner = on_update_ultimate_prize_winner
-        self._on_update_mini_prize_winner = on_update_mini_prize_winner
-        self._on_update_user_info = on_update_user_info
+        self._on_update_cur_jp = on_update_cur_jp
+        self._on_update_prize_winner = on_update_prize_winner
+        self._on_update_info_display = on_update_info_display
 
-        # Browser automation components
         self._session: Optional[BrowserSession] = None
         self._page: Optional[Page] = None
-        self._user_data_dir: Optional[str] = None
 
-        # User authentication and profile data
+        self._user_data_dir: Optional[str] = None
         self._user_info: Optional[UserReponse] = None
 
-        # API client and websocket handler
         self._client: Optional[FCOnlineClient] = None
         self._websocket_handler: Optional[WebsocketHandler] = None
 
@@ -97,24 +98,15 @@ class MainTool:
             # Setup websocket handler for real-time jackpot monitoring
             self._websocket_handler = WebsocketHandler(
                 page=self._page,
-                event_name=next(
-                    (
-                        event_name
-                        for event_name, event_config in EVENT_CONFIGS_MAP.items()
-                        if event_config.tab_attr_name == self._event_config.tab_attr_name
-                    ),
-                    "Unknown Event",
-                ),
                 event_config=self._event_config,
                 username=self._username,
                 spin_action=self._spin_action,
-                target_special_jackpot=self._target_special_jackpot,
+                target_special_jackpot=self._target_sjp,
                 on_account_won=self._on_account_won,
                 on_add_message=self._on_add_message,
                 on_add_notification=self._on_add_notification,
-                on_update_current_jackpot=self._on_update_current_jackpot,
-                on_update_ultimate_prize_winner=self._on_update_ultimate_prize_winner,
-                on_update_mini_prize_winner=self._on_update_mini_prize_winner,
+                on_update_cur_jp=self._on_update_cur_jp,
+                on_update_prize_winner=self._on_update_prize_winner,
             )
             self._websocket_handler.setup_websocket()
 
@@ -124,9 +116,9 @@ class MainTool:
                 event_config=self._event_config,
                 username=self._username,
                 password=self._password,
+                websocket_handler=self._websocket_handler,
                 on_add_message=self._on_add_message,
             )
-            login_handler.websocket_handler = self._websocket_handler
             await login_handler.ensure_logged_in()
 
             await self._page.wait_for_load_state(state="networkidle")
@@ -139,7 +131,6 @@ class MainTool:
                 headers=await RequestManager.get_headers(page=self._page, event_config=self._event_config),
                 username=self._username,
                 on_add_message=self._on_add_message,
-                on_update_user_info=self._on_update_user_info,
             )
             self._user_info = await self._client.lookup()
 
@@ -159,7 +150,7 @@ class MainTool:
 
         finally:
             await self.close()
-            hp.ensure_execute(self._on_add_message, MessageTag.INFO, f"{PROGRAM_NAME} stopped", True)
+            self._on_add_message(tag=MessageTag.INFO, message=f"{PROGRAM_NAME} stopped", compact=True)
 
     async def close(self) -> None:
         logger.info("Closing browser context and cleaning up resources...")
@@ -193,17 +184,17 @@ class MainTool:
         if self._user_info and (jackpot_billboard := self._user_info.payload.jackpot_billboard):
             nickname = jackpot_billboard.nickname
             value = jackpot_billboard.value
-            hp.ensure_execute(self._on_update_ultimate_prize_winner, nickname, value)
+            self._on_update_prize_winner(nickname=nickname, value=value, is_jackpot=True)
 
         # Update mini prize winner display
         if self._user_info and (mini_jackpot_billboard := self._user_info.payload.mini_jackpot_billboard):
             nickname = mini_jackpot_billboard.nickname
             value = mini_jackpot_billboard.value
-            hp.ensure_execute(self._on_update_mini_prize_winner, nickname, value)
+            self._on_update_prize_winner(nickname=nickname, value=value)
 
         # Update UI with user info
         if self._user_info and (user := self._user_info.payload.user):
-            hp.ensure_execute(self._on_update_user_info, self._username, user)
+            self._on_update_info_display(username=self._username, user=user)
 
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("Setting up browser context...")

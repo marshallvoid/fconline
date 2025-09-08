@@ -1,19 +1,26 @@
 import asyncio
+import contextlib
 import json
 import re
 import threading
-from typing import Callable, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from browser_use.browser.types import Page
 from loguru import logger
 from playwright.async_api import WebSocket  # noqa: DEP003
 
-from src.infrastructure.clients.fco import FCOnlineClient
+from src.infrastructure.client import FCOnlineClient
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
-from src.utils import helpers as hp
 from src.utils import sounds
 from src.utils.contants import EventConfig
+from src.utils.types.callbacks import (
+    OnAccountWonCallback,
+    OnAddMessageCallback,
+    OnAddNotificationCallback,
+    OnUpdateCurrentJackpotCallback,
+    OnUpdateWinnerCallback,
+)
 
 
 class WebsocketHandler:
@@ -24,20 +31,17 @@ class WebsocketHandler:
     def __init__(
         self,
         page: Page,
-        event_name: str,
         event_config: EventConfig,
         username: str,
         spin_action: int,
         target_special_jackpot: int,
-        on_account_won: Optional[Callable[[str, bool], None]] = None,
-        on_add_message: Optional[Callable[[MessageTag, str, bool], None]] = None,
-        on_add_notification: Optional[Callable[[str, str], None]] = None,
-        on_update_current_jackpot: Optional[Callable[[int], None]] = None,
-        on_update_ultimate_prize_winner: Optional[Callable[[str, str], None]] = None,
-        on_update_mini_prize_winner: Optional[Callable[[str, str], None]] = None,
+        on_account_won: OnAccountWonCallback,
+        on_add_message: OnAddMessageCallback,
+        on_add_notification: OnAddNotificationCallback,
+        on_update_cur_jp: OnUpdateCurrentJackpotCallback,
+        on_update_prize_winner: OnUpdateWinnerCallback,
     ) -> None:
         self._page = page
-        self._event_name = event_name
         self._event_config = event_config
         self._username = username
         self._spin_action = spin_action
@@ -46,21 +50,17 @@ class WebsocketHandler:
         self._on_account_won = on_account_won
         self._on_add_message = on_add_message
         self._on_add_notification = on_add_notification
-        self._on_update_current_jackpot = on_update_current_jackpot
-        self._on_update_ultimate_prize_winner = on_update_ultimate_prize_winner
-        self._on_update_mini_prize_winner = on_update_mini_prize_winner
+        self._on_update_cur_jp = on_update_cur_jp
+        self._on_update_prize_winner = on_update_prize_winner
 
         self._current_jackpot: int = 0
         self._is_logged_in: bool = False
         self._user_info: Optional[UserReponse] = None
         self._fconline_client: Optional[FCOnlineClient] = None
 
-        # Task management for spin operations
-        self._spin_lock = asyncio.Lock()
-        self._spin_task: Optional[asyncio.Task] = None
-
-        # Epoch counter to track jackpot resets and prevent stale spin operations
         self._jackpot_epoch: int = 0
+        self._spin_lock = asyncio.Lock()
+        self._spin_task: Optional[asyncio.Task[Any]] = None
 
     @property
     def is_logged_in(self) -> bool:
@@ -170,7 +170,7 @@ class WebsocketHandler:
             match kind:
                 case "jackpot_value" | "prize_change":
                     message = f"Jackpot value: {int(value):,}"
-                    hp.ensure_execute(self._on_add_message, MessageTag.WEBSOCKET, message, True)
+                    self._on_add_message(tag=MessageTag.WEBSOCKET, message=message, compact=True)
 
                     # Handle real-time jackpot value updates
                     new_value = int(value)
@@ -186,7 +186,7 @@ class WebsocketHandler:
                     # Check if special jackpot target reached
                     if new_value >= self._target_special_jackpot:
                         message = f"Special Jackpot has reached {self._target_special_jackpot:,}"
-                        hp.ensure_execute(self._on_add_message, MessageTag.REACHED_GOAL, message)
+                        self._on_add_message(tag=MessageTag.REACHED_GOAL, message=message)
 
                         # Clean up any completed tasks first
                         self._cleanup_completed_spin_task()
@@ -200,7 +200,7 @@ class WebsocketHandler:
                             )
                             logger.info(f"Created spin task for {self._username} at jackpot {new_value:,}")
 
-                    hp.ensure_execute(self._on_update_current_jackpot, new_value)
+                    self._on_update_cur_jp(value=new_value)
 
                 case "jackpot" | "mini_jackpot":
                     # Stop auto spin when any jackpot is won by anyone
@@ -279,16 +279,12 @@ class WebsocketHandler:
             is_compact = False
             tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT
 
-            hp.ensure_execute(self._on_account_won, self._username, is_jackpot)
-            hp.ensure_execute(self._on_add_notification, target_nickname, str(target_value))
+            self._on_account_won(username=self._username, is_jackpot=is_jackpot)
+            self._on_add_notification(nickname=target_nickname, jackpot_value=str(target_value))
 
-        hp.ensure_execute(self._on_add_message, tag, message, is_compact)
+        self._on_add_message(tag=tag, message=message, compact=is_compact)
+        self._on_update_prize_winner(nickname=target_nickname, value=str(target_value), is_jackpot=is_jackpot)
         threading.Thread(target=sounds.send_notification, args=(tag.sound_name,), daemon=True).start()
-
-        if is_jackpot:
-            hp.ensure_execute(self._on_update_ultimate_prize_winner, target_nickname, str(target_value))
-        else:
-            hp.ensure_execute(self._on_update_mini_prize_winner, target_nickname, str(target_value))
 
     def _cancel_spin_task(self) -> None:
         if self._spin_task and not self._spin_task.done():
@@ -298,12 +294,9 @@ class WebsocketHandler:
 
     def _cleanup_completed_spin_task(self) -> None:
         if self._spin_task and self._spin_task.done():
-            try:
+            with contextlib.suppress(Exception):
                 # Get any exception from completed task
                 exception = self._spin_task.exception()
                 if exception and not isinstance(exception, asyncio.CancelledError):
                     logger.warning(f"Spin task completed with exception: {exception}")
-            except Exception:
-                pass  # Task might be cancelled
-            finally:
-                self._spin_task = None
+            self._spin_task = None

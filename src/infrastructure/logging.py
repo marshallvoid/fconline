@@ -1,7 +1,8 @@
 import logging
+import os
 import sys
 from types import FrameType
-from typing import Optional, cast
+from typing import Any, Optional, cast
 
 from loguru import logger
 
@@ -16,6 +17,30 @@ LOGURU_FORMAT = (
 
 # Global flag to track if logger has been initialized
 _logger_initialized = False
+
+
+def _get_log_file_path() -> str:
+    try:
+        # Try to use the same config directory as FileManager
+        from src.core.managers.file import FileManager
+
+        config_dir = FileManager.get_configs_dicrectory()
+    except ImportError:
+        # Fallback to user home directory if FileManager is not available
+        config_dir = os.path.expanduser("~/.fc-online")
+
+    # Ensure directory exists
+    os.makedirs(config_dir, exist_ok=True)
+
+    return os.path.join(config_dir, "app_error.log")
+
+
+def _should_log_to_file(record: Any) -> bool:
+    # Log ERROR and CRITICAL levels to file
+    level_name = getattr(record.get("level"), "name", "")
+
+    # Log if it's an error/critical level or if there's an exception
+    return level_name in ("ERROR", "CRITICAL") or record.get("exception") is not None
 
 
 class InterceptHandler(logging.Handler):
@@ -76,12 +101,24 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
         log_file = tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False)
         sink = log_file.name
 
-    handlers = [{"sink": sink, "level": logging_level, "format": loguru_format}]
+    # Configure multiple handlers
+    handlers = [
+        # Console handler for all logs
+        {"sink": sink, "level": logging_level, "format": loguru_format},
+        # File handler for errors and exceptions with rotation
+        {
+            "sink": _get_log_file_path(),
+            "level": "ERROR",
+            "format": loguru_format,
+            "rotation": "10 MB",  # Rotate when file reaches 10MB
+            "retention": "7 days",  # Keep logs for 7 days
+            "compression": "zip",  # Compress old log files
+            "filter": _should_log_to_file,  # Only log errors and exceptions
+            "backtrace": True,  # Include full traceback for exceptions
+            "diagnose": True,  # Include variable values in traceback
+        },
+    ]
     logger.configure(handlers=handlers)  # type: ignore
 
     # Mark logger as initialized
     _logger_initialized = True
-
-
-# Auto-initialize logger on module import with default settings
-init_logger()
