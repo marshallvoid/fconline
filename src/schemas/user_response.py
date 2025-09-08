@@ -14,6 +14,7 @@ class UserDetail(BaseModel):
     account_id: str
     fc: int
     mc: int
+    accumulation: Optional[int] = None
 
     nickname: Optional[str] = None
     account_name: Optional[str] = None

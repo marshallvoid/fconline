@@ -9,10 +9,12 @@ from src.core.managers.file import FileManager
 from src.core.managers.platform import PlatformManager
 from src.core.managers.request import RequestManager
 from src.infrastructure.client import FCOnlineClient
+from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
 from src.services.login_handler import LoginHandler
 from src.services.websocket_handler import WebsocketHandler
+from src.utils import concurrency as cc
 from src.utils import helpers as hp
 from src.utils.contants import PROGRAM_NAME, EventConfig
 from src.utils.types.callbacks import (
@@ -35,10 +37,7 @@ class MainTool:
         req_width: int,
         req_height: int,
         event_config: EventConfig,
-        username: str,
-        password: str,
-        spin_action: int,
-        target_sjp: int,
+        account: Account,
         on_account_won: OnAccountWonCallback,
         on_add_message: OnAddMessageCallback,
         on_add_notification: OnAddNotificationCallback,
@@ -53,10 +52,7 @@ class MainTool:
         self._req_width = req_width
         self._req_height = req_height
         self._event_config = event_config
-        self._username = username
-        self._password = password
-        self._spin_action = spin_action
-        self._target_sjp = target_sjp
+        self._account = account
 
         self._on_account_won = on_account_won
         self._on_add_message = on_add_message
@@ -99,9 +95,7 @@ class MainTool:
             self._websocket_handler = WebsocketHandler(
                 page=self._page,
                 event_config=self._event_config,
-                username=self._username,
-                spin_action=self._spin_action,
-                target_special_jackpot=self._target_sjp,
+                account=self._account,
                 on_account_won=self._on_account_won,
                 on_add_message=self._on_add_message,
                 on_add_notification=self._on_add_notification,
@@ -114,8 +108,7 @@ class MainTool:
             login_handler = LoginHandler(
                 page=self._page,
                 event_config=self._event_config,
-                username=self._username,
-                password=self._password,
+                account=self._account,
                 websocket_handler=self._websocket_handler,
                 on_add_message=self._on_add_message,
             )
@@ -129,11 +122,11 @@ class MainTool:
                 page=self._page,
                 cookies=await RequestManager.get_cookies(page=self._page),
                 headers=await RequestManager.get_headers(page=self._page, event_config=self._event_config),
-                username=self._username,
                 on_add_message=self._on_add_message,
             )
             self._user_info = await self._client.lookup()
 
+            await self._check_first_spin(page=self._page)
             self._update_ui()
 
             # Connect websocket handler with API client and user info
@@ -161,13 +154,6 @@ class MainTool:
             if self._session:
                 await self._session.kill()
 
-            # Clean up shared request connector on the last tool close
-            # Note: This is safe to call multiple times
-            try:
-                await RequestManager.cleanup_connector()
-            except Exception as cleanup_error:
-                logger.warning(f"Failed to cleanup request connector: {cleanup_error}")
-
             logger.success("Browser resources cleaned up successfully")
 
         except Exception as error:
@@ -178,6 +164,24 @@ class MainTool:
             self._user_data_dir = None
             self._session = None
             self._page = None
+
+    async def _check_first_spin(self, page: Page) -> None:
+        if (
+            not self._client
+            or not self._user_info
+            or not self._user_info.payload.user
+            or self._user_info.payload.user.accumulation is None
+            or self._user_info.payload.user.accumulation > 0
+        ):
+            return
+
+        self._on_add_message(
+            tag=MessageTag.INFO,
+            message="First spin detected, performing initial spin to accumulate points...",
+        )
+        await self._client.spin(spin_type=1, extra_params=self._event_config.params)
+
+        cc.run_in_thread(coro_func=page.reload)
 
     def _update_ui(self) -> None:
         # Update ultimate prize winner display
@@ -194,7 +198,7 @@ class MainTool:
 
         # Update UI with user info
         if self._user_info and (user := self._user_info.payload.user):
-            self._on_update_info_display(username=self._username, user=user)
+            self._on_update_info_display(username=self._account.username, user=user)
 
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("Setting up browser context...")
