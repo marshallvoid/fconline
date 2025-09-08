@@ -1,15 +1,16 @@
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 import aiohttp
 from browser_use.browser.types import Page
 from loguru import logger
 
-from src.core.managers.request_manager import RequestManager
+from src.core.managers.request import RequestManager
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.spin_response import SpinResponse
-from src.schemas.user_response import UserDetail, UserReponse
+from src.schemas.user_response import UserReponse
 from src.utils import helpers as hp
 from src.utils.contants import EventConfig
+from src.utils.types.callbacks import OnAddMessageCallback
 
 
 class FCOnlineClient:
@@ -20,8 +21,7 @@ class FCOnlineClient:
         cookies: Dict[str, str],
         headers: Dict[str, str],
         username: str,
-        on_add_message: Optional[Callable[[MessageTag, str, bool], None]],
-        on_update_user_info: Optional[Callable[[str, UserDetail], None]],
+        on_add_message: OnAddMessageCallback,
     ) -> None:
         self._page = page
         self._cookies = cookies
@@ -29,9 +29,7 @@ class FCOnlineClient:
         self._username = username
 
         self._on_add_message = on_add_message
-        self._on_update_user_info = on_update_user_info
 
-        self._user_info: Optional[UserReponse] = None
         self._user_api = f"{event_config.base_url}/{event_config.user_endpoint}"
         self._spin_api = f"{event_config.base_url}/{event_config.spin_endpoint}"
 
@@ -45,19 +43,19 @@ class FCOnlineClient:
                 async with session.get(self._user_api) as response:
                     if not response.ok:
                         message = f"User API request failed with status: {response.status}"
-                        hp.ensure_execute(self._on_add_message, MessageTag.ERROR, message)
+                        self._on_add_message(tag=MessageTag.ERROR, message=message)
 
                         logger.error(f"{message} - {await response.text(encoding='utf-8')}")
                         return None
 
-                    self._user_info = UserReponse.model_validate(await response.json())
-                    if not self._user_info.is_successful or self._user_info.payload.error_code:
-                        message = f"Lookup user info failed: {self._user_info.payload.error_code or 'Unknown error'}"
-                        hp.ensure_execute(self._on_add_message, MessageTag.ERROR, message)
+                    user_response = UserReponse.model_validate(await response.json())
+                    if not user_response.is_successful or user_response.payload.error_code:
+                        message = f"Lookup user info failed: {user_response.payload.error_code or 'Unknown error'}"
+                        self._on_add_message(tag=MessageTag.ERROR, message=message)
                         return None
 
-                    hp.ensure_execute(self._on_add_message, MessageTag.SUCCESS, "Lookup user info successfully")
-                    return self._user_info
+                    self._on_add_message(tag=MessageTag.SUCCESS, message="Lookup user info successfully")
+                    return user_response
 
         except Exception as error:
             logger.exception(f"Failed to lookup user info: {error}")
@@ -75,7 +73,7 @@ class FCOnlineClient:
                 async with session.post(url=self._spin_api, json=payload) as response:
                     if not response.ok:
                         message = f"Spin API request failed with status: {response.status}"
-                        hp.ensure_execute(self._on_add_message, MessageTag.ERROR, message)
+                        self._on_add_message(tag=MessageTag.ERROR, message=message)
 
                         logger.error(f"{message} - {await response.text(encoding='utf-8')}")
                         return
@@ -83,11 +81,11 @@ class FCOnlineClient:
                     spin_response = SpinResponse.model_validate(await response.json())
                     if not spin_response.payload or not spin_response.is_successful or spin_response.error_code:
                         message = f"Spin failed: {spin_response.error_code or 'Unknown error'}"
-                        hp.ensure_execute(self._on_add_message, MessageTag.ERROR, message)
+                        self._on_add_message(tag=MessageTag.ERROR, message=message)
                         return
 
                     message = hp.format_results_block(results=spin_response.payload.spin_results)
-                    hp.ensure_execute(self._on_add_message, MessageTag.REWARD, message)
+                    self._on_add_message(tag=MessageTag.REWARD, message=message)
 
         except Exception as error:
             logger.exception(f"Failed to spin: {error}")

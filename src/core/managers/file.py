@@ -3,20 +3,22 @@ import shutil
 import sys
 import tempfile
 import time
+from pathlib import Path
 from typing import Optional
 
 import shortuuid
 from loguru import logger
 
-from src.core.managers.platform_manager import PlatformManager
+from src.core.managers.platform import PlatformManager
 from src.utils.contants import PROGRAM_NAME
 
 
 class FileManager:
     @classmethod
     def get_resource_path(cls, relative_path: str) -> str:
+        base_path: Path | str
         if hasattr(sys, "_MEIPASS"):
-            base_path = sys._MEIPASS
+            base_path = Path(sys._MEIPASS) # type: ignore
         else:
             base_path = os.path.abspath(".")
 

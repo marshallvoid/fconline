@@ -1,20 +1,20 @@
 import base64
 import json
 import os
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from cryptography.fernet import Fernet
 from loguru import logger
 
-from src.core.managers.file_manager import FileManager
-from src.core.managers.platform_manager import PlatformManager
-from src.schemas.configs import Configs
+from src.core.managers.file import FileManager
+from src.core.managers.platform import PlatformManager
+from src.schemas.configs import Config
 
 
 class ConfigManager:
     @classmethod
-    def load_configs(cls) -> Configs:
-        configs = Configs()
+    def load_configs(cls) -> Config:
+        configs = Config()
         try:
             configs_file = os.path.join(FileManager.get_configs_dicrectory(), "configs.json")
             if not os.path.exists(configs_file):
@@ -33,7 +33,7 @@ class ConfigManager:
                     for account in encrypted_configs["accounts"]
                 ]
 
-            return Configs.model_validate(encrypted_configs)
+            return Config.model_validate(encrypted_configs)
 
         except Exception:
             logger.exception("Failed to load configs")
@@ -41,9 +41,9 @@ class ConfigManager:
         return configs
 
     @classmethod
-    def save_configs(cls, configs: Configs) -> None:
+    def save_configs(cls, configs: Config) -> None:
         try:
-            encrypted_configs = {
+            encrypted_configs: Dict[str, Any] = {
                 "event": configs.event,
                 "accounts": [
                     {
