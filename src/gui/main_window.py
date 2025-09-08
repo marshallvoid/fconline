@@ -1,5 +1,3 @@
-import asyncio
-import concurrent.futures
 import contextlib
 import threading
 import tkinter as tk
@@ -20,6 +18,7 @@ from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserDetail
 from src.services.main_tool import MainTool
+from src.utils import concurrency as cc
 from src.utils import helpers as hp
 from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME
 
@@ -52,36 +51,12 @@ class MainWindow:
 
         def on_close() -> None:
             if self._running_tools:
-                for running_tool in self._running_tools.values():
-                    running_tool.is_running = False
-
-                def close_tool(tool: MainTool) -> None:
-                    loop = asyncio.new_event_loop()
-                    try:
-                        asyncio.set_event_loop(loop=loop)
-                        loop.run_until_complete(future=asyncio.wait_for(fut=tool.close(), timeout=3.0))
-
-                    except asyncio.TimeoutError:
-                        logger.warning("Tool close timeout, forcing shutdown")
-
-                    except Exception as error:
-                        logger.exception(f"Error closing tool: {error}")
-
-                    finally:
-                        with contextlib.suppress(Exception):
-                            loop.close()
+                _ = [setattr(tool, "is_running", False) for tool in self._running_tools.values()]
 
                 # Close tools in separate threads to avoid blocking the UI
                 def close_tools_concurrently() -> None:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=len(self._running_tools)) as executor:
-                        future_to_tool = {executor.submit(close_tool, tool) for tool in self._running_tools.values()}
-                        with contextlib.suppress(Exception):
-                            concurrent.futures.wait(fs=future_to_tool, timeout=5.0)
-
-                        # Cancel any remaining tasks
-                        for future in future_to_tool:
-                            if not future.done():
-                                future.cancel()
+                    tasks = [(tool.close, (), {}) for tool in self._running_tools.values()]
+                    cc.run_many_in_threads(tasks=tasks, timeout=5.0)
 
                 # Start closing process in background thread
                 threading.Thread(target=close_tools_concurrently, daemon=True).start()
@@ -287,26 +262,12 @@ class MainWindow:
             req_width=self._root.winfo_reqwidth(),
             req_height=self._root.winfo_reqheight(),
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
-            username=account.username,
-            password=account.password,
-            spin_action=account.spin_action,
-            target_sjp=account.target_sjp,
+            account=account,
             **self._build_callbacks(account=account),
         )
         self._running_tools[account.username] = new_tool
 
-        # Runner thread
-        def handle_run_account() -> None:
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(new_tool.run())
-
-            except Exception as error:
-                logger.exception(f"Error running account '{account.username}': {error}")
-
-        threading.Thread(target=handle_run_account, daemon=True).start()
-
+        cc.run_in_thread(coro_func=new_tool.run)
         self._update_all_buttons_state()
 
     def _stop_account(self, username: str) -> None:
@@ -318,16 +279,7 @@ class MainWindow:
         running_tool = self._running_tools.pop(username)
         running_tool.is_running = False
 
-        def handle_stop_account() -> None:
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(running_tool.close())
-
-            except Exception as error:
-                logger.exception(f"Error stopping account '{username}': {error}")
-
-        threading.Thread(target=handle_stop_account, daemon=True).start()
+        cc.run_in_thread(coro_func=running_tool.close)
 
         self._update_all_buttons_state()
 
@@ -343,16 +295,7 @@ class MainWindow:
             self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
             return
 
-        def handle_refresh_page() -> None:
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(running_tool.page.reload())  # type: ignore
-
-            except Exception as error:
-                logger.exception(f"Error refreshing page for account '{username}': {error}")
-
-        threading.Thread(target=handle_refresh_page, daemon=True).start()
+        cc.run_in_thread(coro_func=running_tool.page.reload)
 
     def _run_all_accounts(self) -> None:
         self._accounts_tab.run_all_accounts()

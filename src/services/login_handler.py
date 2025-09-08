@@ -4,6 +4,7 @@ import contextlib
 from browser_use.browser.types import Page
 from loguru import logger
 
+from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
 from src.services.websocket_handler import WebsocketHandler
 from src.utils.contants import EventConfig
@@ -15,15 +16,13 @@ class LoginHandler:
         self,
         page: Page,
         event_config: EventConfig,
-        username: str,
-        password: str,
+        account: Account,
         websocket_handler: WebsocketHandler,
         on_add_message: OnAddMessageCallback,
     ) -> None:
         self._page = page
         self._event_config = event_config
-        self._username = username
-        self._password = password
+        self._account = account
 
         self._websocket_handler = websocket_handler
         self._on_add_message = on_add_message
@@ -75,7 +74,7 @@ class LoginHandler:
                 self._on_add_message(tag=MessageTag.ERROR, message="Username input field not found")
                 return False
             user_loc = user_base_loc.first
-            await user_loc.fill(self._username)
+            await user_loc.fill(self._account.username)
 
             # Fill password
             pass_base_loc = self._page.locator(self._event_config.password_input_selector)
@@ -83,7 +82,7 @@ class LoginHandler:
                 self._on_add_message(tag=MessageTag.ERROR, message="Password input field not found")
                 return False
             pass_loc = pass_base_loc.first
-            await pass_loc.fill(self._password)
+            await pass_loc.fill(self._account.password)
 
             # Submit
             submit_base_loc = self._page.locator(self._event_config.submit_btn_selector)

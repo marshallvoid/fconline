@@ -59,8 +59,10 @@ class AccountsTab:
         return self._accounts
 
     # ==================== Public Methods ====================
-    def run_all_accounts(self) -> None:
-        pending_accounts = [a for a in self._accounts if a.username not in self._running_usernames and a.available]
+    def run_all_accounts(self, pending_accounts: Optional[List[Account]] = None) -> None:
+        pending_accounts = pending_accounts or [
+            a for a in self._accounts if a.username not in self._running_usernames and a.available
+        ]
         if not pending_accounts:
             messagebox.showinfo("Info", "No accounts to run.")
             return
@@ -72,23 +74,25 @@ class AccountsTab:
         self._running_usernames.update(a.username for a in pending_accounts)
         self._refresh_accounts_list()
 
-    def stop_all_accounts(self) -> None:
-        if not self._running_usernames:
+    def stop_all_accounts(self, running_usernames: Optional[Set[str]] = None) -> None:
+        running_usernames = running_usernames or self._running_usernames
+        if not running_usernames:
             messagebox.showinfo("Info", "No accounts to stop.")
             return
 
-        for username in self._running_usernames:
+        for username in running_usernames:
             self._on_account_stop(username=username)
 
         self._running_usernames.clear()
         self._refresh_accounts_list()
 
-    def refresh_all_pages(self) -> None:
-        if not self._running_usernames:
+    def refresh_all_pages(self, running_usernames: Optional[Set[str]] = None) -> None:
+        running_usernames = running_usernames or self._running_usernames
+        if not running_usernames:
             messagebox.showinfo("Info", "No accounts to refresh.")
             return
 
-        for username in self._running_usernames:
+        for username in running_usernames:
             self._on_refresh_page(username=username)
 
     def mark_account_as_won(self, username: str) -> None:
@@ -188,7 +192,7 @@ class AccountsTab:
             state="normal",
             command=lambda: self._open_upsert_dialog(),
         )
-        self._add_account_btn.pack(fill="x", pady=(0, 5))
+        self._add_account_btn.pack(fill="x", pady=(0, 10))
 
         # Duplicate Account button
         self._duplicate_account_btn = ttk.Button(
@@ -300,9 +304,19 @@ class AccountsTab:
         )
         self._fc_info_label.pack(anchor="w")
 
+        def select_all_accounts() -> str:
+            all_items = self._accounts_tree.get_children()
+            self._accounts_tree.selection_set(all_items)
+            return "break"
+
         # Bind events
-        self._accounts_tree.bind("<<TreeviewSelect>>", self._on_tree_select)
-        self._accounts_tree.bind("<Double-1>", self._on_tree_double_click)
+        self._accounts_tree.bind("<<TreeviewSelect>>", lambda _: self._on_tree_select())
+        self._accounts_tree.bind("<Double-1>", lambda _: self._on_tree_double_click())
+        self._accounts_tree.bind("<Control-a>", lambda _: select_all_accounts())
+        self._accounts_tree.bind("<Control-A>", lambda _: select_all_accounts())
+
+        # Make sure the treeview can receive focus for keyboard shortcuts
+        self._accounts_tree.focus_set()
 
         # Refresh the accounts list
         self._refresh_accounts_list()
@@ -333,62 +347,125 @@ class AccountsTab:
         for label, (text, color) in labels.items():
             label.config(text=text, foreground=color)
 
-    def _get_account_from_selection(self, event: tk.Event) -> Optional[Account]:
-        item_id = self._accounts_tree.identify_row(y=event.y)
-        if not item_id:
-            return None
+    def _get_selected_accounts(self) -> List[Account]:
+        selected_items = self._accounts_tree.selection()
+        selected_accounts = []
 
-        values = self._accounts_tree.item(item=item_id, option="values")
-        if not values:
-            return None
+        for item_id in selected_items:
+            values = self._accounts_tree.item(item=item_id, option="values")
+            if not values:
+                continue
 
-        return next((a for a in self._accounts if a.username == values[0]), None)
+            account = next((a for a in self._accounts if a.username == values[0]), None)
+            if not account:
+                continue
 
-    def _on_tree_select(self, event: tk.Event) -> None:
-        selected_account = self._get_account_from_selection(event=event)
-        if not selected_account:
+            selected_accounts.append(account)
+
+        return selected_accounts
+
+    def _on_tree_select(self) -> None:
+        selected_accounts = self._get_selected_accounts()
+
+        if not selected_accounts:
+            # No selection
+            self._mark_not_run_btn.config(state="disabled")
+            self._edit_btn.config(state="disabled")
+            self._delete_btn.config(state="disabled")
+            self._run_btn.config(state="disabled")
+            self._stop_btn.config(state="disabled")
+            self._refresh_btn.config(state="disabled")
+
+            # Reset info display
+            self._browser_pos_label.config(text=self._BROWSER_POS_LABEL_TEXT.format(position="-"), foreground="#6b7280")
+            self._display_name_label.config(text=self._NICKNAME_LABEL_TEXT.format(nickname="-"), foreground="#6b7280")
+            self._fc_info_label.config(text=self._FC_LABEL_TEXT.format(fc="-"), foreground="#6b7280")
             return
 
-        # Update buttons reflecting enabled state and running status
-        is_winning = selected_account.has_won
-        is_marked_not_run = selected_account.marked_not_run
-        is_running = selected_account.username in self._running_usernames
+        if len(selected_accounts) == 1:
+            # Single selection
+            selected_account = selected_accounts[0]
+            is_winning = selected_account.has_won
+            is_marked_not_run = selected_account.marked_not_run
+            is_running = selected_account.username in self._running_usernames
 
-        self._mark_not_run_btn.config(
-            command=lambda: self._toggle_mark_not_run(account=selected_account),
-            state="disabled" if is_running else "normal",
-            text="Mark Run" if is_marked_not_run else "Mark Not Run",
-        )
+            self._mark_not_run_btn.config(
+                command=lambda: self._toggle_mark_not_run(account=selected_account),
+                state="disabled" if is_running else "normal",
+                text="Mark Run" if is_marked_not_run else "Mark Not Run",
+            )
 
-        self._edit_btn.config(
-            command=lambda: self._open_upsert_dialog(account=selected_account),
-            state="disabled" if is_running or is_winning else "normal",
-        )
+            self._edit_btn.config(
+                command=lambda: self._open_upsert_dialog(account=selected_account),
+                state="disabled" if is_running or is_winning else "normal",
+            )
 
-        self._delete_btn.config(
-            command=lambda: self._delete_account(account=selected_account),
-            state="disabled" if is_running else "normal",
-        )
+            self._delete_btn.config(
+                command=lambda: self._delete_account(account=selected_account),
+                state="disabled" if is_running else "normal",
+            )
 
-        self._run_btn.config(
-            command=lambda: self._run_account(account=selected_account),
-            state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
-        )
+            self._run_btn.config(
+                command=lambda: self._run_account(account=selected_account),
+                state="disabled" if is_running or is_winning or is_marked_not_run else "normal",
+                text="Run",
+            )
 
-        self._stop_btn.config(
-            command=lambda: self._stop_account(username=selected_account.username),
-            state="disabled" if not is_running else "normal",
-        )
+            self._stop_btn.config(
+                command=lambda: self._stop_account(username=selected_account.username),
+                state="disabled" if not is_running else "normal",
+                text="Stop",
+            )
 
-        self._refresh_btn.config(
-            command=lambda: self._on_refresh_page(username=selected_account.username),
-            state="normal" if is_running else "disabled",
-        )
+            self._refresh_btn.config(
+                command=lambda: self._on_refresh_page(username=selected_account.username),
+                state="normal" if is_running else "disabled",
+            )
 
-        self._update_info_display(account=selected_account, is_running=is_running)
+            self._update_info_display(account=selected_account, is_running=is_running)
 
-    def _on_tree_double_click(self, event: tk.Event) -> None:
-        account = self._get_account_from_selection(event=event)
+        else:
+            # Multiple selection
+            self._mark_not_run_btn.config(state="disabled")
+            self._edit_btn.config(state="disabled")
+            self._delete_btn.config(state="disabled")
+
+            available_accounts = [
+                a for a in selected_accounts if a.username not in self._running_usernames and a.available
+            ]
+            running_usernames = {a.username for a in selected_accounts if a.username in self._running_usernames}
+
+            # Repurpose Run/Stop buttons for multi-selection
+            self._run_btn.config(
+                command=lambda: self.run_all_accounts(pending_accounts=available_accounts),
+                state="normal" if len(available_accounts) > 0 else "disabled",
+                text="Run Selected",
+            )
+
+            self._stop_btn.config(
+                command=lambda: self.stop_all_accounts(running_usernames=running_usernames),
+                state="normal" if len(running_usernames) > 0 else "disabled",
+                text="Stop Selected",
+            )
+
+            self._refresh_btn.config(
+                command=lambda: self.refresh_all_pages(running_usernames=running_usernames),
+                state="normal" if len(running_usernames) > 0 else "disabled",
+            )
+
+    def _on_tree_double_click(self) -> None:
+        selected_items = self._accounts_tree.selection()
+        if not selected_items:
+            messagebox.showwarning("Warning", "Please select an account to duplicate.")
+            return
+
+        # Get the selected account
+        item_id = selected_items[0]
+        values = self._accounts_tree.item(item=item_id, option="values")
+        if not values:
+            return
+
+        account = next((a for a in self._accounts if a.username == values[0]), None)
         if not account:
             return
 
@@ -429,7 +506,7 @@ class AccountsTab:
         duplicated_account = Account(
             username=new_username,
             password=account.password,
-            spin_action=account.spin_action,
+            spin_type=account.spin_type,
             target_sjp=account.target_sjp,
             close_on_jp_win=account.close_on_jp_win,
             has_won=False,  # Reset win status
@@ -458,7 +535,7 @@ class AccountsTab:
                 values=(
                     account.username,
                     account.target_sjp,
-                    account.spin_action_name(selected_event=self._selected_event),
+                    account.spin_type_name(selected_event=self._selected_event),
                     account.close_on_jp_win,
                 ),
             )
@@ -538,31 +615,31 @@ class AccountsTab:
         target_sjp_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
         # Spin Action
-        spin_action_frame = ttk.Frame(master=main_frame)
-        spin_action_frame.pack(fill="x", pady=(0, 15))
-        ttk.Label(master=spin_action_frame, text="Spin Action:", width=15, font=("Arial", 12)).pack(side="left")
+        spin_type_frame = ttk.Frame(master=main_frame)
+        spin_type_frame.pack(fill="x", pady=(0, 15))
+        ttk.Label(master=spin_type_frame, text="Spin Action:", width=15, font=("Arial", 12)).pack(side="left")
 
-        spin_action_options = [
+        spin_type_options = [
             f"{i}. {action_name}"
-            for i, action_name in enumerate(EVENT_CONFIGS_MAP[self._selected_event].spin_actions, start=1)
+            for i, action_name in enumerate(EVENT_CONFIGS_MAP[self._selected_event].spin_types, start=1)
         ]
 
         initial_spin_display = (
-            (f"{account.spin_action}. {account.spin_action_name(selected_event=self._selected_event)}")
+            (f"{account.spin_type}. {account.spin_type_name(selected_event=self._selected_event)}")
             if account
-            else spin_action_options[0]
+            else spin_type_options[0]
         )
 
-        spin_action_var = tk.StringVar(value=initial_spin_display)
-        spin_action_combobox = ttk.Combobox(
-            master=spin_action_frame,
-            textvariable=spin_action_var,
-            values=spin_action_options,
+        spin_type_var = tk.StringVar(value=initial_spin_display)
+        spin_type_combobox = ttk.Combobox(
+            master=spin_type_frame,
+            textvariable=spin_type_var,
+            values=spin_type_options,
             state="readonly",
             width=25,
             font=("Arial", 12),
         )
-        spin_action_combobox.pack(side="left", padx=(10, 0), fill="x", expand=True)
+        spin_type_combobox.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
         # Close on Jackpot Win
         close_on_jp_win_frame = ttk.Frame(master=main_frame)
@@ -576,7 +653,7 @@ class AccountsTab:
         close_on_jp_win_checkbox.pack(anchor="w")
 
         def handle_save() -> None:
-            spin_action_display = spin_action_var.get().strip()
+            spin_type_display = spin_type_var.get().strip()
             auto_close = close_on_jp_win_var.get()
 
             if not (username := username_var.get().strip()):
@@ -593,7 +670,7 @@ class AccountsTab:
 
             # Parse spin action
             try:
-                spin_action_val = int(spin_action_display.split(".")[0])
+                spin_type_val = int(spin_type_display.split(".")[0])
             except (ValueError, IndexError):
                 messagebox.showerror("Error", "Invalid spin action selected!")
                 return
@@ -608,7 +685,7 @@ class AccountsTab:
                 # Update existing account
                 account.username = username
                 account.password = password
-                account.spin_action = spin_action_val
+                account.spin_type = spin_type_val
                 account.target_sjp = target_val
                 account.close_on_jp_win = auto_close
 
@@ -622,7 +699,7 @@ class AccountsTab:
                 assert account is not None  # Type narrowing for mypy
                 account.username = username
                 account.password = password
-                account.spin_action = spin_action_val
+                account.spin_type = spin_type_val
                 account.target_sjp = target_val
                 account.close_on_jp_win = auto_close
 
@@ -640,7 +717,7 @@ class AccountsTab:
                     Account(
                         username=username,
                         password=password,
-                        spin_action=spin_action_val,
+                        spin_type=spin_type_val,
                         target_sjp=target_val,
                         close_on_jp_win=auto_close,
                     )
@@ -673,7 +750,7 @@ class AccountsTab:
         username_entry.bind("<Return>", lambda _: handle_save())
         pwd_entry.bind("<Return>", lambda _: handle_save())
         target_sjp_entry.bind("<Return>", lambda _: handle_save())
-        spin_action_combobox.bind("<Return>", lambda _: handle_save())
+        spin_type_combobox.bind("<Return>", lambda _: handle_save())
         close_on_jp_win_checkbox.bind("<Return>", lambda _: handle_save())
 
         dialog.wait_window()

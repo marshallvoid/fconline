@@ -16,7 +16,8 @@ class Notification(BaseModel):
 class Account(BaseModel):
     username: str = ""
     password: str = ""
-    spin_action: int = 1
+    spin_type: int = 1
+    payment_type: int = 1
     target_sjp: int = 19000
     close_on_jp_win: bool = True
     has_won: bool = False
@@ -26,12 +27,12 @@ class Account(BaseModel):
     def available(self) -> bool:
         return not self.has_won and not self.marked_not_run
 
-    def spin_action_name(self, selected_event: str) -> str:
-        return EVENT_CONFIGS_MAP[selected_event].spin_actions[self.spin_action - 1]
+    def spin_type_name(self, selected_event: str) -> str:
+        return EVENT_CONFIGS_MAP[selected_event].spin_types[self.spin_type - 1]
 
     def running_message(self, selected_event: str) -> str:
-        spin_action_name = self.spin_action_name(selected_event)
-        return f"Running account '{self.username}' (Action: '{spin_action_name}' - Target: '{self.target_sjp:,}')"
+        spin_type_name = self.spin_type_name(selected_event)
+        return f"Running account '{self.username}' (Action: '{spin_type_name}' - Target: '{self.target_sjp:,}')"
 
 
 class Config(BaseModel):

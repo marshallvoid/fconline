@@ -18,7 +18,7 @@ class FileManager:
     def get_resource_path(cls, relative_path: str) -> str:
         base_path: Path | str
         if hasattr(sys, "_MEIPASS"):
-            base_path = Path(sys._MEIPASS) # type: ignore
+            base_path = Path(sys._MEIPASS)  # type: ignore
         else:
             base_path = os.path.abspath(".")
 
