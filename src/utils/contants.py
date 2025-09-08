@@ -14,6 +14,7 @@ BROWSER_POSITIONS: Dict[Tuple[int, int], str] = {
 
 @dataclass
 class EventConfig:
+    event_name: str = ""
     tab_attr_name: str = ""
     spin_actions: List[str] = field(default_factory=list)
 
@@ -32,16 +33,19 @@ class EventConfig:
 
 EVENT_CONFIGS_MAP: Dict[str, EventConfig] = {
     "Bi Lắc": EventConfig(
+        event_name="Bi Lắc",
         tab_attr_name="_bilac_tab",
         spin_actions=["10 FC Spin", "190 FC Spin", "900 FC Spin"],
         base_url="https://bilac.fconline.garena.vn",
     ),
     "Tỷ Phú": EventConfig(
+        event_name="Tỷ Phú",
         tab_attr_name="_typhu_tab",
         spin_actions=["20 FC Spin", "190 FC Spin", "900 FC Spin", "1800 FC Spin"],
         base_url="https://typhu.fconline.garena.vn",
     ),
     "Vòng Quanh Thế Giới": EventConfig(
+        event_name="Vòng Quanh Thế Giới",
         tab_attr_name="_vqtg_tab",
         spin_actions=["20 FC Spin", "190 FC Spin", "900 FC Spin"],
         base_url="https://vqtg.fconline.garena.vn",
@@ -49,6 +53,7 @@ EVENT_CONFIGS_MAP: Dict[str, EventConfig] = {
         params={"is_free": False, "use_topup_deal": False},
     ),
     "Tuyển Chọn Siêu Sao": EventConfig(
+        event_name="Tuyển Chọn Siêu Sao",
         tab_attr_name="_tcss_tab",
         spin_actions=["20 FC Spin", "190 FC Spin", "900 FC Spin", "1800 FC Spin"],
         base_url="https://tcss.fconline.garena.vn",
