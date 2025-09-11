@@ -8,7 +8,7 @@ from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
 from src.services.websocket_handler import WebsocketHandler
 from src.utils.contants import EventConfig
-from src.utils.types.callbacks import OnAddMessageCallback
+from src.utils.types import callback as cb
 
 
 class LoginHandler:
@@ -18,7 +18,7 @@ class LoginHandler:
         event_config: EventConfig,
         account: Account,
         websocket_handler: WebsocketHandler,
-        on_add_message: OnAddMessageCallback,
+        on_add_message: cb.OnAddMessageCallback,
     ) -> None:
         self._page = page
         self._event_config = event_config

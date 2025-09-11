@@ -9,21 +9,14 @@ from browser_use.browser.types import Page
 from loguru import logger
 from playwright.async_api import WebSocket  # noqa: DEP003
 
+from src.core.managers.notifier import notifier_mgr
 from src.infrastructure.client import FCOnlineClient
 from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
-from src.utils import concurrency as cc
-from src.utils import helpers as hp
-from src.utils import sounds
+from src.utils import conc, hlp, sfx
 from src.utils.contants import EventConfig
-from src.utils.types.callbacks import (
-    OnAccountWonCallback,
-    OnAddMessageCallback,
-    OnAddNotificationCallback,
-    OnUpdateCurrentJackpotCallback,
-    OnUpdateWinnerCallback,
-)
+from src.utils.types import callback as cb
 
 
 class WebsocketHandler:
@@ -36,11 +29,11 @@ class WebsocketHandler:
         page: Page,
         event_config: EventConfig,
         account: Account,
-        on_account_won: OnAccountWonCallback,
-        on_add_message: OnAddMessageCallback,
-        on_add_notification: OnAddNotificationCallback,
-        on_update_cur_jp: OnUpdateCurrentJackpotCallback,
-        on_update_prize_winner: OnUpdateWinnerCallback,
+        on_account_won: cb.OnAccountWonCallback,
+        on_add_message: cb.OnAddMessageCallback,
+        on_add_notification: cb.OnAddNotificationCallback,
+        on_update_cur_jp: cb.OnUpdateCurrentJackpotCallback,
+        on_update_prize_winner: cb.OnUpdateWinnerCallback,
     ) -> None:
         self._page = page
         self._event_config = event_config
@@ -102,7 +95,7 @@ class WebsocketHandler:
 
                 results = await self._parse_socket_frame(frame=frame_str)
                 if not results:
-                  return
+                    return
 
                 kind, value, nickname = results
                 await self._handle_jackpot_event(kind=kind, value=value, nickname=nickname)
@@ -113,7 +106,7 @@ class WebsocketHandler:
 
             def _on_close(ws: WebSocket) -> None:
                 logger.info(f"WebSocket closed: {ws.url}")
-                cc.run_in_thread(coro_func=self._page.reload)
+                conc.run_in_thread(coro_func=self._page.reload)
 
             websocket.on("framereceived", _on_framereceived)
             websocket.on("framesent", _on_framesent)
@@ -260,7 +253,7 @@ class WebsocketHandler:
         finally:
             # Always process result if we got one, regardless of cancellation
             if spin_response and spin_response.payload and spin_response.payload.spin_results:
-                message = hp.format_results_block(results=spin_response.payload.spin_results)
+                message = hlp.format_results_block(results=spin_response.payload.spin_results)
                 self._on_add_message(tag=MessageTag.REWARD, message=message)
 
             self._spin_task = None
@@ -287,9 +280,17 @@ class WebsocketHandler:
             self._on_account_won(username=self._account.username, is_jackpot=is_jackpot)
             self._on_add_notification(nickname=target_nickname, jackpot_value=str(target_value))
 
+            notifier_mgr.discord_winner_notifier(
+                is_jackpot=is_jackpot,
+                username=self._account.username,
+                nickname=target_nickname,
+                value=str(target_value),
+            )
+
         self._on_add_message(tag=tag, message=message, compact=is_compact)
         self._on_update_prize_winner(nickname=target_nickname, value=str(target_value), is_jackpot=is_jackpot)
-        threading.Thread(target=sounds.send_notification, args=(tag.sound_name,), daemon=True).start()
+
+        threading.Thread(target=sfx.play_audio, kwargs={"audio_name": tag.sound_name}, daemon=True).start()
 
     def _cancel_spin_task(self) -> None:
         if self._spin_task and not self._spin_task.done():

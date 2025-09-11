@@ -3,9 +3,9 @@ import tkinter as tk
 from tkinter import ttk
 from typing import List, Optional
 
-from src.core.managers.config import ConfigManager
+from src.core.managers.config import config_mgr
 from src.schemas.configs import Config, Notification
-from src.utils import helpers as hp
+from src.utils import hlp
 
 
 class NotificationIcon:
@@ -15,7 +15,7 @@ class NotificationIcon:
         self._frame: ttk.Frame = ttk.Frame(master=parent)
         self._menu_window: Optional[tk.Toplevel] = None
 
-        self._configs: Config = ConfigManager.load_configs()
+        self._configs: Config = config_mgr.load_configs()
         self._notifications: List[Notification] = self._configs.notifications
 
         self._setup_ui()
@@ -87,7 +87,7 @@ class NotificationIcon:
 
         # Center the menu window
         self._menu_window.update_idletasks()
-        _, _, _, _, x, y = hp.get_window_position(child_frame=self._menu_window, parent_frame=self._parent)
+        _, _, _, _, x, y = hlp.get_window_position(child_frame=self._menu_window, parent_frame=self._parent)
         self._menu_window.geometry(newGeometry=f"400x500+{x}+{y}")
 
         # Configure menu appearance
@@ -232,4 +232,4 @@ class NotificationIcon:
 
     def _save_notifications_to_config(self) -> None:
         self._configs.notifications = self._notifications
-        ConfigManager.save_configs(configs=self._configs)
+        config_mgr.save_configs(configs=self._configs)

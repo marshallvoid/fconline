@@ -4,12 +4,12 @@ import aiohttp
 from browser_use.browser.types import Page
 from loguru import logger
 
-from src.core.managers.request import RequestManager
+from src.core.managers.request import request_mgr
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.spin_response import SpinResponse
 from src.schemas.user_response import UserReponse
 from src.utils.contants import EventConfig
-from src.utils.types.callbacks import OnAddMessageCallback
+from src.utils.types import callback as cb
 
 
 class FCOnlineClient:
@@ -19,7 +19,7 @@ class FCOnlineClient:
         page: Page,
         cookies: Dict[str, str],
         headers: Dict[str, str],
-        on_add_message: OnAddMessageCallback,
+        on_add_message: cb.OnAddMessageCallback,
     ) -> None:
         self._page = page
         self._cookies = cookies
@@ -35,7 +35,7 @@ class FCOnlineClient:
             async with aiohttp.ClientSession(
                 cookies=self._cookies,
                 headers=self._headers,
-                connector=RequestManager.connector(),
+                connector=request_mgr.connector(),
             ) as session:
                 async with session.get(self._user_api) as response:
                     if not response.ok:
@@ -67,7 +67,7 @@ class FCOnlineClient:
             async with aiohttp.ClientSession(
                 cookies=self._cookies,
                 headers=self._headers,
-                connector=RequestManager.connector(),
+                connector=request_mgr.connector(),
             ) as session:
                 payload = {"spin_type": spin_type, "payment_type": payment_type, **extra_params}
 

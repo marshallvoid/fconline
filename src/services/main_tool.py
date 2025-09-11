@@ -5,26 +5,19 @@ from browser_use import BrowserProfile, BrowserSession
 from browser_use.browser.types import Page
 from loguru import logger
 
-from src.core.managers.file import FileManager
-from src.core.managers.platform import PlatformManager
-from src.core.managers.request import RequestManager
+from src.core.configs import settings
+from src.core.managers.file import file_mgr
+from src.core.managers.platform import platform_mgr
+from src.core.managers.request import request_mgr
 from src.infrastructure.client import FCOnlineClient
 from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
 from src.services.login_handler import LoginHandler
 from src.services.websocket_handler import WebsocketHandler
-from src.utils import concurrency as cc
-from src.utils import helpers as hp
-from src.utils.contants import PROGRAM_NAME, EventConfig
-from src.utils.types.callbacks import (
-    OnAccountWonCallback,
-    OnAddMessageCallback,
-    OnAddNotificationCallback,
-    OnUpdateCurrentJackpotCallback,
-    OnUpdateUserInfoCallback,
-    OnUpdateWinnerCallback,
-)
+from src.utils import conc, hlp
+from src.utils.contants import EventConfig
+from src.utils.types import callback as cb
 
 
 class MainTool:
@@ -38,12 +31,12 @@ class MainTool:
         req_height: int,
         event_config: EventConfig,
         account: Account,
-        on_account_won: OnAccountWonCallback,
-        on_add_message: OnAddMessageCallback,
-        on_add_notification: OnAddNotificationCallback,
-        on_update_cur_jp: OnUpdateCurrentJackpotCallback,
-        on_update_prize_winner: OnUpdateWinnerCallback,
-        on_update_info_display: OnUpdateUserInfoCallback,
+        on_account_won: cb.OnAccountWonCallback,
+        on_add_message: cb.OnAddMessageCallback,
+        on_add_notification: cb.OnAddNotificationCallback,
+        on_update_cur_jp: cb.OnUpdateCurrentJackpotCallback,
+        on_update_prize_winner: cb.OnUpdateWinnerCallback,
+        on_update_info_display: cb.OnUpdateUserInfoCallback,
     ) -> None:
         self._is_running = is_running
         self._browser_index = browser_index
@@ -120,8 +113,8 @@ class MainTool:
             self._client = FCOnlineClient(
                 event_config=self._event_config,
                 page=self._page,
-                cookies=await RequestManager.get_cookies(page=self._page),
-                headers=await RequestManager.get_headers(page=self._page, event_config=self._event_config),
+                cookies=await request_mgr.get_cookies(page=self._page),
+                headers=await request_mgr.get_headers(page=self._page, event_config=self._event_config),
                 on_add_message=self._on_add_message,
             )
             self._user_info = await self._client.lookup()
@@ -143,7 +136,7 @@ class MainTool:
 
         finally:
             await self.close()
-            self._on_add_message(tag=MessageTag.INFO, message=f"{PROGRAM_NAME} stopped", compact=True)
+            self._on_add_message(tag=MessageTag.INFO, message=f"{settings.program_name} stopped", compact=True)
 
     async def close(self) -> None:
         logger.info("Closing browser context and cleaning up resources...")
@@ -160,7 +153,7 @@ class MainTool:
             logger.exception(f"Failed to clean up browser resource: {error}")
 
         finally:
-            FileManager.cleanup_data_directory(data_dir=self._user_data_dir)
+            file_mgr.cleanup_data_directory(data_dir=self._user_data_dir)
             self._user_data_dir = None
             self._session = None
             self._page = None
@@ -181,7 +174,7 @@ class MainTool:
         )
         await self._client.spin(spin_type=1, extra_params=self._event_config.params)
 
-        cc.run_in_thread(coro_func=page.reload)
+        conc.run_in_thread(coro_func=page.reload)
 
     def _update_ui(self) -> None:
         # Update ultimate prize winner display
@@ -225,7 +218,7 @@ class MainTool:
         ]
 
         # Add Windows-specific optimizations for better performance
-        if PlatformManager.platform() == "windows":
+        if platform_mgr.platform() == "windows":
             extra_chromium_args.extend(
                 [
                     "--disable-software-rasterizer",
@@ -242,7 +235,7 @@ class MainTool:
             )
 
         # Ensure Chrome is available for consistent automation behavior
-        if not (chrome_path := PlatformManager.get_chrome_executable_path()):
+        if not (chrome_path := platform_mgr.get_chrome_executable_path()):
             msg = "Chrome/Chromium not found. Please install Chrome or Chromium."
             raise Exception(msg)
 
@@ -250,13 +243,13 @@ class MainTool:
         for attempt in range(3):
             try:
                 # Use persistent profile on first attempt, temporary on retries
-                user_data_dir = None if attempt > 0 else FileManager.get_data_directory()
+                user_data_dir = None if attempt > 0 else file_mgr.get_data_directory()
                 # Store for cleanup later
                 if user_data_dir:
                     self._user_data_dir = user_data_dir
 
                 # Configure browser profile with stealth settings and timeouts
-                x, y, width, height = hp.get_browser_position(
+                x, y, width, height = hlp.get_browser_position(
                     browser_index=self._browser_index,
                     screen_width=self._screen_width,
                     screen_height=self._screen_height,

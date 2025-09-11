@@ -6,17 +6,18 @@ from typing import Any, Dict, Optional
 from cryptography.fernet import Fernet
 from loguru import logger
 
-from src.core.managers.file import FileManager
-from src.core.managers.platform import PlatformManager
+from src.core.decorators import singleton
+from src.core.managers.file import file_mgr
+from src.core.managers.platform import platform_mgr
 from src.schemas.configs import Config
 
 
+@singleton
 class ConfigManager:
-    @classmethod
-    def load_configs(cls) -> Config:
+    def load_configs(self) -> Config:
         configs = Config()
         try:
-            configs_file = os.path.join(FileManager.get_configs_dicrectory(), "configs.json")
+            configs_file = os.path.join(file_mgr.get_configs_directory(), "configs.json")
             if not os.path.exists(configs_file):
                 return configs
 
@@ -27,8 +28,8 @@ class ConfigManager:
                 encrypted_configs["accounts"] = [
                     {
                         **account,
-                        "username": cls._decrypt_data(value=account.get("username")),
-                        "password": cls._decrypt_data(value=account.get("password")),
+                        "username": self._decrypt_data(value=account.get("username")),
+                        "password": self._decrypt_data(value=account.get("password")),
                     }
                     for account in encrypted_configs["accounts"]
                 ]
@@ -40,15 +41,14 @@ class ConfigManager:
 
         return configs
 
-    @classmethod
-    def save_configs(cls, configs: Config) -> None:
+    def save_configs(self, configs: Config) -> None:
         try:
             encrypted_configs: Dict[str, Any] = {
                 "event": configs.event,
                 "accounts": [
                     {
-                        "username": cls._encrypt_data(value=account.username),
-                        "password": cls._encrypt_data(value=account.password),
+                        "username": self._encrypt_data(value=account.username),
+                        "password": self._encrypt_data(value=account.password),
                         **account.model_dump(exclude={"username", "password"}),
                     }
                     for account in configs.accounts
@@ -56,21 +56,20 @@ class ConfigManager:
                 "notifications": [notification.model_dump() for notification in configs.notifications],
             }
 
-            configs_file = os.path.join(FileManager.get_configs_dicrectory(), "configs.json")
+            configs_file = os.path.join(file_mgr.get_configs_directory(), "configs.json")
             with open(configs_file, "w", encoding="utf-8") as f:
                 json.dump(encrypted_configs, f, indent=2, ensure_ascii=False)
 
         except Exception:
             logger.exception("Failed to save configs")
 
-    @classmethod
-    def _encrypt_data(cls, value: Optional[str] = None) -> str:
+    def _encrypt_data(self, value: Optional[str] = None) -> str:
         if not value:
             return ""
 
         try:
             # Use Fernet symmetric encryption for sensitive data
-            f = Fernet(cls._get_encryption_key())
+            f = Fernet(self._get_encryption_key())
             encrypted_data = f.encrypt(value.encode())
             return base64.urlsafe_b64encode(encrypted_data).decode()
 
@@ -78,14 +77,13 @@ class ConfigManager:
             # Fallback to simple base64 encoding if encryption fails
             return base64.urlsafe_b64encode(value.encode()).decode()
 
-    @classmethod
-    def _decrypt_data(cls, value: Optional[str] = None) -> str:
+    def _decrypt_data(self, value: Optional[str] = None) -> str:
         if not value:
             return ""
 
         try:
             # Use Fernet symmetric encryption for sensitive data
-            f = Fernet(cls._get_encryption_key())
+            f = Fernet(self._get_encryption_key())
             decrypted_data = f.decrypt(base64.urlsafe_b64decode(value.encode()))
             return decrypted_data.decode()
 
@@ -93,9 +91,8 @@ class ConfigManager:
             # Fallback to simple base64 decoding if decryption fails
             return base64.urlsafe_b64decode(value.encode()).decode()
 
-    @classmethod
-    def _get_encryption_key(cls) -> bytes:
-        config_data_dir = FileManager.get_configs_dicrectory()
+    def _get_encryption_key(self) -> bytes:
+        config_data_dir = file_mgr.get_configs_directory()
         key_file = os.path.join(config_data_dir, ".key")
 
         try:
@@ -110,13 +107,16 @@ class ConfigManager:
                 f.write(key)
 
             # Make key file hidden and read-only on Unix systems
-            if not PlatformManager.is_windows():
+            if not platform_mgr.is_windows():
                 os.chmod(key_file, 0o600)
 
             return key
 
         except Exception:
             # Fallback to a simple key based on machine info
-            machine_id = PlatformManager.node() + PlatformManager.machine()
+            machine_id = platform_mgr.node() + platform_mgr.machine()
             key = base64.urlsafe_b64encode(machine_id.encode().ljust(32)[:32])
             return key
+
+
+config_mgr = ConfigManager()

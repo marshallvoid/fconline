@@ -2,9 +2,15 @@ import logging
 import os
 import sys
 from types import FrameType
-from typing import Any, Optional, cast
+from typing import TYPE_CHECKING, Optional, TextIO, cast
 
 from loguru import logger
+
+from src.core.managers.file import file_mgr
+from src.core.managers.notifier import notifier_mgr
+
+if TYPE_CHECKING:
+    from loguru import Record
 
 LOGURU_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
@@ -14,33 +20,6 @@ LOGURU_FORMAT = (
     "<cyan>{name}</cyan>:<cyan>{function}</cyan>:"
     "<cyan>{line}</cyan> - <level>{message}</level>"
 )
-
-# Global flag to track if logger has been initialized
-_logger_initialized = False
-
-
-def _get_log_file_path() -> str:
-    try:
-        # Try to use the same config directory as FileManager
-        from src.core.managers.file import FileManager
-
-        config_dir = FileManager.get_configs_dicrectory()
-    except ImportError:
-        # Fallback to user home directory if FileManager is not available
-        config_dir = os.path.expanduser("~/.fc-online")
-
-    # Ensure directory exists
-    os.makedirs(config_dir, exist_ok=True)
-
-    return os.path.join(config_dir, "app_error.log")
-
-
-def _should_log_to_file(record: Any) -> bool:
-    # Log ERROR and CRITICAL levels to file
-    level_name = getattr(record.get("level"), "name", "")
-
-    # Log if it's an error/critical level or if there's an exception
-    return level_name in ("ERROR", "CRITICAL") or record.get("exception") is not None
 
 
 class InterceptHandler(logging.Handler):
@@ -71,24 +50,18 @@ class InterceptHandler(logging.Handler):
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
-def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMAT) -> None:
-    global _logger_initialized
+def is_loggable_error(record: "Record") -> bool:
+    return record["level"].name in ("ERROR", "CRITICAL") or record["exception"] is not None
 
-    # Prevent multiple logger initializations
-    if _logger_initialized:
-        return
 
+def init_logger(debug: Optional[bool] = False) -> None:
     # logging configuration
     logging_level = logging.DEBUG if debug else logging.INFO
-    loggers = (
-        "aiohttp",
-        "playwright",
-        "browser_use",
-    )
+    loggers = ("aiohttp", "playwright", "browser_use")
 
     logging.getLogger().handlers = [InterceptHandler()]
     for logger_name in loggers:
-        logging_logger = logging.getLogger(logger_name)
+        logging_logger = logging.getLogger(name=logger_name)
         logging_logger.propagate = False
         logging_logger.handlers = [InterceptHandler(level=logging_level)]
 
@@ -102,23 +75,37 @@ def init_logger(debug: Optional[bool] = False, loguru_format: str = LOGURU_FORMA
         sink = log_file.name
 
     # Configure multiple handlers
-    handlers = [
-        # Console handler for all logs
-        {"sink": sink, "level": logging_level, "format": loguru_format},
-        # File handler for errors and exceptions with rotation
-        {
-            "sink": _get_log_file_path(),
-            "level": "ERROR",
-            "format": loguru_format,
-            "rotation": "10 MB",  # Rotate when file reaches 10MB
-            "retention": "7 days",  # Keep logs for 7 days
-            "compression": "zip",  # Compress old log files
-            "filter": _should_log_to_file,  # Only log errors and exceptions
-            "backtrace": True,  # Include full traceback for exceptions
-            "diagnose": True,  # Include variable values in traceback
-        },
-    ]
-    logger.configure(handlers=handlers)  # type: ignore
+    logger.configure(
+        handlers=[
+            # Console handler for all logs
+            {
+                "sink": cast(TextIO, sink),
+                "level": logging_level,
+                "format": LOGURU_FORMAT,
+                "backtrace": True,  # Include full traceback for exceptions
+            },
+            # Discord notification handler for errors
+            {
+                "sink": notifier_mgr.discord_error_notifier,
+                "level": "ERROR",
+                "filter": lambda record: not record["extra"].get("apprise", False) and is_loggable_error(record=record),
+                "backtrace": True,  # Include full traceback for exceptions
+            },
+            # File handler for errors and exceptions with rotation
+            {
+                "sink": os.path.join(file_mgr.get_configs_directory(), "app_error.log"),
+                "level": "ERROR",
+                "format": LOGURU_FORMAT,
+                "filter": is_loggable_error,  # Only log errors and exceptions
+                "backtrace": True,  # Include full traceback for exceptions
+                "diagnose": True,  # Include variable values in traceback
+                "rotation": "10 MB",  # Rotate when file reaches 10MB
+                "retention": "7 days",  # Keep logs for 7 days
+                "compression": "zip",  # Compress old log files
+            },
+        ]
+    )
 
-    # Mark logger as initialized
-    _logger_initialized = True
+
+original_error = logger.error
+logger.error = lambda *args, **kwargs: logger.opt(exception=True).log("ERROR", *args, **kwargs)

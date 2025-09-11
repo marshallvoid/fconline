@@ -19,6 +19,11 @@ a = Analysis(
         'darkdetect',
         'notify-py',
         'playsound3',
+        'apprise',
+        'dishka',
+        'logprise',
+        'pydantic-extra-types',
+        'pydantic-settings',
 
         # Networking and automation
         'aiohttp',
