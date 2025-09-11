@@ -5,19 +5,19 @@ import aiohttp
 from browser_use.browser.types import Page
 from loguru import logger
 
+from src.core.decorators import singleton
 from src.utils.contants import EventConfig
 
 
+@singleton
 class RequestManager:
-    @classmethod
-    def connector(cls) -> aiohttp.TCPConnector:
+    def connector(self) -> aiohttp.TCPConnector:
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
         return aiohttp.TCPConnector(ssl=ssl_context)
 
-    @classmethod
-    async def get_cookies(cls, page: Page) -> Dict[str, str]:
+    async def get_cookies(self, page: Page) -> Dict[str, str]:
         try:
             cookies = await page.context.cookies()
             return {
@@ -30,9 +30,8 @@ class RequestManager:
             logger.exception(f"Failed to extract cookies: {error}")
             return {}
 
-    @classmethod
-    async def get_headers(cls, page: Page, event_config: EventConfig) -> Dict[str, str]:
-        cookies = await cls.get_cookies(page=page)
+    async def get_headers(self, page: Page, event_config: EventConfig) -> Dict[str, str]:
+        cookies = await self.get_cookies(page=page)
 
         return {
             "Cookie": "; ".join([f"{name}={value}" for name, value in cookies.items()]),
@@ -50,3 +49,6 @@ class RequestManager:
             "TE": "trailers",
             "Priority": "u=0",
         }
+
+
+request_mgr = RequestManager()

@@ -2,15 +2,17 @@ import contextlib
 import threading
 import tkinter as tk
 from tkinter import ttk
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence
 
 import darkdetect  # type: ignore
 import sv_ttk
+from dishka import AsyncContainer
 from loguru import logger
 
-from src.core.managers.config import ConfigManager
-from src.core.managers.file import FileManager
-from src.core.managers.platform import PlatformManager
+from src.core.configs import Settings
+from src.core.managers.config import config_mgr
+from src.core.managers.file import file_mgr
+from src.core.managers.platform import platform_mgr
 from src.gui.accounts_tab import AccountsTab
 from src.gui.activity_log_tab import ActivityLogTab
 from src.gui.notification_icon import NotificationIcon
@@ -18,28 +20,30 @@ from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserDetail
 from src.services.main_tool import MainTool
-from src.utils import concurrency as cc
-from src.utils import helpers as hp
-from src.utils.contants import EVENT_CONFIGS_MAP, PROGRAM_NAME
+from src.utils import conc, hlp
+from src.utils.contants import EVENT_CONFIGS_MAP
 
 
 class MainWindow:
-    def __init__(self) -> None:
+    def __init__(self, container: AsyncContainer, settings: Settings) -> None:
+        self._container = container
+        self._settings = settings
+
         self._root = tk.Tk()
-        self._root.title(string=PROGRAM_NAME)
+        self._root.title(string=self._settings.program_name)
         self._root.resizable(width=False, height=False)
 
         with contextlib.suppress(Exception):
-            png_path = FileManager.get_resource_path(relative_path="assets/icon.png")
+            png_path = file_mgr.get_resource_path(relative_path="assets/icon.png")
             icon = tk.PhotoImage(file=png_path)
             self._root.iconphoto(True, icon)
 
-        if PlatformManager.is_windows():
+        if platform_mgr.is_windows():
             with contextlib.suppress(Exception):
-                ico_path = FileManager.get_resource_path(relative_path="assets/icon.ico")
+                ico_path = file_mgr.get_resource_path(relative_path="assets/icon.ico")
                 self._root.iconbitmap(ico_path)
 
-        self._configs = ConfigManager.load_configs()
+        self._configs = config_mgr.load_configs()
         self._selected_event = self._configs.event
 
         self._running_tools: Dict[str, MainTool] = {}
@@ -47,16 +51,18 @@ class MainWindow:
         self._setup_ui()
 
     def run(self) -> None:
-        logger.info(f"Running {PROGRAM_NAME}")
+        logger.info(f"Running {self._settings.program_name}")
 
         def on_close() -> None:
             if self._running_tools:
-                _ = [setattr(tool, "is_running", False) for tool in self._running_tools.values()]
+                _ = [setattr(tool, "is_running", False) for tool in self._running_tools.values()]  # type: ignore
 
                 # Close tools in separate threads to avoid blocking the UI
                 def close_tools_concurrently() -> None:
-                    tasks = [(tool.close, (), {}) for tool in self._running_tools.values()]
-                    cc.run_many_in_threads(tasks=tasks, timeout=5.0)
+                    tasks: Sequence[tuple[Callable[..., Awaitable[Any]], Sequence[Any], Mapping[str, Any]]] = [
+                        (tool.close, (), {}) for tool in self._running_tools.values()
+                    ]
+                    conc.run_many_in_threads(tasks=tasks, timeout=5.0)
 
                 # Start closing process in background thread
                 threading.Thread(target=close_tools_concurrently, daemon=True).start()
@@ -138,7 +144,7 @@ class MainWindow:
             self._accounts_tab.selected_event = self._selected_event
 
             self._configs.event = self._selected_event
-            ConfigManager.save_configs(self._configs)
+            config_mgr.save_configs(self._configs)
 
         self._event_combobox.bind(sequence="<<ComboboxSelected>>", func=lambda _: on_combobox_select_changed())
         self._event_combobox.pack(anchor="w", fill="x", pady=(0, 10))
@@ -228,7 +234,7 @@ class MainWindow:
 
         # ==================== Adjust Window Size ====================
         self._root.update_idletasks()
-        _, _, width, height, x, y = hp.get_window_position(child_frame=self._root)
+        _, _, width, height, x, y = hlp.get_window_position(child_frame=self._root)
         self._root.geometry(f"{width}x{height}+{x}+{y}")
 
     def _update_all_buttons_state(self) -> None:
@@ -267,7 +273,7 @@ class MainWindow:
         )
         self._running_tools[account.username] = new_tool
 
-        cc.run_in_thread(coro_func=new_tool.run)
+        conc.run_in_thread(coro_func=new_tool.run)
         self._update_all_buttons_state()
 
     def _stop_account(self, username: str) -> None:
@@ -279,7 +285,7 @@ class MainWindow:
         running_tool = self._running_tools.pop(username)
         running_tool.is_running = False
 
-        cc.run_in_thread(coro_func=running_tool.close)
+        conc.run_in_thread(coro_func=running_tool.close)
 
         self._update_all_buttons_state()
 
@@ -295,7 +301,7 @@ class MainWindow:
             self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
             return
 
-        cc.run_in_thread(coro_func=running_tool.page.reload)
+        conc.run_in_thread(coro_func=running_tool.page.reload)
 
     def _run_all_accounts(self) -> None:
         self._accounts_tab.run_all_accounts()

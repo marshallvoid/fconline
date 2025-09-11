@@ -2,39 +2,34 @@ import os
 import platform
 from typing import Optional
 
+from src.core.decorators import singleton
 
+
+@singleton
 class PlatformManager:
-    @classmethod
-    def platform(cls) -> str:
+    def platform(self) -> str:
         return platform.system().casefold()
 
-    @classmethod
-    def is_windows(cls) -> bool:
-        return cls.platform() == "windows"
+    def is_windows(self) -> bool:
+        return self.platform() == "windows"
 
-    @classmethod
-    def is_macos(cls) -> bool:
-        return cls.platform() == "darwin"
+    def is_macos(self) -> bool:
+        return self.platform() == "darwin"
 
-    @classmethod
-    def is_linux(cls) -> bool:
-        return cls.platform() == "linux"
+    def is_linux(self) -> bool:
+        return self.platform() == "linux"
 
-    @classmethod
-    def is_unix(cls) -> bool:
-        return cls.platform() in ["linux", "darwin"]
+    def is_unix(self) -> bool:
+        return self.platform() in ["linux", "darwin"]
 
-    @classmethod
-    def node(cls) -> str:
+    def node(self) -> str:
         return platform.node()
 
-    @classmethod
-    def machine(cls) -> str:
+    def machine(self) -> str:
         return platform.machine()
 
-    @classmethod
-    def get_chrome_executable_path(cls) -> Optional[str]:
-        match cls.platform():
+    def get_chrome_executable_path(self) -> Optional[str]:
+        match self.platform():
             case "windows":
                 # Common Chrome installation paths on Windows
                 chrome_paths = [
@@ -77,3 +72,6 @@ class PlatformManager:
 
         # Return first existing Chrome path found
         return next((p for p in chrome_paths if os.path.exists(p)), None)
+
+
+platform_mgr = PlatformManager()

@@ -5,14 +5,18 @@ from tkinter import messagebox
 from loguru import logger
 
 try:
+    from src.core.configs import settings
+    from src.core.providers.factory import make_container
     from src.gui.main_window import MainWindow
     from src.infrastructure.logging import init_logger
 
-    init_logger()
+    container = make_container(settings=settings)
+
+    init_logger(debug=settings.debug)
 
     def main() -> None:
         # Create and run main application window
-        app = MainWindow()
+        app = MainWindow(container=container, settings=settings)
         app.run()
 
     if __name__ == "__main__":

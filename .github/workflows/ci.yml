@@ -1,0 +1,45 @@
+name: CI - Build Test
+
+on:
+   pull_request:
+      branches: [main]
+   workflow_dispatch:
+
+permissions:
+   contents: read
+   actions: read
+
+jobs:
+   test-build:
+      name: Test Build
+      runs-on: windows-latest
+
+      steps:
+         - name: Checkout code
+           uses: actions/checkout@v4
+
+         - name: Set up Python
+           uses: actions/setup-python@v5
+           with:
+              python-version: '3.12'
+
+         - name: Install uv
+           uses: astral-sh/setup-uv@v4
+           with:
+              enable-cache: true
+
+         - name: Install dependencies
+           run: |
+              uv sync
+              uv add pyinstaller
+
+         - name: Test build executable
+           run: uv run pyinstaller --clean build.spec
+
+         - name: Upload test artifact
+           uses: actions/upload-artifact@v4
+           with:
+              name: FC_Online_Tool-test-build-${{ github.event.pull_request.number }}
+              path: dist/FC_Online_Tool.exe
+              if-no-files-found: error
+              retention-days: 3

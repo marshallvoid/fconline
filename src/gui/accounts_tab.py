@@ -3,13 +3,13 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.core.managers.config import ConfigManager
+from src.core.managers.config import config_mgr
 from src.schemas.configs import Account
 from src.schemas.enums.account_tag import AccountTag
 from src.schemas.user_response import UserDetail
-from src.utils import helpers as hp
+from src.utils import hlp
 from src.utils.contants import BROWSER_POSITIONS, EVENT_CONFIGS_MAP
-from src.utils.types.callbacks import OnAccountRunCallback, OnAccountStopCallback, OnRefreshPageCallback
+from src.utils.types import callback as cb
 
 
 class AccountsTab:
@@ -21,9 +21,9 @@ class AccountsTab:
         self,
         parent: tk.Misc,
         selected_event: str,
-        on_account_run: OnAccountRunCallback,
-        on_account_stop: OnAccountStopCallback,
-        on_refresh_page: OnRefreshPageCallback,
+        on_account_run: cb.OnAccountRunCallback,
+        on_account_stop: cb.OnAccountStopCallback,
+        on_refresh_page: cb.OnRefreshPageCallback,
     ) -> None:
         self._frame = ttk.Frame(parent)
         self._selected_event = selected_event
@@ -32,7 +32,7 @@ class AccountsTab:
         self._on_account_stop = on_account_stop
         self._on_refresh_page = on_refresh_page
 
-        self._configs = ConfigManager.load_configs()
+        self._configs = config_mgr.load_configs()
         self._accounts: List[Account] = self._configs.accounts
         self._running_usernames: Set[str] = set()
 
@@ -742,7 +742,7 @@ class AccountsTab:
 
         # Center and focus
         dialog.update_idletasks()
-        _, _, dw, dh, x, y = hp.get_window_position(child_frame=dialog, parent_frame=self._frame)
+        _, _, dw, dh, x, y = hlp.get_window_position(child_frame=dialog, parent_frame=self._frame)
         dialog.geometry(f"{dw}x{dh}+{x}+{y}")
         dialog.resizable(False, False)
 
@@ -776,4 +776,4 @@ class AccountsTab:
 
     def _save_accounts_to_config(self) -> None:
         self._configs.accounts = self._accounts
-        ConfigManager.save_configs(configs=self._configs)
+        config_mgr.save_configs(configs=self._configs)
