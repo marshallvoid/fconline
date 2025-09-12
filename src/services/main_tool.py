@@ -131,7 +131,6 @@ class MainTool:
                 await asyncio.sleep(delay=0.1)
 
         except Exception as error:
-            logger.exception(f"Error during execution: {error}")
             raise error
 
         finally:
