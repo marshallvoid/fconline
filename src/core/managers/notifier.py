@@ -22,7 +22,7 @@ class NotifierManager:
         appriser.add(
             servers=(
                 f"discord://{settings.discord_developer_webhook_id}/{settings.discord_developer_webhook_token}?"
-                f"avatar={file_mgr.get_resource_path("assets/images/fco.png")}&"
+                f"avatar={file_mgr.get_resource_path('assets/images/fco.png')}&"
                 f"botname={settings.program_name}&"
                 "url=https://fconline.garena.vn/&"
                 "format=Markdown&"
@@ -33,7 +33,7 @@ class NotifierManager:
         appriser.add(
             servers=(
                 f"discord://{settings.discord_fco_webhook_id}/{settings.discord_fco_webhook_token}?"
-                f"avatar={file_mgr.get_resource_path("assets/images/fco.png")}&"
+                f"avatar={file_mgr.get_resource_path('assets/images/fco.png')}&"
                 f"botname={settings.program_name}&"
                 "url=https://fconline.garena.vn/&"
                 "format=Markdown&"

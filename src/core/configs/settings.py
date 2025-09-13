@@ -9,6 +9,13 @@ from pydantic_settings import (
 )
 
 
+class NonEmptyEnvSource(EnvSettingsSource):
+    def __call__(self) -> dict[str, str]:
+        data = super().__call__()
+        # filter out empty values
+        return {k: v for k, v in data.items() if v not in (None, "")}
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         extra="ignore",
@@ -54,13 +61,8 @@ class Settings(BaseSettings):
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         source = [
             init_settings,
-            EnvSettingsSource(
-                settings_cls=settings_cls,
-            ),
-            DotEnvSettingsSource(
-                settings_cls=settings_cls,
-                env_file=".env",
-            ),
+            NonEmptyEnvSource(settings_cls=settings_cls),
+            DotEnvSettingsSource(settings_cls=settings_cls, env_file=".env"),
             file_secret_settings,
         ]
 
