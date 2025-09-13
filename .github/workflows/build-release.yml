@@ -66,6 +66,26 @@ jobs:
       needs: version
       runs-on: windows-latest
 
+      # Set environment variables for the entire job
+      env:
+         PROGRAM_NAME: 'FC Online Automation Tool'
+         SECRET_KEY: ${{ secrets.SECRET_KEY }}
+         DEBUG: 'False' # Set to False for production builds
+         DISCORD_DEVELOPER_WEBHOOK_ID: ${{ secrets.DISCORD_DEVELOPER_WEBHOOK_ID }}
+         DISCORD_DEVELOPER_WEBHOOK_TOKEN: ${{ secrets.DISCORD_DEVELOPER_WEBHOOK_TOKEN }}
+         DISCORD_DEVELOPER_ROLE_ID: ${{ secrets.DISCORD_DEVELOPER_ROLE_ID }}
+         DISCORD_FCO_WEBHOOK_ID: ${{ secrets.DISCORD_FCO_WEBHOOK_ID }}
+         DISCORD_FCO_WEBHOOK_TOKEN: ${{ secrets.DISCORD_FCO_WEBHOOK_TOKEN }}
+         DISCORD_FCO_WEBHOOK_ROLE_ID: ${{ secrets.DISCORD_FCO_WEBHOOK_ROLE_ID }}
+         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+         OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+         OPENAI_TEMPERATURE: ${{ secrets.OPENAI_TEMPERATURE }}
+         OPENAI_MAX_RETRIES: ${{ secrets.OPENAI_MAX_RETRIES }}
+         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+         ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
+         ANTHROPIC_TEMPERATURE: ${{ secrets.ANTHROPIC_TEMPERATURE }}
+         ANTHROPIC_MAX_RETRIES: ${{ secrets.ANTHROPIC_MAX_RETRIES }}
+
       steps:
          - name: Checkout code
            uses: actions/checkout@v4
