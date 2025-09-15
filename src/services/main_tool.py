@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import Optional, Tuple
 
 from browser_use import BrowserProfile, BrowserSession
@@ -62,6 +63,10 @@ class MainTool:
 
         self._client: Optional[FCOnlineClient] = None
         self._websocket_handler: Optional[WebsocketHandler] = None
+
+        # Auto refresh configuration
+        self._refresh_interval = 30 * 60  # 30 minutes in seconds
+        self._last_refresh_time: Optional[float] = None
 
     @property
     def page(self) -> Optional[Page]:
@@ -127,7 +132,23 @@ class MainTool:
             self._websocket_handler.user_info = self._user_info
 
             # Main monitoring loop - keep running until stopped
+            self._last_refresh_time = time.time()
             while self._is_running:
+                # Auto-refresh browser session periodically to avoid stale sessions
+                current_time = time.time()
+                if (current_time - self._last_refresh_time) >= self._refresh_interval:
+                    message = "Refreshing browser session to maintain stability..."
+                    self._on_add_message(tag=MessageTag.INFO, message=message)
+
+                    await self._page.reload()
+                    await self._page.wait_for_load_state(state="networkidle")
+
+                    self._last_refresh_time = current_time
+
+                    # Re-fetch user info after refresh
+                    self._user_info = await self._client.lookup()
+                    self._update_ui()
+
                 await asyncio.sleep(delay=0.1)
 
         except Exception as error:
@@ -197,41 +218,24 @@ class MainTool:
 
         # Chrome arguments to disable security features and optimize for automation
         extra_chromium_args = [
-            "--disable-web-security",
-            "--disable-features=VizDisplayCompositor",
-            "--disable-blink-features=AutomationControlled",
-            "--disable-infobars",
-            "--disable-background-timer-throttling",
-            "--disable-popup-blocking",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-renderer-backgrounding",
-            "--disable-window-activation",
-            "--disable-focus-on-load",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-dev-shm-usage",
-            "--hide-scrollbars",
-            "--mute-audio",
-            "--ignore-certificate-errors",
-            "--no-sandbox",
+            "--enable-logging --v=1",  # enable Chrome debug logs
+            "--disable-blink-features=AutomationControlled",  # stealth mode (hide automation)
+            "--no-first-run",  # skip first run dialog
+            "--no-default-browser-check",  # skip default browser check
+            "--mute-audio",  # mute all sounds
+            "--ignore-certificate-errors",  # ignore SSL certificate errors
+            "--disable-infobars",  # hide "Chrome is being controlled" bar
+            "--disable-gpu",  # disable GPU (reduce resource usage)
+            "--disable-software-rasterizer",  # disable software GPU fallback
+            # Performance optimizations for multiple browsers:
+            "--disable-background-timer-throttling",  # do not throttle JS timers in background
+            "--disable-renderer-backgrounding",  # keep rendering active even when unfocused
+            "--disable-backgrounding-occluded-windows",  # keep rendering for covered/hidden windows
+            "--disable-extensions",  # disable all extensions (save memory)
+            "--disable-sync",  # disable Chrome account sync
+            "--disable-translate",  # disable built-in Google Translate
+            "--password-store=basic",  # use basic password store (avoid conflicts)
         ]
-
-        # Add Windows-specific optimizations for better performance
-        if platform_mgr.platform() == "windows":
-            extra_chromium_args.extend(
-                [
-                    "--disable-software-rasterizer",
-                    "--disable-background-networking",
-                    "--disable-default-apps",
-                    "--disable-extensions",
-                    "--disable-sync",
-                    "--disable-translate",
-                    "--hide-crash-restore-bubble",
-                    "--no-service-autorun",
-                    "--password-store=basic",
-                    "--use-mock-keychain",
-                ]
-            )
 
         # Ensure Chrome is available for consistent automation behavior
         if not (chrome_path := platform_mgr.get_chrome_executable_path()):
@@ -255,6 +259,7 @@ class MainTool:
                 )
                 browser_profile = BrowserProfile(
                     stealth=True,
+                    keep_alive=True,
                     ignore_https_errors=True,
                     timeout=60000 * 3,
                     default_timeout=60000 * 3,

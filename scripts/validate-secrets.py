@@ -4,6 +4,7 @@
 Script to validate GitHub Actions secrets are properly configured.
 Run this locally to check if all required secrets are set up.
 """
+
 import sys
 from pathlib import Path
 
@@ -48,7 +49,7 @@ def validate_local_env() -> bool:
             if line and not line.startswith("#") and "=" in line:
                 key, value = line.split("=", 1)
                 # Remove quotes if present
-                value = value.strip('"\'')
+                value = value.strip("\"'")
                 env_vars[key] = value
 
     print("🔍 Validating local .env file...")
@@ -98,7 +99,7 @@ def generate_github_secrets_json() -> None:
             if line and not line.startswith("#") and "=" in line:
                 key, value = line.split("=", 1)
                 # Remove quotes if present
-                value = value.strip('"\'')
+                value = value.strip("\"'")
                 if value:  # Only include non-empty values
                     secrets[key] = value
 

@@ -151,8 +151,8 @@ class WebsocketHandler:
         try:
             match kind:
                 case "jackpot_value" | "prize_change":
-                    message = f"Jackpot value: {int(value):,}"
-                    self._on_add_message(tag=MessageTag.WEBSOCKET, message=message, compact=True)
+                    #   message = f"Jackpot value: {int(value):,}"
+                    #   self._on_add_message(tag=MessageTag.WEBSOCKET, message=message, compact=True)
 
                     # Handle real-time jackpot value updates
                     new_value = int(value)

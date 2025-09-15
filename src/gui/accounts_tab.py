@@ -59,6 +59,28 @@ class AccountsTab:
         return self._accounts
 
     # ==================== Public Methods ====================
+    def delete_all_accounts(self, accounts: List[Account]) -> None:
+        if not accounts:
+            messagebox.showinfo("Info", "No accounts to delete.")
+            return
+
+        if any(a.username in self._running_usernames for a in accounts):
+            messagebox.showwarning("Warning", "Cannot delete accounts that are currently running.")
+            return
+
+        confirm = messagebox.askyesno(
+            title="Confirm Deletion",
+            message=f"Are you sure you want to delete the selected {len(accounts)} account(s)? This action cannot be undone.",  # noqa: E501
+            icon="warning",
+        )
+        if not confirm:
+            return
+
+        usernames_to_delete = {a.username for a in accounts}
+        self._accounts = [a for a in self._accounts if a.username not in usernames_to_delete]
+        self._save_accounts_to_config()
+        self._refresh_accounts_list()
+
     def run_all_accounts(self, pending_accounts: Optional[List[Account]] = None) -> None:
         pending_accounts = pending_accounts or [
             a for a in self._accounts if a.username not in self._running_usernames and a.available
@@ -428,12 +450,17 @@ class AccountsTab:
             # Multiple selection
             self._mark_not_run_btn.config(state="disabled")
             self._edit_btn.config(state="disabled")
-            self._delete_btn.config(state="disabled")
 
             available_accounts = [
                 a for a in selected_accounts if a.username not in self._running_usernames and a.available
             ]
             running_usernames = {a.username for a in selected_accounts if a.username in self._running_usernames}
+
+            self._delete_btn.config(
+                command=lambda: self.delete_all_accounts(accounts=selected_accounts),
+                state="disabled" if len(running_usernames) > 0 else "normal",
+                text="Delete Selected",
+            )
 
             # Repurpose Run/Stop buttons for multi-selection
             self._run_btn.config(
