@@ -4,6 +4,7 @@
 Script to create .env file from GitHub Actions environment variables.
 This script is used during CI/CD to securely pass environment variables to the build process.
 """
+
 import os
 from pathlib import Path
 
