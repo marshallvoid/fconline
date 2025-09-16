@@ -65,7 +65,7 @@ class MainTool:
         self._websocket_handler: Optional[WebsocketHandler] = None
 
         # Auto refresh configuration
-        self._refresh_interval = 30 * 60  # 30 minutes in seconds
+        self._refresh_interval = 60 * 60  # 60 minutes in seconds
         self._last_refresh_time: Optional[float] = None
 
     @property
@@ -140,9 +140,7 @@ class MainTool:
                     message = "Refreshing browser session to maintain stability..."
                     self._on_add_message(tag=MessageTag.INFO, message=message)
 
-                    await self._page.reload()
-                    await self._page.wait_for_load_state(state="networkidle")
-
+                    conc.run_in_thread(coro_func=self._page.reload)
                     self._last_refresh_time = current_time
 
                     # Re-fetch user info after refresh
