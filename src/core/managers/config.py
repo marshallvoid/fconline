@@ -44,7 +44,7 @@ class ConfigManager:
     def save_configs(self, configs: Config) -> None:
         try:
             encrypted_configs: Dict[str, Any] = {
-                "event": configs.event,
+                **configs.model_dump(exclude={"accounts", "notifications"}),
                 "accounts": [
                     {
                         "username": self._encrypt_data(value=account.username),

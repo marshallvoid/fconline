@@ -32,6 +32,7 @@ class MainTool:
         req_height: int,
         event_config: EventConfig,
         account: Account,
+        auto_refresh: bool,
         on_account_won: cb.OnAccountWonCallback,
         on_add_message: cb.OnAddMessageCallback,
         on_add_notification: cb.OnAddNotificationCallback,
@@ -47,6 +48,7 @@ class MainTool:
         self._req_height = req_height
         self._event_config = event_config
         self._account = account
+        self._auto_refresh = auto_refresh
 
         self._on_account_won = on_account_won
         self._on_add_message = on_add_message
@@ -134,18 +136,19 @@ class MainTool:
             # Main monitoring loop - keep running until stopped
             self._last_refresh_time = time.time()
             while self._is_running:
-                # Auto-refresh browser session periodically to avoid stale sessions
-                current_time = time.time()
-                if (current_time - self._last_refresh_time) >= self._refresh_interval:
-                    message = "Refreshing browser session to maintain stability..."
-                    self._on_add_message(tag=MessageTag.INFO, message=message)
+                # Auto-refresh browser session periodically to avoid stale sessions (if enabled)
+                if self._auto_refresh:
+                    current_time = time.time()
+                    if (current_time - self._last_refresh_time) >= self._refresh_interval:
+                        message = "Refreshing browser session to maintain stability..."
+                        self._on_add_message(tag=MessageTag.INFO, message=message)
 
-                    conc.run_in_thread(coro_func=self._page.reload)
-                    self._last_refresh_time = current_time
+                        conc.run_in_thread(coro_func=self._page.reload)
+                        self._last_refresh_time = current_time
 
-                    # Re-fetch user info after refresh
-                    self._user_info = await self._client.lookup()
-                    self._update_ui()
+                        # Re-fetch user info after refresh
+                        self._user_info = await self._client.lookup()
+                        self._update_ui()
 
                 await asyncio.sleep(delay=0.1)
 

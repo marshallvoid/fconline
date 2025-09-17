@@ -144,10 +144,27 @@ class MainWindow:
             self._accounts_tab.selected_event = self._selected_event
 
             self._configs.event = self._selected_event
-            config_mgr.save_configs(self._configs)
+            config_mgr.save_configs(configs=self._configs)
+
+            # Clear selection to prevent text highlighting
+            self._event_combobox.selection_clear()
 
         self._event_combobox.bind(sequence="<<ComboboxSelected>>", func=lambda _: on_combobox_select_changed())
         self._event_combobox.pack(anchor="w", fill="x", pady=(0, 10))
+
+        def on_auto_refresh_changed() -> None:
+            self._configs.auto_refresh = self._auto_refresh_var.get()
+            config_mgr.save_configs(configs=self._configs)
+
+        # Auto refresh checkbox
+        self._auto_refresh_var = tk.BooleanVar(value=self._configs.auto_refresh)
+        self._auto_refresh_checkbox = ttk.Checkbutton(
+            master=event_selection_frame,
+            text="Auto Refresh after 1 hour",
+            variable=self._auto_refresh_var,
+            command=on_auto_refresh_changed,
+        )
+        self._auto_refresh_checkbox.pack(anchor="w")
 
         # ==================== All Control Buttons ====================
         all_control_buttons_frame = ttk.LabelFrame(master=self._root, padding=10, text="Actions")
@@ -269,6 +286,7 @@ class MainWindow:
             req_height=self._root.winfo_reqheight(),
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
             account=account,
+            auto_refresh=self._configs.auto_refresh,
             **self._build_callbacks(account=account),
         )
         self._running_tools[account.username] = new_tool
