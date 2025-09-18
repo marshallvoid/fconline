@@ -126,7 +126,6 @@ class MainTool:
             )
             self._user_info = await self._client.lookup()
 
-            await self._check_first_spin(page=self._page)
             self._update_ui()
 
             # Connect websocket handler with API client and user info
@@ -178,24 +177,6 @@ class MainTool:
             self._user_data_dir = None
             self._session = None
             self._page = None
-
-    async def _check_first_spin(self, page: Page) -> None:
-        if (
-            not self._client
-            or not self._user_info
-            or not self._user_info.payload.user
-            or self._user_info.payload.user.accumulation is None
-            or self._user_info.payload.user.accumulation > 0
-        ):
-            return
-
-        self._on_add_message(
-            tag=MessageTag.INFO,
-            message="First spin detected, performing initial spin to accumulate points...",
-        )
-        await self._client.spin(spin_type=1, extra_params=self._event_config.params)
-
-        conc.run_in_thread(coro_func=page.reload)
 
     def _update_ui(self) -> None:
         # Update ultimate prize winner display
