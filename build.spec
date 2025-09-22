@@ -17,19 +17,16 @@ a = Analysis(
         'tkinter.messagebox',
         'sv_ttk',
         'darkdetect',
-        'notify-py',
         'playsound3',
         'apprise',
         'dishka',
-        'logprise',
-        'pydantic-extra-types',
-        'pydantic-settings',
+        'pydantic_settings',
 
         # Networking and automation
         'aiohttp',
         'loguru',
         'pydantic',
-        'watchdog',
+        'cryptography',
         'cryptography.fernet',
         'playwright',
         'playwright.async_api',
@@ -53,9 +50,11 @@ a = Analysis(
         'requests.models',
         'requests.adapters',
 
+        # Additional runtime libraries
+        'shortuuid',
+
         # Project modules (explicit to help PyInstaller discovery)
         'src.main',
-
         'src.infrastructure',
         'src.infrastructure.logger',
         'src.infrastructure.client',
