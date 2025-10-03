@@ -9,7 +9,6 @@ from browser_use.browser.types import Page
 from loguru import logger
 from playwright.async_api import WebSocket  # noqa: DEP003
 
-from src.core.managers.notifier import notifier_mgr
 from src.infrastructure.client import FCOnlineClient
 from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
@@ -280,12 +279,12 @@ class WebsocketHandler:
             self._on_account_won(username=self._account.username, is_jackpot=is_jackpot)
             self._on_add_notification(nickname=target_nickname, jackpot_value=str(target_value))
 
-            notifier_mgr.discord_winner_notifier(
-                is_jackpot=is_jackpot,
-                username=self._account.username,
-                nickname=target_nickname,
-                value=str(target_value),
-            )
+            # notifier_mgr.discord_winner_notifier(
+            #     is_jackpot=is_jackpot,
+            #     username=self._account.username,
+            #     nickname=target_nickname,
+            #     value=str(target_value),
+            # )
 
         self._on_add_message(tag=tag, message=message, compact=is_compact)
         self._on_update_prize_winner(nickname=target_nickname, value=str(target_value), is_jackpot=is_jackpot)
