@@ -55,19 +55,36 @@ a = Analysis(
 
         # Project modules (explicit to help PyInstaller discovery)
         'src.main',
+
+        'src.core.configs',
+        'src.core.configs.settings',
+
+        'src.core.decorators',
+        'src.core.decorators.singleton',
+
+        'src.core.managers',
+        'src.core.managers.config',
+        'src.core.managers.file',
+        'src.core.managers.notifier',
+        'src.core.managers.platform',
+        'src.core.managers.request',
+
+        'src.core.providers',
+        'src.core.providers.configs',
+        'src.core.providers.factory',
+
         'src.infrastructure',
         'src.infrastructure.logger',
         'src.infrastructure.client',
-        'src.infrastructure.client.fco',
 
         'src.gui',
-        'src.gui.fco',
+        'src.gui.main_window',
         'src.gui.accounts_tab',
         'src.gui.activity_log_tab',
         'src.gui.notification_icon',
 
         'src.services',
-        'src.services.fco',
+        'src.services.main_tool',
         'src.services.login_handler',
         'src.services.websocket_handler',
 
@@ -81,13 +98,12 @@ a = Analysis(
         'src.schemas.enum.message_tab',
 
         'src.utils',
-        'src.utils.configs',
+        'src.utils.concurrency',
         'src.utils.contants',
-        'src.utils.files',
-        'src.utils.methods',
-        'src.utils.platforms',
-        'src.utils.requests',
+        'src.utils.helpers',
         'src.utils.sounds',
+        'src.utils.types',
+        'src.utils.types.callbacks',
     ],
     hookspath=[],
     hooksconfig={},
