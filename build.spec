@@ -74,7 +74,7 @@ a = Analysis(
         'src.core.providers.factory',
 
         'src.infrastructure',
-        'src.infrastructure.logger',
+        'src.infrastructure.logging',
         'src.infrastructure.client',
 
         'src.gui',
@@ -93,9 +93,9 @@ a = Analysis(
         'src.schemas.billboard',
         'src.schemas.spin_response',
         'src.schemas.user_response',
-        'src.schemas.enum',
-        'src.schemas.enum.account_tag',
-        'src.schemas.enum.message_tab',
+        'src.schemas.enums',
+        'src.schemas.enums.account_tag',
+        'src.schemas.enums.message_tab',
 
         'src.utils',
         'src.utils.concurrency',
@@ -103,7 +103,7 @@ a = Analysis(
         'src.utils.helpers',
         'src.utils.sounds',
         'src.utils.types',
-        'src.utils.types.callbacks',
+        'src.utils.types.callback',
     ],
     hookspath=[],
     hooksconfig={},
