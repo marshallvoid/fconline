@@ -18,7 +18,6 @@ a = Analysis(
         'sv_ttk',
         'darkdetect',
         'playsound3',
-        'apprise',
         'dishka',
         'pydantic_settings',
 
@@ -95,7 +94,7 @@ a = Analysis(
         'src.schemas.user_response',
         'src.schemas.enums',
         'src.schemas.enums.account_tag',
-        'src.schemas.enums.message_tab',
+        'src.schemas.enums.message_tag',
 
         'src.utils',
         'src.utils.concurrency',

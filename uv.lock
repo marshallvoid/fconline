@@ -139,23 +139,6 @@ wheels = [
 ]
 
 [[package]]
-name = "apprise"
-version = "1.9.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "certifi" },
-    { name = "click" },
-    { name = "markdown" },
-    { name = "pyyaml" },
-    { name = "requests" },
-    { name = "requests-oauthlib" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/51/f9/bda66afaf393f6914f4d6c035964936cadd98ee1fef44e4e77cba3b5828c/apprise-1.9.4.tar.gz", hash = "sha256:483122aee19a89a7b075ecd48ef11ae37d79744f7aeb450bcf985a9a6c28c988", size = 1855012, upload-time = "2025-08-02T18:13:28.467Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/83/fa/7875ad63088b2d7dea538ffe60fba85786c228c7349d258891c54d0416a0/apprise-1.9.4-py3-none-any.whl", hash = "sha256:17dca8ad0a5b2063f6bae707979a51ca2cb374fcc66b0dd5c05a9d286dd40069", size = 1402630, upload-time = "2025-08-02T18:13:26.263Z" },
-]
-
-[[package]]
 name = "asttokens"
 version = "3.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1042,15 +1025,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/95/ee/af1a3842bdd5902ce133bd246eb7ffd4375c38642aeb5dc0ae3a0329dfa2/macholib-1.16.3.tar.gz", hash = "sha256:07ae9e15e8e4cd9a788013d81f5908b3609aa76f9b1421bae9c4d7606ec86a30", size = 59309, upload-time = "2023-09-25T09:10:16.155Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/5d/c059c180c84f7962db0aeae7c3b9303ed1d73d76f2bfbc32bc231c8be314/macholib-1.16.3-py2.py3-none-any.whl", hash = "sha256:0e315d7583d38b8c77e815b1ecbdbf504a8258d8b3e17b61165c6feb60d18f2c", size = 38094, upload-time = "2023-09-25T09:10:14.188Z" },
-]
-
-[[package]]
-name = "markdown"
-version = "3.9"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8d/37/02347f6d6d8279247a5837082ebc26fc0d5aaeaf75aa013fcbb433c777ab/markdown-3.9.tar.gz", hash = "sha256:d2900fe1782bd33bdbbd56859defef70c2e78fc46668f8eb9df3128138f2cb6a", size = 364585, upload-time = "2025-09-04T20:25:22.885Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/ae/44c4a6a4cbb496d93c6257954260fe3a6e91b7bed2240e5dad2a717f5111/markdown-3.9-py3-none-any.whl", hash = "sha256:9f4d91ed810864ea88a6f32c07ba8bee1346c0cc1f6b1f9f6c822f2a9667d280", size = 107441, upload-time = "2025-09-04T20:25:21.784Z" },
 ]
 
 [[package]]
@@ -4785,7 +4759,6 @@ version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
-    { name = "apprise" },
     { name = "browser-use" },
     { name = "cryptography" },
     { name = "darkdetect" },
@@ -4823,7 +4796,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.12.15" },
-    { name = "apprise", specifier = ">=1.9.4" },
     { name = "browser-use", specifier = ">=0.5.11" },
     { name = "cryptography", specifier = ">=45.0.6" },
     { name = "darkdetect", specifier = ">=0.8.0" },
