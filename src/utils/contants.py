@@ -58,4 +58,11 @@ EVENT_CONFIGS_MAP: Dict[str, EventConfig] = {
         base_url="https://tcss.fconline.garena.vn",
         login_btn_selector='header a:has-text("Đăng nhập")',
     ),
+    "Lồng Đèn Siêu Sao": EventConfig(
+        event_name="Lồng Đèn Siêu Sao",
+        tab_attr_name="_ldss_tab",
+        spin_types=["20 FC Spin", "190 FC Spin", "900 FC Spin", "1800 FC Spin"],
+        base_url="https://ruocden.fconline.garena.vn",
+        login_btn_selector='header a:has-text("Đăng nhập")',
+    ),
 }
