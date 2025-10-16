@@ -4,7 +4,7 @@ from tkinter import messagebox, ttk
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.core.managers.config import config_mgr
-from src.schemas.configs import Account
+from src.schemas.configs import Account, Config
 from src.schemas.enums.account_tag import AccountTag
 from src.schemas.user_response import UserDetail
 from src.utils import hlp
@@ -24,6 +24,7 @@ class AccountsTab:
         on_account_run: cb.OnAccountRunCallback,
         on_account_stop: cb.OnAccountStopCallback,
         on_refresh_page: cb.OnRefreshPageCallback,
+        configs: Optional[Config] = None,
     ) -> None:
         self._frame = ttk.Frame(parent)
         self._selected_event = selected_event
@@ -32,7 +33,7 @@ class AccountsTab:
         self._on_account_stop = on_account_stop
         self._on_refresh_page = on_refresh_page
 
-        self._configs = config_mgr.load_configs()
+        self._configs = configs if configs is not None else config_mgr.load_configs()
         self._accounts: List[Account] = self._configs.accounts
         self._running_usernames: Set[str] = set()
 
