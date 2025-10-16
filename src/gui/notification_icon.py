@@ -9,13 +9,13 @@ from src.utils import hlp
 
 
 class NotificationIcon:
-    def __init__(self, parent: tk.Misc) -> None:
+    def __init__(self, parent: tk.Misc, configs: Optional[Config] = None) -> None:
         self._parent: tk.Misc = parent
 
         self._frame: ttk.Frame = ttk.Frame(master=parent)
         self._menu_window: Optional[tk.Toplevel] = None
 
-        self._configs: Config = config_mgr.load_configs()
+        self._configs: Config = configs if configs is not None else config_mgr.load_configs()
         self._notifications: List[Notification] = self._configs.notifications
 
         self._setup_ui()

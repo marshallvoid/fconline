@@ -118,7 +118,7 @@ class MainWindow:
         spacer = ttk.Frame(master=notification_frame)
         spacer.pack(side="left", fill="x", expand=True)
 
-        self._notification_icon = NotificationIcon(parent=notification_frame)
+        self._notification_icon = NotificationIcon(parent=notification_frame, configs=self._configs)
         self._notification_icon.frame.pack(side="right")
 
         # ==================== Event Selection ====================
@@ -210,6 +210,7 @@ class MainWindow:
         self._accounts_tab = AccountsTab(
             parent=self._notebook,
             selected_event=self._selected_event,
+            configs=self._configs,
             on_account_run=self._run_account,
             on_account_stop=self._stop_account,
             on_refresh_page=self._refresh_page,
