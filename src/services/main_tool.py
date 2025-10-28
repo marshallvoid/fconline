@@ -33,6 +33,7 @@ class MainTool:
         event_config: EventConfig,
         account: Account,
         auto_refresh: bool,
+        spin_delay_seconds: float,
         on_account_won: cb.OnAccountWonCallback,
         on_add_message: cb.OnAddMessageCallback,
         on_add_notification: cb.OnAddNotificationCallback,
@@ -49,6 +50,7 @@ class MainTool:
         self._event_config = event_config
         self._account = account
         self._auto_refresh = auto_refresh
+        self._spin_delay_seconds = spin_delay_seconds
 
         self._on_account_won = on_account_won
         self._on_add_message = on_add_message
@@ -96,6 +98,7 @@ class MainTool:
                 page=self._page,
                 event_config=self._event_config,
                 account=self._account,
+                spin_delay_seconds=self._spin_delay_seconds,
                 on_account_won=self._on_account_won,
                 on_add_message=self._on_add_message,
                 on_add_notification=self._on_add_notification,
