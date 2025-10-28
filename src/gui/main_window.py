@@ -166,6 +166,50 @@ class MainWindow:
         )
         self._auto_refresh_checkbox.pack(anchor="w")
 
+        # Spin delay input
+        spin_delay_frame = ttk.Frame(master=event_selection_frame)
+        spin_delay_frame.pack(anchor="w", fill="x", pady=(10, 0))
+
+        spin_delay_label = ttk.Label(master=spin_delay_frame, text="Spin Delay (seconds):")
+        spin_delay_label.pack(side="left", padx=(0, 5))
+
+        def validate_spin_delay(value: str) -> bool:
+            if value == "":
+                return True
+            try:
+                num = float(value)
+                return num >= 0
+            except ValueError:
+                return False
+
+        def on_spin_delay_changed(*args: Any) -> None:
+            try:
+                value = self._spin_delay_var.get()
+                if value == "":
+                    delay = 0.0
+                else:
+                    delay = float(value)
+                    if delay < 0:
+                        delay = 0.0
+                        self._spin_delay_var.set(str(delay))
+
+                self._configs.spin_delay_seconds = delay
+                config_mgr.save_configs(configs=self._configs)
+            except ValueError:
+                self._spin_delay_var.set(str(self._configs.spin_delay_seconds))
+
+        vcmd = (self._root.register(validate_spin_delay), "%P")
+        self._spin_delay_var = tk.StringVar(value=str(self._configs.spin_delay_seconds))
+        self._spin_delay_var.trace_add("write", on_spin_delay_changed)
+        self._spin_delay_entry = ttk.Entry(
+            master=spin_delay_frame,
+            textvariable=self._spin_delay_var,
+            validate="key",
+            validatecommand=vcmd,
+            width=15,
+        )
+        self._spin_delay_entry.pack(side="left")
+
         # ==================== All Control Buttons ====================
         all_control_buttons_frame = ttk.LabelFrame(master=self._root, padding=10, text="Actions")
         all_control_buttons_frame.pack(fill="x", padx=10, pady=(0, 5))
@@ -288,6 +332,7 @@ class MainWindow:
             event_config=EVENT_CONFIGS_MAP[self._selected_event],
             account=account,
             auto_refresh=self._configs.auto_refresh,
+            spin_delay_seconds=self._configs.spin_delay_seconds,
             **self._build_callbacks(account=account),
         )
         self._running_tools[account.username] = new_tool

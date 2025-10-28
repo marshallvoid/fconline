@@ -28,6 +28,7 @@ class WebsocketHandler:
         page: Page,
         event_config: EventConfig,
         account: Account,
+        spin_delay_seconds: float,
         on_account_won: cb.OnAccountWonCallback,
         on_add_message: cb.OnAddMessageCallback,
         on_add_notification: cb.OnAddNotificationCallback,
@@ -37,6 +38,7 @@ class WebsocketHandler:
         self._page = page
         self._event_config = event_config
         self._account = account
+        self._spin_delay_seconds = spin_delay_seconds
 
         self._on_account_won = on_account_won
         self._on_add_message = on_add_message
@@ -211,6 +213,12 @@ class WebsocketHandler:
         spin_response = None
 
         try:
+            # Apply delay if configured
+            if self._spin_delay_seconds > 0:
+                message = f"Waiting {self._spin_delay_seconds} seconds before spin..."
+                self._on_add_message(tag=MessageTag.INFO, message=message, compact=True)
+                await asyncio.sleep(self._spin_delay_seconds)
+
             # Quick validation without holding lock to maximize parallelism
             if epoch_snapshot != self._jackpot_epoch:
                 logger.warning(f"Spin aborted: epoch changed (was {epoch_snapshot}, now {self._jackpot_epoch})")

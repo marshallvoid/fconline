@@ -38,6 +38,7 @@ class Account(BaseModel):
 class Config(BaseModel):
     event: str = list(EVENT_CONFIGS_MAP.keys())[0]
     auto_refresh: bool = True
+    spin_delay_seconds: float = 0.0
     accounts: List[Account] = []
     notifications: List[Notification] = []
 
