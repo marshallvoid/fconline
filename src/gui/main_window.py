@@ -322,6 +322,13 @@ class MainWindow:
         message = account.running_message(selected_event=self._selected_event)
         self._activity_log_tab.add_message(tag=MessageTag.INFO, message=message)
 
+        # Log spin delay configuration
+        if self._configs.spin_delay_seconds > 0:
+            delay_message = f"Spin delay: {self._configs.spin_delay_seconds} seconds between spins"
+        else:
+            delay_message = "Spin delay: Disabled (spin on every websocket update)"
+        self._activity_log_tab.add_message(tag=MessageTag.INFO, message=delay_message, compact=True)
+
         new_tool = MainTool(
             is_running=True,
             browser_index=browser_index,

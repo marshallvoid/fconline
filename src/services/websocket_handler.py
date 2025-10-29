@@ -3,6 +3,7 @@ import contextlib
 import json
 import re
 import threading
+import time
 from typing import Any, Optional, Tuple
 
 from browser_use.browser.types import Page
@@ -54,6 +55,7 @@ class WebsocketHandler:
         self._jackpot_epoch: int = 0
         self._spin_lock = asyncio.Lock()
         self._spin_task: Optional[asyncio.Task[Any]] = None
+        self._last_spin_time: float = 0.0
 
     @property
     def is_logged_in(self) -> bool:
@@ -168,19 +170,30 @@ class WebsocketHandler:
 
                     # Check if special jackpot target reached
                     if new_value >= self._account.target_sjp:
-                        message = f"Special Jackpot has reached {self._account.target_sjp:,}"
-                        self._on_add_message(tag=MessageTag.REACHED_GOAL, message=message)
-
                         # Clean up any completed tasks first
                         self._cleanup_completed_spin_task()
 
-                        # Trigger immediate spin when target is reached
-                        if not self._spin_task:
+                        # Check if we should trigger a new spin based on delay
+                        current_time = time.time()
+                        time_since_last_spin = current_time - self._last_spin_time
+
+                        # Trigger spin if: no active task AND (first spin OR enough delay passed)
+                        should_spin = not self._spin_task and (
+                            self._last_spin_time == 0.0 or
+                            time_since_last_spin >= self._spin_delay_seconds
+                        )
+
+                        if should_spin:
+                            if self._last_spin_time == 0.0:
+                                message = f"Special Jackpot has reached {self._account.target_sjp:,}"
+                                self._on_add_message(tag=MessageTag.REACHED_GOAL, message=message)
+
                             epoch_snapshot = self._jackpot_epoch
                             self._spin_task = asyncio.create_task(
                                 self._attempt_spin(epoch_snapshot),
                                 name=f"spin-{self._account.username}-{epoch_snapshot}",
                             )
+                            self._last_spin_time = current_time
                             logger.info(f"Created spin task for {self._account.username} at jackpot {new_value:,}")
 
                     self._on_update_cur_jp(value=new_value)
@@ -188,6 +201,7 @@ class WebsocketHandler:
                 case "jackpot" | "mini_jackpot":
                     # Stop auto spin when any jackpot is won by anyone
                     self._cancel_spin_task()
+                    self._last_spin_time = 0.0
 
                     is_jackpot = kind == "jackpot"
                     if is_jackpot:
@@ -213,12 +227,6 @@ class WebsocketHandler:
         spin_response = None
 
         try:
-            # Apply delay if configured
-            if self._spin_delay_seconds > 0:
-                message = f"Waiting {self._spin_delay_seconds} seconds before spin..."
-                self._on_add_message(tag=MessageTag.INFO, message=message, compact=True)
-                await asyncio.sleep(self._spin_delay_seconds)
-
             # Quick validation without holding lock to maximize parallelism
             if epoch_snapshot != self._jackpot_epoch:
                 logger.warning(f"Spin aborted: epoch changed (was {epoch_snapshot}, now {self._jackpot_epoch})")
@@ -304,6 +312,7 @@ class WebsocketHandler:
             logger.info(f"Cancelling pending spin task for {self._account.username} (epoch {self._jackpot_epoch})")
             self._spin_task.cancel()
         self._spin_task = None
+        self._last_spin_time = 0.0
 
     def _cleanup_completed_spin_task(self) -> None:
         if not self._spin_task or not self._spin_task.done():
