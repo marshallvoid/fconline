@@ -19,8 +19,9 @@ Edit `.env` file with your values:
 ```bash
 # Required for application to work
 SECRET_KEY="your_32_character_secret_key_here"
-DISCORD_DEVELOPER_WEBHOOK_ID="your_webhook_id"
-DISCORD_DEVELOPER_WEBHOOK_TOKEN="your_webhook_token"
+DISCORD_WEBHOOK_ID="your_webhook_id"
+DISCORD_WEBHOOK_TOKEN="your_webhook_token"
+DISCORD_ROLE_ID="your_role_id"
 # ... (see .env.template for all variables)
 ```
 
@@ -61,23 +62,12 @@ You need to add secrets to your GitHub repository for CI/CD builds to work prope
 3. Click **"New repository secret"**
 4. Add each of these secrets with values from your `.env` file:
 
-| Secret Name                       | Description                                            | Default Value                |
-| --------------------------------- | ------------------------------------------------------ | ---------------------------- |
-| `SECRET_KEY`                      | Encryption key for securing application data           | **Required**                 |
-| `DISCORD_DEVELOPER_WEBHOOK_ID`    | Discord webhook ID for developer notifications         | **Required**                 |
-| `DISCORD_DEVELOPER_WEBHOOK_TOKEN` | Discord webhook token for developer notifications      | **Required**                 |
-| `DISCORD_DEVELOPER_ROLE_ID`       | Discord role ID to mention for developer notifications | **Required**                 |
-| `DISCORD_FCO_WEBHOOK_ID`          | Discord webhook ID for FCO notifications               | **Required**                 |
-| `DISCORD_FCO_WEBHOOK_TOKEN`       | Discord webhook token for FCO notifications            | **Required**                 |
-| `DISCORD_FCO_WEBHOOK_ROLE_ID`     | Discord role ID to mention for FCO notifications       | **Required**                 |
-| `OPENAI_API_KEY`                  | _(Optional)_ OpenAI API key for AI features            | None                         |
-| `OPENAI_MODEL`                    | _(Optional)_ OpenAI model to use                       | `"03"`                       |
-| `OPENAI_TEMPERATURE`              | _(Optional)_ OpenAI temperature setting                | `"0.8"`                      |
-| `OPENAI_MAX_RETRIES`              | _(Optional)_ OpenAI maximum retries                    | `"2"`                        |
-| `ANTHROPIC_API_KEY`               | _(Optional)_ Anthropic API key for AI features         | None                         |
-| `ANTHROPIC_MODEL`                 | _(Optional)_ Anthropic model to use                    | `"claude-sonnet-4-20250514"` |
-| `ANTHROPIC_TEMPERATURE`           | _(Optional)_ Anthropic temperature setting             | `"0.8"`                      |
-| `ANTHROPIC_MAX_RETRIES`           | _(Optional)_ Anthropic maximum retries                 | `"2"`                        |
+| Secret Name                       | Description                                               | Default Value                |
+| --------------------------------- | --------------------------------------------------------- | ---------------------------- |
+| `SECRET_KEY`                      | Encryption key for securing application data              | **Required**                 |
+| `DISCORD_WEBHOOK_ID`              | _(Optional)_ Discord webhook ID for notifications         | None                         |
+| `DISCORD_WEBHOOK_TOKEN`           | _(Optional)_ Discord webhook token for notifications      | None                         |
+| `DISCORD_ROLE_ID`                 | _(Optional)_ Discord role ID to mention for notifications | None                         |
 
 ### 2. Default Values & Fallbacks
 
@@ -89,8 +79,6 @@ The system automatically uses **default values** when optional secrets are not d
    -  Application will work with sensible defaults
 -  **Optional secrets without defaults**: Features disabled if not set
    -  API keys (OpenAI, Anthropic) - AI features won't work without them
-
-**Example**: If you don't set `OPENAI_MODEL` secret, it automatically uses `"03"` as default.
 
 ### 3. How It Works in CI/CD
 

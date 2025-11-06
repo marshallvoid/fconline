@@ -28,7 +28,9 @@ class Account(BaseModel):
         return not self.has_won and not self.marked_not_run
 
     def spin_type_name(self, selected_event: str) -> str:
-        return EVENT_CONFIGS_MAP[selected_event].spin_types[self.spin_type - 1]
+        base_name = EVENT_CONFIGS_MAP[selected_event].spin_types[self.spin_type - 1]
+        payment_prefix = "FC" if self.payment_type == 1 else "MC"
+        return base_name.replace("Spin", f"{payment_prefix} Spin")
 
     def running_message(self, selected_event: str) -> str:
         spin_type_name = self.spin_type_name(selected_event)

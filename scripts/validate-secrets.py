@@ -14,12 +14,9 @@ ENV_FILE = ROOT / ".env"
 # Required secrets for the application
 REQUIRED_SECRETS = {
     "SECRET_KEY": "Encryption key for securing application data",
-    "DISCORD_DEVELOPER_WEBHOOK_ID": "Discord webhook ID for developer notifications",
-    "DISCORD_DEVELOPER_WEBHOOK_TOKEN": "Discord webhook token for developer notifications",
-    "DISCORD_DEVELOPER_ROLE_ID": "Discord role ID to mention for developer notifications",
-    "DISCORD_FCO_WEBHOOK_ID": "Discord webhook ID for FCO notifications",
-    "DISCORD_FCO_WEBHOOK_TOKEN": "Discord webhook token for FCO notifications",
-    "DISCORD_FCO_WEBHOOK_ROLE_ID": "Discord role ID to mention for FCO notifications",
+    "DISCORD_WEBHOOK_ID": "Discord webhook ID for notifications",
+    "DISCORD_WEBHOOK_TOKEN": "Discord webhook token for notifications",
+    "DISCORD_ROLE_ID": "Discord role ID to mention for notifications",
 }
 
 # Optional secrets (application will work without these but with limited features)

@@ -10,7 +10,7 @@ from browser_use.browser.types import Page
 from loguru import logger
 from playwright.async_api import WebSocket  # noqa: DEP003
 
-from src.infrastructure.client import FCOnlineClient
+from src.infrastructure.clients.main_client import FCOnlineClient
 from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse

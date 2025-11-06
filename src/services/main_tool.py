@@ -10,7 +10,7 @@ from src.core.configs import settings
 from src.core.managers.file import file_mgr
 from src.core.managers.platform import platform_mgr
 from src.core.managers.request import request_mgr
-from src.infrastructure.client import FCOnlineClient
+from src.infrastructure.clients.main_client import FCOnlineClient
 from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
 from src.schemas.user_response import UserReponse
