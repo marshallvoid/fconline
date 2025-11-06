@@ -535,6 +535,7 @@ class AccountsTab:
             username=new_username,
             password=account.password,
             spin_type=account.spin_type,
+            payment_type=account.payment_type,
             target_sjp=account.target_sjp,
             close_on_jp_win=account.close_on_jp_win,
             has_won=False,  # Reset win status
@@ -642,15 +643,27 @@ class AccountsTab:
         )
         target_sjp_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
+        # Payment Type
+        payment_type_frame = ttk.Frame(master=main_frame)
+        payment_type_frame.pack(fill="x", pady=(0, 15))
+        ttk.Label(master=payment_type_frame, text="Payment Type:", width=15, font=("Arial", 12)).pack(side="left")
+
+        initial_payment_type = "FC" if (account.payment_type if account else 1) == 1 else "MC"
+        payment_type_var = tk.StringVar(value=initial_payment_type)
+
         # Spin Action
         spin_type_frame = ttk.Frame(master=main_frame)
         spin_type_frame.pack(fill="x", pady=(0, 15))
         ttk.Label(master=spin_type_frame, text="Spin Action:", width=15, font=("Arial", 12)).pack(side="left")
 
-        spin_type_options = [
-            f"{i}. {action_name}"
-            for i, action_name in enumerate(EVENT_CONFIGS_MAP[self._selected_event].spin_types, start=1)
-        ]
+        def get_spin_type_options(payment_type: str) -> List[str]:
+            payment_prefix = payment_type
+            return [
+                f"{i}. {action_name.replace('Spin', f'{payment_prefix} Spin')}"
+                for i, action_name in enumerate(EVENT_CONFIGS_MAP[self._selected_event].spin_types, start=1)
+            ]
+
+        spin_type_options = get_spin_type_options(payment_type_var.get())
 
         initial_spin_display = (
             (f"{account.spin_type}. {account.spin_type_name(selected_event=self._selected_event)}")
@@ -669,6 +682,40 @@ class AccountsTab:
         )
         spin_type_combobox.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
+        def on_payment_type_changed(*args: Any) -> None:
+            current_spin_display = spin_type_var.get()
+            try:
+                spin_index = int(current_spin_display.split(".")[0])
+            except (ValueError, IndexError):
+                spin_index = 1
+
+            new_options = get_spin_type_options(payment_type_var.get())
+            spin_type_combobox.config(values=new_options)
+
+            if 1 <= spin_index <= len(new_options):
+                spin_type_var.set(new_options[spin_index - 1])
+
+        payment_type_var.trace_add("write", on_payment_type_changed)
+
+        payment_radio_frame = ttk.Frame(master=payment_type_frame)
+        payment_radio_frame.pack(side="left", padx=(10, 0), fill="x", expand=True)
+
+        payment_fc_radio = ttk.Radiobutton(
+            master=payment_radio_frame,
+            text="FC",
+            variable=payment_type_var,
+            value="FC",
+        )
+        payment_fc_radio.pack(side="left", padx=(0, 15))
+
+        payment_mc_radio = ttk.Radiobutton(
+            master=payment_radio_frame,
+            text="MC",
+            variable=payment_type_var,
+            value="MC",
+        )
+        payment_mc_radio.pack(side="left")
+
         # Close on Jackpot Win
         close_on_jp_win_frame = ttk.Frame(master=main_frame)
         close_on_jp_win_frame.pack(fill="x", pady=(0, 25))
@@ -683,6 +730,7 @@ class AccountsTab:
         def handle_save() -> None:
             spin_type_display = spin_type_var.get().strip()
             auto_close = close_on_jp_win_var.get()
+            payment_type_val = 1 if payment_type_var.get() == "FC" else 2
 
             if not (username := username_var.get().strip()):
                 messagebox.showerror("Error", "Username is required!")
@@ -714,6 +762,7 @@ class AccountsTab:
                 account.username = username
                 account.password = password
                 account.spin_type = spin_type_val
+                account.payment_type = payment_type_val
                 account.target_sjp = target_val
                 account.close_on_jp_win = auto_close
 
@@ -728,6 +777,7 @@ class AccountsTab:
                 account.username = username
                 account.password = password
                 account.spin_type = spin_type_val
+                account.payment_type = payment_type_val
                 account.target_sjp = target_val
                 account.close_on_jp_win = auto_close
 
@@ -746,6 +796,7 @@ class AccountsTab:
                         username=username,
                         password=password,
                         spin_type=spin_type_val,
+                        payment_type=payment_type_val,
                         target_sjp=target_val,
                         close_on_jp_win=auto_close,
                     )

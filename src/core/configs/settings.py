@@ -29,26 +29,13 @@ class Settings(BaseSettings):
     secret_key: str = "secret_key"
     debug: bool = False
 
+    # Internal API settings
+    internal_api_host: Optional[str] = None
+
     # Discord webhook settings
-    discord_developer_webhook_id: Optional[str] = None
-    discord_developer_webhook_token: Optional[str] = None
-    discord_developer_role_id: Optional[str] = None
-
-    discord_fco_webhook_id: Optional[str] = None
-    discord_fco_webhook_token: Optional[str] = None
-    discord_fco_webhook_role_id: Optional[str] = None
-
-    # OpenAI settings
-    openai_api_key: Optional[str] = None
-    openai_model: str = "o3"
-    openai_temperature: float = 0.8
-    openai_max_retries: int = 2
-
-    # Anthropic settings
-    anthropic_api_key: Optional[str] = None
-    anthropic_model: str = "claude-sonnet-4-20250514"
-    anthropic_temperature: float = 0.8
-    anthropic_max_retries: int = 2
+    discord_webhook_id: Optional[str] = None
+    discord_webhook_token: Optional[str] = None
+    discord_role_id: Optional[str] = None
 
     @classmethod
     def settings_customise_sources(
