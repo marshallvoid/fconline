@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from src.core.managers.config import config_mgr
 from src.schemas.configs import Account, Config
 from src.schemas.enums.account_tag import AccountTag
-from src.schemas.user_response import UserDetail
 from src.utils import hlp
 from src.utils.contants import BROWSER_POSITIONS, EVENT_CONFIGS_MAP
 from src.utils.types import callback as cb
@@ -38,7 +37,6 @@ class AccountsTab:
         self._running_usernames: Set[str] = set()
 
         self._browser_pos_by_username: Dict[str, str] = {}
-        self._detail_by_username: Dict[str, UserDetail] = {}
 
         self._setup_ui()
 
@@ -136,12 +134,11 @@ class AccountsTab:
         self._browser_pos_by_username[username] = BROWSER_POSITIONS.get((row, col), "Center")
         self._update_info_display(account=account, is_running=username in self._running_usernames)
 
-    def update_info_display(self, username: str, user: UserDetail) -> None:
+    def update_info_display(self, username: str) -> None:
         account = next((a for a in self._accounts if a.username == username), None)
         if not account:
             return
 
-        self._detail_by_username[username] = user
         self._update_info_display(account=account, is_running=username in self._running_usernames)
 
     # ==================== Private Methods ====================
@@ -309,24 +306,6 @@ class AccountsTab:
         )
         self._browser_pos_label.pack(anchor="w", pady=(0, 5))
 
-        # Nickname label
-        self._display_name_label = ttk.Label(
-            info_frame,
-            text=self._NICKNAME_LABEL_TEXT.format(nickname="-"),
-            font=("Arial", 14),
-            foreground="#6b7280",
-        )
-        self._display_name_label.pack(anchor="w", pady=(0, 5))
-
-        # FC label
-        self._fc_info_label = ttk.Label(
-            info_frame,
-            text=self._FC_LABEL_TEXT.format(fc="-"),
-            font=("Arial", 14),
-            foreground="#6b7280",
-        )
-        self._fc_info_label.pack(anchor="w")
-
         def select_all_accounts() -> str:
             all_items = self._accounts_tree.get_children()
             self._accounts_tree.selection_set(all_items)
@@ -349,23 +328,12 @@ class AccountsTab:
 
         if not is_running:
             browser_pos, browser_color = "Not Running", gray
-            nickname, fc, user_color = "Unknown", "Unknown", gray
         else:
             # Browser position
             browser_pos = self._browser_pos_by_username.get(account.username, "Unknown")
             browser_color = green if browser_pos != "Unknown" else gray
 
-            # Detail info
-            detail = self._detail_by_username.get(account.username, None)
-            nickname = detail.display_name(username=account.username) if detail else "Unknown"
-            fc = str(detail.fc) if detail and detail.fc else "Unknown"
-            user_color = green if detail else gray
-
-        labels = {
-            self._browser_pos_label: (self._BROWSER_POS_LABEL_TEXT.format(position=browser_pos), browser_color),
-            self._display_name_label: (self._NICKNAME_LABEL_TEXT.format(nickname=nickname), user_color),
-            self._fc_info_label: (self._FC_LABEL_TEXT.format(fc=fc), user_color),
-        }
+        labels = {self._browser_pos_label: (self._BROWSER_POS_LABEL_TEXT.format(position=browser_pos), browser_color)}
 
         for label, (text, color) in labels.items():
             label.config(text=text, foreground=color)
@@ -401,8 +369,6 @@ class AccountsTab:
 
             # Reset info display
             self._browser_pos_label.config(text=self._BROWSER_POS_LABEL_TEXT.format(position="-"), foreground="#6b7280")
-            self._display_name_label.config(text=self._NICKNAME_LABEL_TEXT.format(nickname="-"), foreground="#6b7280")
-            self._fc_info_label.config(text=self._FC_LABEL_TEXT.format(fc="-"), foreground="#6b7280")
             return
 
         if len(selected_accounts) == 1:
