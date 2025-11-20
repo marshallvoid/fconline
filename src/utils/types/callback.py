@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, ParamSpec, Protocol, TypeVar
 if TYPE_CHECKING:
     from src.schemas.configs import Account
     from src.schemas.enums.message_tag import MessageTag
-    from src.schemas.user_response import UserDetail
 
 P = ParamSpec("P")  # parameter specification
 R = TypeVar("R", covariant=True)  # return type
@@ -14,7 +13,7 @@ class Callback(Protocol[P, R]):
 
 
 class OnAccountWonCallback(Protocol):
-    def __call__(self, username: str, is_jackpot: bool) -> None: ...
+    def __call__(self, username: str) -> None: ...
 
 
 class OnAddMessageCallback(Protocol):
@@ -34,7 +33,7 @@ class OnUpdateWinnerCallback(Protocol):
 
 
 class OnUpdateUserInfoCallback(Protocol):
-    def __call__(self, username: str, user: "UserDetail") -> None: ...
+    def __call__(self, username: str) -> None: ...
 
 
 class OnAccountRunCallback(Protocol):

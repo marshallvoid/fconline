@@ -154,8 +154,8 @@ class WebsocketHandler:
         try:
             match kind:
                 case "jackpot_value" | "prize_change":
-                    #   message = f"Jackpot value: {int(value):,}"
-                    #   self._on_add_message(tag=MessageTag.WEBSOCKET, message=message, compact=True)
+                    message = f"Jackpot value: {int(value):,}"
+                    self._on_add_message(tag=MessageTag.WEBSOCKET, message=message, compact=True)
 
                     # Handle real-time jackpot value updates
                     new_value = int(value)
@@ -179,8 +179,7 @@ class WebsocketHandler:
 
                         # Trigger spin if: no active task AND (first spin OR enough delay passed)
                         should_spin = not self._spin_task and (
-                            self._last_spin_time == 0.0 or
-                            time_since_last_spin >= self._spin_delay_seconds
+                            self._last_spin_time == 0.0 or time_since_last_spin >= self._spin_delay_seconds
                         )
 
                         if should_spin:
@@ -277,7 +276,11 @@ class WebsocketHandler:
         try:
             user = self._user_info and self._user_info.payload and self._user_info.payload.user
             target_nickname = target_nickname.casefold()
-            is_me = bool(user and user.display_name(username=self._account.username).casefold() == target_nickname)
+            is_me = (
+                (target_nickname == user.normalized_nickname or target_nickname == user.normalized_account_name)
+                if user
+                else False
+            )
 
         except Exception:
             is_me = False
@@ -285,14 +288,14 @@ class WebsocketHandler:
         prefix = "You" if is_me else f"User '{target_nickname}'"
         suffix = "Ultimate Prize" if is_jackpot else "Mini Prize"
         message = f"{prefix} won {suffix}: {str(target_value)}"
-        is_compact = True
         tag = MessageTag.OTHER_PLAYER_JACKPOT if is_jackpot else MessageTag.OTHER_PLAYER_MINI_JACKPOT
 
         if is_me:
-            is_compact = False
             tag = MessageTag.JACKPOT if is_jackpot else MessageTag.MINI_JACKPOT
 
-            self._on_account_won(username=self._account.username, is_jackpot=is_jackpot)
+            if is_jackpot:
+                self._on_account_won(username=self._account.username)
+
             self._on_add_notification(nickname=target_nickname, jackpot_value=str(target_value))
 
             # notifier_mgr.discord_winner_notifier(
@@ -302,6 +305,7 @@ class WebsocketHandler:
             #     value=str(target_value),
             # )
 
+        is_compact = False if is_me else True
         self._on_add_message(tag=tag, message=message, compact=is_compact)
         self._on_update_prize_winner(nickname=target_nickname, value=str(target_value), is_jackpot=is_jackpot)
 

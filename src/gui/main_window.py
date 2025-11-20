@@ -18,8 +18,7 @@ from src.gui.activity_log_tab import ActivityLogTab
 from src.gui.notification_icon import NotificationIcon
 from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
-from src.schemas.user_response import UserDetail
-from src.services.main_tool import MainTool
+from src.services.main_service import MainTool
 from src.utils import conc, hlp
 from src.utils.contants import EVENT_CONFIGS_MAP
 
@@ -314,6 +313,13 @@ class MainWindow:
             self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
             return
 
+        # Log spin delay configuration
+        if self._configs.spin_delay_seconds > 0:
+            delay_message = f"Spin delay: {self._configs.spin_delay_seconds} seconds between spins"
+        else:
+            delay_message = "Spin delay: Disabled (spin on every websocket update)"
+        self._activity_log_tab.add_message(tag=MessageTag.INFO, message=delay_message, compact=True)
+
         # Update browser position in accounts tab
         browser_index = len(self._running_tools)
         self._accounts_tab.update_browser_position(username=account.username, browser_index=browser_index)
@@ -321,13 +327,6 @@ class MainWindow:
         # Log running message
         message = account.running_message(selected_event=self._selected_event)
         self._activity_log_tab.add_message(tag=MessageTag.INFO, message=message)
-
-        # Log spin delay configuration
-        if self._configs.spin_delay_seconds > 0:
-            delay_message = f"Spin delay: {self._configs.spin_delay_seconds} seconds between spins"
-        else:
-            delay_message = "Spin delay: Disabled (spin on every websocket update)"
-        self._activity_log_tab.add_message(tag=MessageTag.INFO, message=delay_message, compact=True)
 
         new_tool = MainTool(
             is_running=True,
@@ -383,10 +382,10 @@ class MainWindow:
         self._update_all_buttons_state()
 
     def _build_callbacks(self, account: Account) -> Dict[str, Callable[..., None]]:
-        def on_account_won(username: str, is_jackpot: bool) -> None:
+        def on_account_won(username: str) -> None:
             def _cb() -> None:
                 self._accounts_tab.mark_account_as_won(username=username)
-                if account.close_on_jp_win and is_jackpot:
+                if account.close_on_jp_win:
                     self._stop_account(username=username)
 
             self._root.after(ms=0, func=_cb)
@@ -415,9 +414,9 @@ class MainWindow:
 
             self._root.after(ms=0, func=_cb)
 
-        def on_update_info_display(username: str, user: UserDetail) -> None:
+        def on_update_info_display(username: str) -> None:
             def _cb() -> None:
-                self._accounts_tab.update_info_display(username=username, user=user)
+                self._accounts_tab.update_info_display(username=username)
 
             self._root.after(ms=0, func=_cb)
 

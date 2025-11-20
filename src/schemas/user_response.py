@@ -14,10 +14,19 @@ class UserDetail(BaseModel):
     account_id: str
     fc: int
     mc: int
+    free_spin: Optional[int] = None
     accumulation: Optional[int] = None
 
     nickname: Optional[str] = None
     account_name: Optional[str] = None
+
+    @property
+    def normalized_nickname(self) -> str:
+        return self.nickname.casefold() if self.nickname else ""
+
+    @property
+    def normalized_account_name(self) -> str:
+        return self.account_name.casefold() if self.account_name else ""
 
     def display_name(self, username: str) -> str:
         return next(

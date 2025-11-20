@@ -195,8 +195,7 @@ class MainTool:
             self._on_update_prize_winner(nickname=nickname, value=value)
 
         # Update UI with user info
-        if self._user_info and (user := self._user_info.payload.user):
-            self._on_update_info_display(username=self._account.username, user=user)
+        self._on_update_info_display(username=self._account.username)
 
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("Setting up browser context...")
