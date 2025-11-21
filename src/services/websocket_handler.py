@@ -56,6 +56,7 @@ class WebsocketHandler:
         self._spin_lock = asyncio.Lock()
         self._spin_task: Optional[asyncio.Task[Any]] = None
         self._last_spin_time: float = 0.0
+        self._has_spun_for_mini_jackpot: bool = False
 
     @property
     def is_logged_in(self) -> bool:
@@ -165,11 +166,37 @@ class WebsocketHandler:
                     if new_value < prev_value:
                         self._jackpot_epoch += 1
                         self._cancel_spin_task()
+                        self._has_spun_for_mini_jackpot = False  # Reset mini jackpot flag on value drop
 
                     self._current_jackpot = new_value
 
-                    # Check if special jackpot target reached
-                    if new_value >= self._account.target_sjp:
+                    # Check if mini jackpot target reached (spin once only)
+                    if (
+                        self._account.target_mjp is not None
+                        and new_value >= self._account.target_mjp
+                        and not self._has_spun_for_mini_jackpot
+                    ):
+                        # Clean up any completed tasks first
+                        self._cleanup_completed_spin_task()
+
+                        # Trigger one-time mini jackpot spin
+                        if not self._spin_task:
+                            message = f"Mini Jackpot target reached {self._account.target_mjp:,}, spinning once"
+                            self._on_add_message(tag=MessageTag.REACHED_GOAL, message=message)
+
+                            epoch_snapshot = self._jackpot_epoch
+                            self._spin_task = asyncio.create_task(
+                                self._attempt_spin(epoch_snapshot),
+                                name=f"spin-mjp-{self._account.username}-{epoch_snapshot}",
+                            )
+                            self._has_spun_for_mini_jackpot = True
+                            logger.info(
+                                f"Created one-time mini jackpot spin task for {self._account.username} "
+                                f"at jackpot {new_value:,}"
+                            )
+
+                    # Check if special jackpot target reached (continuous spins)
+                    elif new_value >= self._account.target_sjp:
                         # Clean up any completed tasks first
                         self._cleanup_completed_spin_task()
 
@@ -201,6 +228,7 @@ class WebsocketHandler:
                     # Stop auto spin when any jackpot is won by anyone
                     self._cancel_spin_task()
                     self._last_spin_time = 0.0
+                    self._has_spun_for_mini_jackpot = False  # Reset mini jackpot flag
 
                     is_jackpot = kind == "jackpot"
                     if is_jackpot:

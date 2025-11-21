@@ -28,16 +28,6 @@ class UserDetail(BaseModel):
     def normalized_account_name(self) -> str:
         return self.account_name.casefold() if self.account_name else ""
 
-    def display_name(self, username: str) -> str:
-        return next(
-            (
-                nickname
-                for nickname in (self.nickname, self.account_name)
-                if nickname and nickname.casefold() != username.casefold()
-            ),
-            "Unknown",
-        )
-
 
 class UserPayload(BaseModel):
     user: Optional[UserDetail] = None
