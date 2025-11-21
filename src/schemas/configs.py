@@ -39,12 +39,13 @@ class Account(BaseModel):
 
     def running_message(self, selected_event: str) -> str:
         spin_type_name = self.spin_type_name(selected_event)
-        return (
-            f"Running account '{self.username}' (Action: '{spin_type_name}' - Target JP: '{self.target_sjp:,}')"
-            f" - Target Mini JP: '{self.target_mjp:,}'"
-            if self.target_mjp is not None
-            else ""
-        )
+
+        base_msg = f"Running account '{self.username}' (Action: '{spin_type_name}' - Target JP: '{self.target_sjp:,}')"
+
+        if self.target_mjp is not None:
+            return f"{base_msg} - Target Mini JP: '{self.target_mjp:,}'"
+
+        return base_msg
 
 
 class Config(BaseModel):
