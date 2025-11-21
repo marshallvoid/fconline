@@ -107,8 +107,8 @@ class FCOnlineClient:
         payment_type: int = 1,
         extra_params: Dict[str, Any] = {},
     ) -> Optional[SpinResponse]:
-        message = f"Spinning with type {spin_type} and payment type {payment_type}..."
-        self._on_add_message(tag=MessageTag.INFO, message=message)
+        #   message = f"Spinning with type {spin_type} and payment type {payment_type}..."
+        #   self._on_add_message(tag=MessageTag.INFO, message=message)
 
         try:
             async with aiohttp.ClientSession(

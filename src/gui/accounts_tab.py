@@ -161,7 +161,8 @@ class AccountsTab:
         # Configure columns for Treeview
         columns: Dict[str, Dict[str, Any]] = {
             "Username": {"width": 160, "anchor": "w"},
-            "Target": {"width": 120, "anchor": "center"},
+            "Target Jackpot": {"width": 120, "anchor": "center"},
+            "Target Mini Jackpot": {"width": 120, "anchor": "center"},
             "Spin Action": {"width": 120, "anchor": "center"},
             "Auto Close": {"width": 120, "anchor": "center"},
         }
@@ -530,6 +531,7 @@ class AccountsTab:
                 values=(
                     account.username,
                     account.target_sjp,
+                    account.target_mjp if account.target_mjp is not None else "-",
                     account.spin_type_name(selected_event=self._selected_event),
                     account.close_on_jp_win,
                 ),
@@ -609,6 +611,19 @@ class AccountsTab:
         )
         target_sjp_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
+        # Target Mini Jackpot (Optional)
+        target_mjp_frame = ttk.Frame(master=main_frame)
+        target_mjp_frame.pack(fill="x", pady=(0, 15))
+        ttk.Label(master=target_mjp_frame, text="Target Mini JP:", width=15, font=("Arial", 12)).pack(side="left")
+        target_mjp_var = tk.StringVar(value=str(account.target_mjp) if account and account.target_mjp else "")
+        target_mjp_entry = ttk.Entry(
+            master=target_mjp_frame,
+            textvariable=target_mjp_var,
+            width=25,
+            font=("Arial", 12),
+        )
+        target_mjp_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
+
         # Payment Type
         payment_type_frame = ttk.Frame(master=main_frame)
         payment_type_frame.pack(fill="x", pady=(0, 15))
@@ -682,6 +697,32 @@ class AccountsTab:
         )
         payment_mc_radio.pack(side="left")
 
+        # Spin Delay
+        spin_delay_frame = ttk.Frame(master=main_frame)
+        spin_delay_frame.pack(fill="x", pady=(0, 15))
+        ttk.Label(master=spin_delay_frame, text="Spin Delay (sec):", width=15, font=("Arial", 12)).pack(side="left")
+
+        def validate_spin_delay(value: str) -> bool:
+            if value == "":
+                return True
+            try:
+                float(value)
+                return True
+            except ValueError:
+                return False
+
+        vcmd = (main_frame.register(validate_spin_delay), "%P")
+        spin_delay_var = tk.StringVar(value=str(account.spin_delay_seconds if account else 0.0))
+        spin_delay_entry = ttk.Entry(
+            master=spin_delay_frame,
+            textvariable=spin_delay_var,
+            validate="key",
+            validatecommand=vcmd,
+            width=25,
+            font=("Arial", 12),
+        )
+        spin_delay_entry.pack(side="left", padx=(10, 0), fill="x", expand=True)
+
         # Close on Jackpot Win
         close_on_jp_win_frame = ttk.Frame(master=main_frame)
         close_on_jp_win_frame.pack(fill="x", pady=(0, 25))
@@ -710,6 +751,28 @@ class AccountsTab:
                 messagebox.showerror("Error", "Target Jackpot must be greater than 0!")
                 return
 
+            # Validate target_mjp (optional)
+            target_mjp_str = target_mjp_var.get().strip()
+            target_mjp_val: Optional[int] = None
+            if target_mjp_str:
+                try:
+                    target_mjp_val = int(target_mjp_str)
+                    if target_mjp_val < 10000:
+                        messagebox.showerror("Error", "Target Mini Jackpot must be at least 10,000!")
+                        return
+                except ValueError:
+                    messagebox.showerror("Error", "Invalid Target Mini Jackpot value!")
+                    return
+
+            try:
+                spin_delay_val = float(spin_delay_var.get() or "0")
+                if spin_delay_val < 0:
+                    messagebox.showerror("Error", "Spin Delay must be 0 or greater!")
+                    return
+            except ValueError:
+                messagebox.showerror("Error", "Invalid Spin Delay value!")
+                return
+
             # Parse spin action
             try:
                 spin_type_val = int(spin_type_display.split(".")[0])
@@ -730,6 +793,8 @@ class AccountsTab:
                 account.spin_type = spin_type_val
                 account.payment_type = payment_type_val
                 account.target_sjp = target_val
+                account.target_mjp = target_mjp_val
+                account.spin_delay_seconds = spin_delay_val
                 account.close_on_jp_win = auto_close
 
             elif is_duplicate_mode:
@@ -745,6 +810,8 @@ class AccountsTab:
                 account.spin_type = spin_type_val
                 account.payment_type = payment_type_val
                 account.target_sjp = target_val
+                account.target_mjp = target_mjp_val
+                account.spin_delay_seconds = spin_delay_val
                 account.close_on_jp_win = auto_close
 
                 # Add the updated duplicated account to the list
@@ -764,6 +831,8 @@ class AccountsTab:
                         spin_type=spin_type_val,
                         payment_type=payment_type_val,
                         target_sjp=target_val,
+                        target_mjp=target_mjp_val,
+                        spin_delay_seconds=spin_delay_val,
                         close_on_jp_win=auto_close,
                     )
                 )
@@ -795,6 +864,8 @@ class AccountsTab:
         username_entry.bind("<Return>", lambda _: handle_save())
         pwd_entry.bind("<Return>", lambda _: handle_save())
         target_sjp_entry.bind("<Return>", lambda _: handle_save())
+        target_mjp_entry.bind("<Return>", lambda _: handle_save())
+        spin_delay_entry.bind("<Return>", lambda _: handle_save())
         spin_type_combobox.bind("<Return>", lambda _: handle_save())
         close_on_jp_win_checkbox.bind("<Return>", lambda _: handle_save())
 
