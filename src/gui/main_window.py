@@ -16,6 +16,7 @@ from src.core.managers.platform import platform_mgr
 from src.gui.accounts_tab import AccountsTab
 from src.gui.activity_log_tab import ActivityLogTab
 from src.gui.notification_icon import NotificationIcon
+from src.gui.update_dialog import UpdateDialog
 from src.schemas.configs import Account
 from src.schemas.enums.message_tag import MessageTag
 from src.services.main_service import MainTool
@@ -195,7 +196,16 @@ class MainWindow:
             state="disabled",
             command=lambda: self._accounts_tab.refresh_all_pages(),
         )
-        self._refresh_all_page_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
+        self._refresh_all_page_btn.pack(side="left", fill="x", expand=True, padx=2.5)
+
+        # Check for Updates button
+        self._update_btn = ttk.Button(
+            master=all_control_buttons_frame,
+            text="Check for Updates",
+            state="normal",
+            command=lambda: UpdateDialog(parent=self._root),
+        )
+        self._update_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
 
         # ==================== Tabs Content ====================
         tabs_container = ttk.Frame(master=self._root)
