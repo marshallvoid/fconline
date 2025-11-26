@@ -53,9 +53,12 @@ class WebsocketHandler:
         self._fconline_client: Optional[FCOnlineClient] = None
 
         self._jackpot_epoch: int = 0
-        self._spin_lock = asyncio.Lock()
-        self._spin_task: Optional[asyncio.Task[Any]] = None
-        self._last_spin_time: float = 0.0
+        self._sjp_spin_lock = asyncio.Lock()
+        self._sjp_spin_task: Optional[asyncio.Task[Any]] = None
+        self._sjp_last_spin_time: float = 0.0
+
+        self._mjp_spin_lock = asyncio.Lock()
+        self._mjp_spin_task: Optional[asyncio.Task[Any]] = None
         self._has_spun_for_mini_jackpot: bool = False
 
     @property
@@ -166,7 +169,6 @@ class WebsocketHandler:
                     if new_value < prev_value:
                         self._jackpot_epoch += 1
                         self._cancel_spin_task()
-                        self._has_spun_for_mini_jackpot = False  # Reset mini jackpot flag on value drop
 
                     self._current_jackpot = new_value
 
@@ -177,19 +179,18 @@ class WebsocketHandler:
                         and not self._has_spun_for_mini_jackpot
                     ):
                         # Clean up any completed tasks first
-                        self._cleanup_completed_spin_task()
+                        self._cleanup_completed_mjp_spin_task()
 
                         # Trigger one-time mini jackpot spin
-                        if not self._spin_task:
+                        if not self._mjp_spin_task:
                             message = f"Mini Jackpot target reached {self._account.target_mjp:,}, spinning once"
                             self._on_add_message(tag=MessageTag.REACHED_GOAL, message=message)
 
                             epoch_snapshot = self._jackpot_epoch
-                            self._spin_task = asyncio.create_task(
-                                self._attempt_spin(epoch_snapshot),
+                            self._mjp_spin_task = asyncio.create_task(
+                                self._attempt_spin(epoch_snapshot=epoch_snapshot, is_jackpot=False),
                                 name=f"spin-mjp-{self._account.username}-{epoch_snapshot}",
                             )
-                            self._has_spun_for_mini_jackpot = True
                             logger.info(
                                 f"Created one-time mini jackpot spin task for {self._account.username} "
                                 f"at jackpot {new_value:,}"
@@ -198,28 +199,28 @@ class WebsocketHandler:
                     # Check if special jackpot target reached (continuous spins)
                     elif new_value >= self._account.target_sjp:
                         # Clean up any completed tasks first
-                        self._cleanup_completed_spin_task()
+                        self._cleanup_completed_sjp_spin_task()
 
                         # Check if we should trigger a new spin based on delay
                         current_time = time.time()
-                        time_since_last_spin = current_time - self._last_spin_time
+                        time_since_last_spin = current_time - self._sjp_last_spin_time
 
                         # Trigger spin if: no active task AND (first spin OR enough delay passed)
-                        should_spin = not self._spin_task and (
-                            self._last_spin_time == 0.0 or time_since_last_spin >= self._spin_delay_seconds
+                        should_spin = not self._sjp_spin_task and (
+                            self._sjp_last_spin_time == 0.0 or time_since_last_spin >= self._spin_delay_seconds
                         )
 
                         if should_spin:
-                            if self._last_spin_time == 0.0:
+                            if self._sjp_last_spin_time == 0.0:
                                 message = f"Special Jackpot has reached {self._account.target_sjp:,}"
                                 self._on_add_message(tag=MessageTag.REACHED_GOAL, message=message)
 
                             epoch_snapshot = self._jackpot_epoch
-                            self._spin_task = asyncio.create_task(
-                                self._attempt_spin(epoch_snapshot),
+                            self._sjp_spin_task = asyncio.create_task(
+                                self._attempt_spin(epoch_snapshot=epoch_snapshot),
                                 name=f"spin-{self._account.username}-{epoch_snapshot}",
                             )
-                            self._last_spin_time = current_time
+                            self._sjp_last_spin_time = current_time
                             logger.info(f"Created spin task for {self._account.username} at jackpot {new_value:,}")
 
                     self._on_update_cur_jp(value=new_value)
@@ -227,14 +228,14 @@ class WebsocketHandler:
                 case "jackpot" | "mini_jackpot":
                     # Stop auto spin when any jackpot is won by anyone
                     self._cancel_spin_task()
-                    self._last_spin_time = 0.0
-                    self._has_spun_for_mini_jackpot = False  # Reset mini jackpot flag
+                    self._sjp_last_spin_time = 0.0
 
                     is_jackpot = kind == "jackpot"
                     if is_jackpot:
                         # Reset jackpot value and increment epoch when ultimate prize is won
                         self._jackpot_epoch += 1
                         self._current_jackpot = 0
+                        self._has_spun_for_mini_jackpot = False  # Reset mini jackpot flag on ultimate prize win
 
                     await self._check_winner(is_jackpot=is_jackpot, target_nickname=nickname, target_value=value)
 
@@ -247,30 +248,34 @@ class WebsocketHandler:
         except Exception as error:
             logger.exception(f"Error handling jackpot event: {error}")
 
-    async def _attempt_spin(self, epoch_snapshot: int) -> None:
+    async def _attempt_spin(self, epoch_snapshot: int, is_jackpot: bool = True) -> None:
         if not self._fconline_client:
             return
 
         spin_response = None
+        target_jp = self._account.target_sjp if is_jackpot else (self._account.target_mjp or 0)
+        spin_lock = self._sjp_spin_lock if is_jackpot else self._mjp_spin_lock
 
         try:
             # Quick validation without holding lock to maximize parallelism
-            if epoch_snapshot != self._jackpot_epoch:
+            # Only check if is jackpot (not check for mini jackpot)
+            if is_jackpot and epoch_snapshot != self._jackpot_epoch:
                 logger.warning(f"Spin aborted: epoch changed (was {epoch_snapshot}, now {self._jackpot_epoch})")
                 return
 
-            if self._current_jackpot < self._account.target_sjp:
+            if self._current_jackpot < target_jp:
                 logger.warning(f"Spin aborted: jackpot dropped to {self._current_jackpot}")
                 return
 
             # Use lock only for final validation and spin execution to minimize contention
-            async with self._spin_lock:
+            async with spin_lock:
                 # Re-verify conditions under lock (double-checked locking pattern)
-                if epoch_snapshot != self._jackpot_epoch:
+                # Only check if is jackpot (not check for mini jackpot)
+                if is_jackpot and epoch_snapshot != self._jackpot_epoch:
                     logger.warning("Spin aborted: epoch changed during lock acquisition")
                     return
 
-                if self._current_jackpot < self._account.target_sjp:
+                if self._current_jackpot < target_jp:
                     logger.warning("Spin aborted: jackpot dropped during lock acquisition")
                     return
 
@@ -298,7 +303,11 @@ class WebsocketHandler:
                 message = hlp.format_results_block(results=spin_response.payload.spin_results)
                 self._on_add_message(tag=MessageTag.REWARD, message=message)
 
-            self._spin_task = None
+            self._sjp_spin_task = None
+            self._mjp_spin_task = None
+
+            if not is_jackpot:
+                self._has_spun_for_mini_jackpot = True
 
     async def _check_winner(self, is_jackpot: bool, target_nickname: str, target_value: int | str) -> None:
         try:
@@ -340,19 +349,30 @@ class WebsocketHandler:
         threading.Thread(target=sfx.play_audio, kwargs={"audio_name": tag.sound_name}, daemon=True).start()
 
     def _cancel_spin_task(self) -> None:
-        if self._spin_task and not self._spin_task.done():
+        if self._sjp_spin_task and not self._sjp_spin_task.done():
             logger.info(f"Cancelling pending spin task for {self._account.username} (epoch {self._jackpot_epoch})")
-            self._spin_task.cancel()
-        self._spin_task = None
-        self._last_spin_time = 0.0
+            self._sjp_spin_task.cancel()
+        self._sjp_spin_task = None
+        self._sjp_last_spin_time = 0.0
 
-    def _cleanup_completed_spin_task(self) -> None:
-        if not self._spin_task or not self._spin_task.done():
+    def _cleanup_completed_sjp_spin_task(self) -> None:
+        if not self._sjp_spin_task or not self._sjp_spin_task.done():
             return
 
         with contextlib.suppress(Exception):
             # Get any exception from completed task
-            exception = self._spin_task.exception()
+            exception = self._sjp_spin_task.exception()
             if exception and not isinstance(exception, asyncio.CancelledError):
                 logger.warning(f"Spin task completed with exception: {exception}")
-        self._spin_task = None
+        self._sjp_spin_task = None
+
+    def _cleanup_completed_mjp_spin_task(self) -> None:
+        if not self._mjp_spin_task or not self._mjp_spin_task.done():
+            return
+
+        with contextlib.suppress(Exception):
+            # Get any exception from completed task
+            exception = self._mjp_spin_task.exception()
+            if exception and not isinstance(exception, asyncio.CancelledError):
+                logger.warning(f"Spin task completed with exception: {exception}")
+        self._mjp_spin_task = None

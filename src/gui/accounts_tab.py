@@ -757,8 +757,8 @@ class AccountsTab:
             if target_mjp_str:
                 try:
                     target_mjp_val = int(target_mjp_str)
-                    if target_mjp_val < 10000:
-                        messagebox.showerror("Error", "Target Mini Jackpot must be at least 10,000!")
+                    if target_mjp_val < 0:
+                        messagebox.showerror("Error", "Target Mini Jackpot must be 0 or greater!")
                         return
                 except ValueError:
                     messagebox.showerror("Error", "Invalid Target Mini Jackpot value!")
