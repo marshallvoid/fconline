@@ -55,14 +55,14 @@ playwright install chromium
 uv run python manage.py
 
 # Alternative entry point
-uv run python src/main.py
+uv run python app/main.py
 ```
 
 ## ⚙️ Configuration
 
 ### Event Configuration
 
-All event configurations are defined in `src/utils/contants.py` and can be customized for different events or updated selectors.
+All event configurations are defined in `app/utils/contants.py` and can be customized for different events or updated selectors.
 
 ## 🔧 Development
 
@@ -80,18 +80,18 @@ uv run pre-commit install
 
 ```bash
 # Code formatting
-uv run black src/
+uv run black app/
 uv run ruff format
 
 # Linting
-uv run ruff check src/
-uv run flake8 src/
+uv run ruff check app/
+uv run flake8 app/
 
 # Type checking
-uv run mypy src/
+uv run mypy app/
 
 # Import sorting
-uv run isort src/
+uv run isort app/
 
 # Run all pre-commit hooks
 uv run pre-commit run --all-files
@@ -119,7 +119,7 @@ uv sync --group build
 uv run pyinstaller build.spec
 
 # Clean build artifacts (optional)
-rm -rf build/ dist/ __pycache__/ src/__pycache__/ src/*/__pycache__/ src/*/*/__pycache__/
+rm -rf build/ dist/ __pycache__/ app/__pycache__/ app/*/__pycache__/ app/*/*/__pycache__/
 ```
 
 The build process creates a standalone executable with embedded Python runtime and all dependencies.

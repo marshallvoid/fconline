@@ -1,6 +1,6 @@
 line-length = 120
-src = ["src"]
-include = ["src/**.py", "tests/**.py"]
+src = ["app"]
+include = ["app/**.py", "tests/**.py"]
 exclude = [
     ".bzr",
     ".direnv",
