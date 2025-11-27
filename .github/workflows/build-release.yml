@@ -106,6 +106,19 @@ jobs:
          - name: Install Inno Setup
            run: choco install innosetup
 
+         - name: Create .env file with secrets
+           shell: bash
+           run: |
+              cat > .env << EOF
+              PROGRAM_NAME=${{ env.PROGRAM_NAME }}
+              SECRET_KEY=${{ secrets.SECRET_KEY }}
+              DEBUG=${{ env.DEBUG }}
+              RELEASE_URL=${{ secrets.GITHUB_API_URL }}
+              DISCORD_WEBHOOK_ID=${{ secrets.DISCORD_WEBHOOK_ID }}
+              DISCORD_WEBHOOK_TOKEN=${{ secrets.DISCORD_WEBHOOK_TOKEN }}
+              DISCORD_ROLE_ID=${{ secrets.DISCORD_ROLE_ID }}
+              EOF
+
          - name: Build executable
            run: uv run pyinstaller --clean build_onedir.spec
 
