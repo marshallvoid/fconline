@@ -7,10 +7,12 @@ requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.12.15",
     "browser-use==0.5.11",
+    "certifi>=2024.0.0",
     "cryptography>=45.0.6",
     "darkdetect>=0.8.0",
     "dishka>=1.6.0",
     "loguru>=0.7.3",
+    "packaging>=24.0",
     "playsound3>=3.2.6",
     "pydantic-settings>=2.10.1",
     "pydantic>=2.11.7",
