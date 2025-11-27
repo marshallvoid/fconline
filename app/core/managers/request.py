@@ -5,7 +5,7 @@ import aiohttp
 from browser_use.browser.types import Page
 from loguru import logger
 
-from app.utils.contants import EventConfig
+from app.utils.constants import EventConfig
 from app.utils.decorators.singleton import singleton
 
 

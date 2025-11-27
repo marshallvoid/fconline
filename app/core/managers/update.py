@@ -11,17 +11,20 @@ import aiohttp
 from loguru import logger
 from packaging import version
 
-import app
+from app.core.managers.version import version_manager
+from app.core.settings import settings
 
 
 class UpdateManager:
     """Manages application updates from GitHub releases."""
 
-    GITHUB_API_URL = "https://api.github.com/repos/marshallvoid/fconline/releases/latest"
+    GITHUB_API_URL = settings.release_url
     DOWNLOAD_TIMEOUT = 300  # 5 minutes
 
     def __init__(self) -> None:
-        self._current_version = app.__version__
+        # self._current_version = app.__version__
+
+        self._current_version = version_manager.version
         self._latest_version: Optional[str] = None
         self._download_url: Optional[str] = None
 

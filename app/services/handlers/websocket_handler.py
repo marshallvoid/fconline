@@ -13,9 +13,9 @@ from playwright.async_api import WebSocket  # noqa: DEP003
 from app.infrastructure.clients.main_client import MainClient
 from app.schemas.enums.message_tag import MessageTag
 from app.schemas.user_response import UserReponse
-from app.utils import concurrency as conc
-from app.utils import helpers as hlp
-from app.utils import sounds as sfx
+from app.utils.concurrency import run_in_thread
+from app.utils.helpers import format_results_block
+from app.utils.sounds import play_audio
 
 if TYPE_CHECKING:
     from app.services.main_service import MainService
@@ -110,7 +110,7 @@ class WebsocketHandler:
 
             def _on_close(ws: WebSocket) -> None:
                 logger.info(f"WebSocket closed: {ws.url}")
-                conc.run_in_thread(coro_func=self._page.reload)
+                run_in_thread(coro_func=self._page.reload)
 
             websocket.on("framereceived", _on_framereceived)
             websocket.on("framesent", _on_framesent)
@@ -297,7 +297,7 @@ class WebsocketHandler:
         finally:
             # Always process result if we got one, regardless of cancellation
             if spin_response and spin_response.payload and spin_response.payload.spin_results:
-                message = hlp.format_results_block(results=spin_response.payload.spin_results)
+                message = format_results_block(results=spin_response.payload.spin_results)
                 self._on_add_message(tag=MessageTag.REWARD, message=message)
 
             self._sjp_spin_task = None
@@ -341,7 +341,7 @@ class WebsocketHandler:
         self._on_add_message(tag=tag, message=message, compact=is_compact)
         self._on_update_prize_winner(nickname=target_nickname, value=str(target_value), is_jackpot=is_jackpot)
 
-        threading.Thread(target=sfx.play_audio, kwargs={"audio_name": tag.sound_name}, daemon=True).start()
+        threading.Thread(target=play_audio, kwargs={"audio_name": tag.sound_name}, daemon=True).start()
 
     def _cancel_spin_task(self) -> None:
         if self._sjp_spin_task and not self._sjp_spin_task.done():

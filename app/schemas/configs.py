@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from app.utils.contants import EVENT_CONFIGS_MAP
+from app.utils.constants import EVENT_CONFIGS_MAP
 
 
 class Notification(BaseModel):
