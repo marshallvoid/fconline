@@ -1,6 +1,7 @@
 import os
 import platform
 import shutil
+import ssl
 import subprocess
 import sys
 import zipfile
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 import aiohttp
+import certifi
 from loguru import logger
 from packaging import version
 
@@ -28,6 +30,9 @@ class UpdateManager:
         self._latest_version: Optional[str] = None
         self._download_url: Optional[str] = None
 
+        # Create SSL context with certifi certificates
+        self._ssl_context = ssl.create_default_context(cafile=certifi.where())
+
     @property
     def current_version(self) -> str:
         """Get current application version."""
@@ -46,7 +51,8 @@ class UpdateManager:
             Tuple of (has_update, latest_version, release_notes)
         """
         try:
-            async with aiohttp.ClientSession() as session:
+            connector = aiohttp.TCPConnector(ssl=self._ssl_context)
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(self.GITHUB_API_URL, timeout=aiohttp.ClientTimeout(total=10)) as response:
                     if not response.ok:
                         logger.error(f"Failed to check for updates: {response.status}")
@@ -149,7 +155,8 @@ class UpdateManager:
 
             logger.info(f"Downloading update from: {self._download_url}")
 
-            async with aiohttp.ClientSession() as session:
+            connector = aiohttp.TCPConnector(ssl=self._ssl_context)
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(
                     self._download_url, timeout=aiohttp.ClientTimeout(total=self.DOWNLOAD_TIMEOUT)
                 ) as response:
