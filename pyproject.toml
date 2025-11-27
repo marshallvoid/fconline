@@ -1,12 +1,12 @@
 [project]
-name = "src"
+name = "app"
 version = "1.0.0"
 description = "FC Online Automation Tool"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.12.15",
-    "browser-use>=0.5.11",
+    "browser-use==0.5.11",
     "cryptography>=45.0.6",
     "darkdetect>=0.8.0",
     "dishka>=1.6.0",
@@ -41,7 +41,7 @@ build = [
 ]
 
 [project.scripts]
-fco = "src.main:main"
+fco = "app.main:main"
 fco-cli = "cli:main"
 
 [build-system]
