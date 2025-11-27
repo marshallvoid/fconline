@@ -28,15 +28,16 @@ jobs:
            id: bump
            shell: bash
            run: |
-              # Get the latest tag in the format vX.Y.Z (single digit each part)
-              LATEST=$(git tag -l 'v[0-9].[0-9].[0-9]' --sort=-v:refname | head -n1)
+              # Get the latest tag in the format vX.Y.Z (supports multi-digit)
+              LATEST=$(git tag -l 'v*.*.*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
 
               if [[ -z "$LATEST" ]]; then
                 LATEST="v0.0.0"
               fi
 
-              if [[ ! "$LATEST" =~ ^v([0-9])\.([0-9])\.([0-9])$ ]]; then
-                echo "Tag '$LATEST' does not match pattern vX.Y.Z (single digit each part)."
+              # Extract version parts (supports multi-digit numbers)
+              if [[ ! "$LATEST" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+                echo "Tag '$LATEST' does not match pattern vX.Y.Z."
                 exit 1
               fi
 
@@ -44,16 +45,22 @@ jobs:
               MINOR="${BASH_REMATCH[2]}"
               PATCH="${BASH_REMATCH[3]}"
 
-              # Increment version with carry-over rules
-              if (( PATCH < 9 )); then
+              # If version is 1.0.0 or higher, only increment PATCH
+              if [[ "$MAJOR" -ge 1 && "$MINOR" -eq 0 ]]; then
                 PATCH=$((PATCH+1))
+                echo "Version is at 1.0.x - incrementing PATCH only"
               else
-                PATCH=0
-                if (( MINOR < 9 )); then
-                  MINOR=$((MINOR+1))
+                # Pre-1.0.0: use carry-over rules (single digit limit)
+                if (( PATCH < 9 )); then
+                  PATCH=$((PATCH+1))
                 else
-                  MINOR=0
-                  MAJOR=$((MAJOR+1))
+                  PATCH=0
+                  if (( MINOR < 9 )); then
+                    MINOR=$((MINOR+1))
+                  else
+                    MINOR=0
+                    MAJOR=$((MAJOR+1))
+                  fi
                 fi
               fi
 
