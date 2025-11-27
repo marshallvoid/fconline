@@ -65,6 +65,7 @@ a = Analysis(
         'app.core.managers.platform',
         'app.core.managers.request',
         'app.core.managers.update',
+        'app.core.managers.version_manager',  # Added new manager
 
         'app.core.providers',
         'app.core.providers.configs',
@@ -145,18 +146,13 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
-    version='version_info.txt',
+    [], # Exclude binaries/datas for onedir
+    exclude_binaries=True,
     name='FC_Online_Tool',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     target_arch=None,

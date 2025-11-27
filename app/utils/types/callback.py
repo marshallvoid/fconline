@@ -32,10 +32,6 @@ class OnUpdateWinnerCallback(Protocol):
     def __call__(self, nickname: str, value: str, is_jackpot: bool = False) -> None: ...
 
 
-class OnUpdateUserInfoCallback(Protocol):
-    def __call__(self, username: str) -> None: ...
-
-
 class OnAccountRunCallback(Protocol):
     def __call__(self, account: "Account") -> None: ...
 

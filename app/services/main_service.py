@@ -16,14 +16,13 @@ from app.schemas.user_response import UserReponse
 from app.services.handlers.login_handler import LoginHandler
 from app.services.handlers.websocket_handler import WebsocketHandler
 from app.utils.concurrency import run_in_thread
-from app.utils.contants import EventConfig
+from app.utils.constants import EventConfig
 from app.utils.helpers import get_browser_position
 from app.utils.types.callback import (
     OnAccountWonCallback,
     OnAddMessageCallback,
     OnAddNotificationCallback,
     OnUpdateCurrentJackpotCallback,
-    OnUpdateUserInfoCallback,
     OnUpdateWinnerCallback,
 )
 
@@ -46,7 +45,6 @@ class MainService:
         on_add_notification: OnAddNotificationCallback,
         on_update_current_jp: OnUpdateCurrentJackpotCallback,
         on_update_prize_winner: OnUpdateWinnerCallback,
-        on_update_info_display: OnUpdateUserInfoCallback,
     ) -> None:
         # Browser configs
         self._is_running = is_running
@@ -65,7 +63,6 @@ class MainService:
         self._on_add_notification = on_add_notification
         self._on_update_current_jp = on_update_current_jp
         self._on_update_prize_winner = on_update_prize_winner
-        self._on_update_info_display = on_update_info_display
 
         # Browser session and page
         self._session: Optional[BrowserSession] = None
@@ -189,9 +186,6 @@ class MainService:
             nickname = mini_jackpot_billboard.nickname
             value = mini_jackpot_billboard.value
             self._on_update_prize_winner(nickname=nickname, value=value)
-
-        # Update UI with user info
-        self._on_update_info_display(username=self._account.username)
 
     async def _setup_browser(self) -> Tuple[BrowserSession, Page]:
         logger.info("Setting up browser context...")

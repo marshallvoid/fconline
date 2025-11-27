@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     secret_key: str = "secret_key"
     debug: bool = False
 
+    # Github API settings
+    release_url: str = "github_api_url"
+
     # Internal API settings
     internal_api_host: Optional[str] = None
 

@@ -32,7 +32,7 @@ fi
 
 # Clean previous builds
 echo "🧹 Cleaning previous builds..."
-rm -rf build/ dist/ __pycache__/ src/__pycache__/ src/*/__pycache__/ src/*/*/__pycache__/
+rm -rf build/ dist/ __pycache__/ app/__pycache__/ app/*/__pycache__/ app/*/*/__pycache__/
 
 # Build the executable
 echo "🏗️ Building executable..."

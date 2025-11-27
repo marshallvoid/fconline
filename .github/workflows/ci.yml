@@ -33,13 +33,25 @@ jobs:
               uv sync
               uv add pyinstaller
 
+         - name: Install Inno Setup
+           run: choco install innosetup
+
          - name: Test build executable
-           run: uv run pyinstaller --clean build.spec
+           run: uv run pyinstaller --clean build_onedir.spec
+
+         - name: Create dummy metadata.json
+           shell: bash
+           run: |
+              echo "{\"version\": \"0.0.0-test\"}" > dist/FC_Online_Tool/metadata.json
+
+         - name: Compile Installer
+           run: |
+              & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=0.0.0-test" setup.iss
 
          - name: Upload test artifact
            uses: actions/upload-artifact@v4
            with:
               name: FC_Online_Tool-test-build-${{ github.event.pull_request.number }}
-              path: dist/FC_Online_Tool.exe
+              path: dist/FC_Online_Tool_Setup.exe
               if-no-files-found: error
               retention-days: 3

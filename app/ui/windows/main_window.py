@@ -2,7 +2,7 @@ import contextlib
 import threading
 import tkinter as tk
 from tkinter import ttk
-from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence
+from typing import Any, Awaitable, Callable, Dict, Mapping, Sequence
 
 import darkdetect  # type: ignore
 import sv_ttk
@@ -20,9 +20,11 @@ from app.ui.components.accounts_tab import AccountsTab
 from app.ui.components.activity_log_tab import ActivityLogTab
 from app.ui.components.notification_icon import NotificationIcon
 from app.ui.components.update_dialog import UpdateDialog
-from app.utils import concurrency as conc
-from app.utils import helpers as hlp
-from app.utils.contants import EVENT_CONFIGS_MAP
+from app.ui.utils.ui_factory import UIFactory
+from app.ui.utils.ui_helpers import UIHelpers
+from app.utils.concurrency import run_in_thread, run_many_in_threads
+from app.utils.constants import EVENT_CONFIGS_MAP
+from app.utils.helpers import get_window_position
 
 
 class MainWindow:
@@ -34,15 +36,7 @@ class MainWindow:
         self._root.title(string=self._settings.program_name)
         self._root.resizable(width=False, height=False)
 
-        with contextlib.suppress(Exception):
-            png_path = file_mgr.get_resource_path(relative_path="assets/icon.png")
-            icon = tk.PhotoImage(file=png_path)
-            self._root.iconphoto(True, icon)
-
-        if platform_mgr.is_windows():
-            with contextlib.suppress(Exception):
-                ico_path = file_mgr.get_resource_path(relative_path="assets/icon.ico")
-                self._root.iconbitmap(ico_path)
+        self._setup_window_icon()
 
         self._configs = config_mgr.load_configs()
         self._selected_event = self._configs.event
@@ -54,25 +48,22 @@ class MainWindow:
     def run(self) -> None:
         logger.info(f"Running {self._settings.program_name}")
 
-        def on_close() -> None:
-            if self._running_tools:
-                _ = [setattr(tool, "is_running", False) for tool in self._running_tools.values()]  # type: ignore
+        self._root.protocol(name="WM_DELETE_WINDOW", func=self._on_close)
+        self._setup_theme()
+        self._root.mainloop()
 
-                # Close tools in separate threads to avoid blocking the UI
-                def close_tools_concurrently() -> None:
-                    tasks: Sequence[tuple[Callable[..., Awaitable[Any]], Sequence[Any], Mapping[str, Any]]] = [
-                        (tool.close, (), {}) for tool in self._running_tools.values()
-                    ]
-                    conc.run_many_in_threads(tasks=tasks, timeout=5.0)
+    def _setup_window_icon(self) -> None:
+        with contextlib.suppress(Exception):
+            png_path = file_mgr.get_resource_path(relative_path="assets/icon.png")
+            icon = tk.PhotoImage(file=png_path)
+            self._root.iconphoto(True, icon)
 
-                # Start closing process in background thread
-                threading.Thread(target=close_tools_concurrently, daemon=True).start()
+        if platform_mgr.is_windows():
+            with contextlib.suppress(Exception):
+                ico_path = file_mgr.get_resource_path(relative_path="assets/icon.ico")
+                self._root.iconbitmap(ico_path)
 
-            # Destroy the root window immediately
-            self._root.destroy()
-
-        self._root.protocol(name="WM_DELETE_WINDOW", func=on_close)
-
+    def _setup_theme(self) -> None:
         sv_ttk.set_theme(theme=darkdetect.theme() or "dark")
 
         with contextlib.suppress(Exception):
@@ -108,10 +99,28 @@ class MainWindow:
             cleaned_layout = strip_focus(elements=layout)
             style.layout(style="TNotebook.Tab", layoutspec=cleaned_layout)
 
-        self._root.mainloop()
+    def _on_close(self) -> None:
+        if self._running_tools:
+            _ = [setattr(tool, "is_running", False) for tool in self._running_tools.values()]  # type: ignore
+
+            def close_tools_concurrently() -> None:
+                tasks: Sequence[tuple[Callable[..., Awaitable[Any]], Sequence[Any], Mapping[str, Any]]] = [
+                    (tool.close, (), {}) for tool in self._running_tools.values()
+                ]
+                run_many_in_threads(tasks=tasks, timeout=5.0)
+
+            threading.Thread(target=close_tools_concurrently, daemon=True).start()
+
+        self._root.destroy()
 
     def _setup_ui(self) -> None:
-        # ==================== Notification Icon ====================
+        self._setup_notification_icon()
+        self._setup_event_selection()
+        self._setup_control_buttons()
+        self._setup_tabs()
+        self._adjust_window_size()
+
+    def _setup_notification_icon(self) -> None:
         notification_frame = ttk.Frame(master=self._root)
         notification_frame.pack(side="top", fill="x", padx=10, pady=(10, 0))
 
@@ -122,97 +131,87 @@ class MainWindow:
         self._notification_icon = NotificationIcon(parent=notification_frame, configs=self._configs)
         self._notification_icon.frame.pack(side="right")
 
-        # ==================== Event Selection ====================
-        event_selection_frame = ttk.LabelFrame(master=self._root, padding=10, text="Select Event:")
-        event_selection_frame.pack(fill="x", padx=10, pady=(10, 5))
+    def _setup_event_selection(self) -> None:
+        event_frame = UIFactory.create_label_frame(parent=self._root, text="Select Event:")
+        event_frame.pack(fill="x", padx=10, pady=(10, 5))
 
         # Event selection combobox
         self._event_var = tk.StringVar(value=self._selected_event)
-        self._event_combobox = ttk.Combobox(
-            master=event_selection_frame,
+        self._event_combobox = UIFactory.create_combobox(
+            parent=event_frame,
             textvariable=self._event_var,
             values=list(EVENT_CONFIGS_MAP.keys()),
-            state="readonly",
             width=30,
         )
 
-        # Update selected event when changed
         def on_combobox_select_changed() -> None:
-            # Get the selected event from combobox
             self._selected_event = self._event_var.get()
-
-            # Update the accounts tab with new event configuration
             self._accounts_tab.selected_event = self._selected_event
 
             self._configs.event = self._selected_event
             config_mgr.save_configs(configs=self._configs)
 
-            # Clear selection to prevent text highlighting
             self._event_combobox.selection_clear()
 
         self._event_combobox.bind(sequence="<<ComboboxSelected>>", func=lambda _: on_combobox_select_changed())
         self._event_combobox.pack(anchor="w", fill="x", pady=(0, 10))
 
+        # Auto refresh checkbox
         def on_auto_refresh_changed() -> None:
             self._configs.auto_refresh = self._auto_refresh_var.get()
             config_mgr.save_configs(configs=self._configs)
 
-        # Auto refresh checkbox
         self._auto_refresh_var = tk.BooleanVar(value=self._configs.auto_refresh)
         self._auto_refresh_checkbox = ttk.Checkbutton(
-            master=event_selection_frame,
+            master=event_frame,
             text="Auto Refresh after 1 hour",
             variable=self._auto_refresh_var,
             command=on_auto_refresh_changed,
         )
         self._auto_refresh_checkbox.pack(anchor="w")
 
-        # ==================== All Control Buttons ====================
-        all_control_buttons_frame = ttk.LabelFrame(master=self._root, padding=10, text="Actions")
-        all_control_buttons_frame.pack(fill="x", padx=10, pady=(0, 5))
+    def _setup_control_buttons(self) -> None:
+        buttons_frame = UIFactory.create_label_frame(parent=self._root, text="Actions")
+        buttons_frame.pack(fill="x", padx=10, pady=(0, 5))
 
-        # Run All button
-        self._run_all_btn = ttk.Button(
-            master=all_control_buttons_frame,
-            text="Run All",
-            style="Accent.TButton",
-            state="normal",
-            command=self._run_all_accounts,
+        button_frame, buttons = UIFactory.create_button_group(
+            parent=buttons_frame,
+            buttons=[
+                {
+                    "text": "Run All",
+                    "style": "Accent.TButton",
+                    "state": "normal",
+                    "command": self._run_all_accounts,
+                },
+                {
+                    "text": "Stop All",
+                    "state": "disabled",
+                    "command": self._stop_all_accounts,
+                },
+                {
+                    "text": "Refresh All",
+                    "state": "disabled",
+                    "command": self._refresh_all_pages,
+                },
+                {
+                    "text": "Check for Updates",
+                    "state": "normal",
+                    "command": lambda: UpdateDialog(parent=self._root),
+                },
+            ],
+            spacing=5,
         )
-        self._run_all_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        button_frame.pack(fill="x")
 
-        # Stop All button
-        self._stop_all_btn = ttk.Button(
-            master=all_control_buttons_frame,
-            text="Stop All",
-            state="disabled",
-            command=self._stop_all_accounts,
-        )
-        self._stop_all_btn.pack(side="left", fill="x", expand=True, padx=2.5)
+        self._run_all_btn = buttons[0]
+        self._stop_all_btn = buttons[1]
+        self._refresh_all_page_btn = buttons[2]
+        self._update_btn = buttons[3]
 
-        # Refresh All Page button
-        self._refresh_all_page_btn = ttk.Button(
-            master=all_control_buttons_frame,
-            text="Refresh All",
-            state="disabled",
-            command=lambda: self._accounts_tab.refresh_all_pages(),
-        )
-        self._refresh_all_page_btn.pack(side="left", fill="x", expand=True, padx=2.5)
-
-        # Check for Updates button
-        self._update_btn = ttk.Button(
-            master=all_control_buttons_frame,
-            text="Check for Updates",
-            state="normal",
-            command=lambda: UpdateDialog(parent=self._root),
-        )
-        self._update_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
-
-        # ==================== Tabs Content ====================
+    def _setup_tabs(self) -> None:
         tabs_container = ttk.Frame(master=self._root)
         tabs_container.pack(fill="both", expand=True, padx=10, pady=5)
 
-        # Notebook for tabs
         self._notebook = ttk.Notebook(master=tabs_container, takefocus=False)
         self._notebook.pack(fill="both", expand=True)
 
@@ -220,10 +219,10 @@ class MainWindow:
         self._accounts_tab = AccountsTab(
             parent=self._notebook,
             selected_event=self._selected_event,
-            configs=self._configs,
             on_account_run=self._run_account,
             on_account_stop=self._stop_account,
             on_refresh_page=self._refresh_page,
+            configs=self._configs,
         )
         self._notebook.add(child=self._accounts_tab.frame, text="Accounts")
 
@@ -231,38 +230,12 @@ class MainWindow:
         self._activity_log_tab = ActivityLogTab(parent=self._notebook)
         self._notebook.add(child=self._activity_log_tab.frame, text="Activity Log")
 
-        self._focus_after_id: Optional[str] = None
+        # Setup focus management using helper
+        UIHelpers.setup_focus_management(root_or_frame=self._root, notebook=self._notebook)
 
-        def schedule_focus_current_tab() -> None:
-            def _focus_current_tab() -> None:
-                with contextlib.suppress(tk.TclError):
-                    current = self._notebook.nametowidget(name=self._notebook.select())
-                    if current and isinstance(current, (tk.Frame, ttk.Frame)):
-                        current.focus_set()
-
-            if self._focus_after_id:
-                with contextlib.suppress(Exception):
-                    self._root.after_cancel(id=self._focus_after_id)
-                self._focus_after_id = None
-
-            self._focus_after_id = self._root.after(ms=10, func=_focus_current_tab)
-
-        def on_notebook_tab_changed() -> None:
-            with contextlib.suppress(tk.TclError):
-                current = self._notebook.nametowidget(name=self._notebook.select())
-                if current and isinstance(current, (tk.Frame, ttk.Frame)):
-                    current.focus_set()
-
-            schedule_focus_current_tab()
-
-        # Update selected event when changed
-        self._notebook.bind(sequence="<<NotebookTabChanged>>", func=lambda _: on_notebook_tab_changed())
-        self._notebook.bind(sequence="<ButtonRelease-1>", func=lambda _: schedule_focus_current_tab())
-        self._root.after_idle(func=schedule_focus_current_tab)
-
-        # ==================== Adjust Window Size ====================
+    def _adjust_window_size(self) -> None:
         self._root.update_idletasks()
-        _, _, width, height, x, y = hlp.get_window_position(child_frame=self._root)
+        _, _, width, height, x, y = get_window_position(child_frame=self._root)
         self._root.geometry(f"{width}x{height}+{x}+{y}")
 
     def _update_all_buttons_state(self) -> None:
@@ -274,7 +247,6 @@ class MainWindow:
         self._refresh_all_page_btn.config(state="normal" if bool(total_running_accounts) else "disabled")
 
     def _run_account(self, account: Account) -> None:
-        # Avoid starting duplicate runner for same username
         if account.username in self._running_tools:
             message = f"Account '{account.username}' is already running"
             self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
@@ -307,7 +279,7 @@ class MainWindow:
         )
         self._running_tools[account.username] = new_service
 
-        conc.run_in_thread(coro_func=new_service.run)
+        run_in_thread(coro_func=new_service.run)
         self._update_all_buttons_state()
 
     def _stop_account(self, username: str) -> None:
@@ -319,7 +291,7 @@ class MainWindow:
         running_tool = self._running_tools.pop(username)
         running_tool.is_running = False
 
-        conc.run_in_thread(coro_func=running_tool.close)
+        run_in_thread(coro_func=running_tool.close)
 
         self._update_all_buttons_state()
 
@@ -335,7 +307,7 @@ class MainWindow:
             self._activity_log_tab.add_message(tag=MessageTag.WARNING, message=message)
             return
 
-        conc.run_in_thread(coro_func=running_tool.page.reload)
+        run_in_thread(coro_func=running_tool.page.reload)
 
     def _run_all_accounts(self) -> None:
         self._accounts_tab.run_all_accounts()
@@ -345,6 +317,10 @@ class MainWindow:
         self._accounts_tab.stop_all_accounts()
         self._update_all_buttons_state()
 
+    def _refresh_all_pages(self) -> None:
+        self._accounts_tab.refresh_all_pages()
+        self._update_all_buttons_state()
+
     def _build_callbacks(self, account: Account) -> Dict[str, Callable[..., None]]:
         def on_account_won(username: str) -> None:
             def _cb() -> None:
@@ -352,37 +328,31 @@ class MainWindow:
                 if account.close_on_jp_win:
                     self._stop_account(username=username)
 
-            self._root.after(ms=0, func=_cb)
+            UIHelpers.schedule_ui_update(root=self._root, callback=_cb)
 
         def on_add_message(tag: MessageTag, message: str, compact: bool = False) -> None:
             def _cb() -> None:
                 self._activity_log_tab.add_message(tag=tag, message=f"[{account.username}] {message}", compact=compact)
 
-            self._root.after(ms=0, func=_cb)
+            UIHelpers.schedule_ui_update(root=self._root, callback=_cb)
 
         def on_add_notification(nickname: str, jackpot_value: str) -> None:
             def _cb() -> None:
                 self._notification_icon.add_notification(nickname=nickname, jackpot_value=jackpot_value)
 
-            self._root.after(ms=0, func=_cb)
+            UIHelpers.schedule_ui_update(root=self._root, callback=_cb)
 
         def on_update_current_jp(value: int) -> None:
             def _cb() -> None:
-                self._activity_log_tab.update_cur_jp(value=value)
+                self._activity_log_tab.update_current_jackpot(value=value)
 
-            self._root.after(ms=0, func=_cb)
+            UIHelpers.schedule_ui_update(root=self._root, callback=_cb)
 
         def on_update_prize_winner(nickname: str, value: str, is_jackpot: bool = False) -> None:
             def _cb() -> None:
                 self._activity_log_tab.update_prize_winner(nickname=nickname, value=value, is_jackpot=is_jackpot)
 
-            self._root.after(ms=0, func=_cb)
-
-        def on_update_info_display(username: str) -> None:
-            def _cb() -> None:
-                self._accounts_tab.update_info_display(username=username)
-
-            self._root.after(ms=0, func=_cb)
+            UIHelpers.schedule_ui_update(root=self._root, callback=_cb)
 
         return {
             on_account_won.__name__: on_account_won,
@@ -390,5 +360,4 @@ class MainWindow:
             on_add_notification.__name__: on_add_notification,
             on_update_current_jp.__name__: on_update_current_jp,
             on_update_prize_winner.__name__: on_update_prize_winner,
-            on_update_info_display.__name__: on_update_info_display,
         }

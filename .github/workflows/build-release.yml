@@ -71,6 +71,7 @@ jobs:
          PROGRAM_NAME: 'FC Online Automation Tool'
          SECRET_KEY: ${{ secrets.SECRET_KEY }}
          DEBUG: 'False' # Set to False for production builds
+         GITHUB_API_URL: ${{ secrets.GITHUB_API_URL }}
          DISCORD_WEBHOOK_ID: ${{ secrets.DISCORD_WEBHOOK_ID }}
          DISCORD_WEBHOOK_TOKEN: ${{ secrets.DISCORD_WEBHOOK_TOKEN }}
          DISCORD_ROLE_ID: ${{ secrets.DISCORD_ROLE_ID }}
@@ -102,19 +103,33 @@ jobs:
               uv sync
               uv add pyinstaller
 
-         - name: Build executable
-           run: uv run pyinstaller --clean build.spec
+         - name: Install Inno Setup
+           run: choco install innosetup
 
-         - name: Rename exe with version
+         - name: Build executable
+           run: uv run pyinstaller --clean build_onedir.spec
+
+         - name: Create metadata.json
+           shell: bash
            run: |
-              mv dist/FC_Online_Tool.exe dist/FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe
+              VERSION="${{ needs.version.outputs.next_tag }}"
+              VERSION=${VERSION#v}
+              echo "{\"version\": \"$VERSION\"}" > dist/FC_Online_Tool/metadata.json
+
+         - name: Compile Installer
+           run: |
+              & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ needs.version.outputs.next_tag }}" setup.iss
+
+         - name: Rename installer with version
+           run: |
+              mv dist/FC_Online_Tool_Setup.exe dist/FC_Online_Tool_Setup-${{ needs.version.outputs.next_tag }}.exe
 
          - name: Upload artifact
            uses: actions/upload-artifact@v4
            with:
               # Name artifact with version so release job can fetch the correct one
               name: FC_Online_Tool-${{ needs.version.outputs.next_tag }}
-              path: dist/FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe
+              path: dist/FC_Online_Tool_Setup-${{ needs.version.outputs.next_tag }}.exe
               if-no-files-found: error
               retention-days: 7
 
@@ -135,20 +150,20 @@ jobs:
            with:
               tag_name: ${{ needs.version.outputs.next_tag }} # <- automatically creates tag if it does not exist
               name: 'FC Online Tool ${{ needs.version.outputs.next_tag }}'
-              files: ./dist/FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe
+              files: ./dist/FC_Online_Tool_Setup-${{ needs.version.outputs.next_tag }}.exe
               generate_release_notes: true
               draft: false
               prerelease: false
               body: |
                  ## 🚀 FC Online Automation Tool ${{ needs.version.outputs.next_tag }}
 
-                 ### 📦 Download
-                 - **FC_Online_Tool-${{ needs.version.outputs.next_tag }}.exe** — Ready-to-run Windows executable
+                  ### 📦 Download
+                  - **FC_Online_Tool_Setup-${{ needs.version.outputs.next_tag }}.exe** — Windows Installer
 
-                 ### 🔧 Installation
-                 1. Download the exe file
-                 2. Run the exe file
-                 3. Windows Defender may show a warning — click "More info" then "Run anyway"
+                  ### 🔧 Installation
+                  1. Download the installer
+                  2. Run the installer and follow the steps
+                  3. Windows Defender may show a warning — click "More info" then "Run anyway"
 
                  ---
                  **Note**: This release is automatically built from source.
