@@ -78,7 +78,7 @@ jobs:
          PROGRAM_NAME: 'FC Online Automation Tool'
          SECRET_KEY: ${{ secrets.SECRET_KEY }}
          DEBUG: 'False' # Set to False for production builds
-         GITHUB_API_URL: ${{ secrets.GITHUB_API_URL }}
+         RELEASE_URL: ${{ secrets.RELEASE_URL }}
          DISCORD_WEBHOOK_ID: ${{ secrets.DISCORD_WEBHOOK_ID }}
          DISCORD_WEBHOOK_TOKEN: ${{ secrets.DISCORD_WEBHOOK_TOKEN }}
          DISCORD_ROLE_ID: ${{ secrets.DISCORD_ROLE_ID }}
@@ -120,7 +120,7 @@ jobs:
               PROGRAM_NAME=${{ env.PROGRAM_NAME }}
               SECRET_KEY=${{ secrets.SECRET_KEY }}
               DEBUG=${{ env.DEBUG }}
-              RELEASE_URL=${{ secrets.GITHUB_API_URL }}
+              RELEASE_URL=${{ secrets.RELEASE_URL }}
               DISCORD_WEBHOOK_ID=${{ secrets.DISCORD_WEBHOOK_ID }}
               DISCORD_WEBHOOK_TOKEN=${{ secrets.DISCORD_WEBHOOK_TOKEN }}
               DISCORD_ROLE_ID=${{ secrets.DISCORD_ROLE_ID }}
