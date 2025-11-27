@@ -1,4 +1,4 @@
-name: CI - Build Test
+name: PR Build & Installer Test
 
 on:
    pull_request:
@@ -10,8 +10,8 @@ permissions:
    actions: read
 
 jobs:
-   test-build:
-      name: Test Build
+   build-and-verify:
+      name: Build & Verify
       runs-on: windows-latest
 
       steps:
@@ -36,7 +36,7 @@ jobs:
          - name: Install Inno Setup
            run: choco install innosetup
 
-         - name: Test build executable
+         - name: Build executable
            run: uv run pyinstaller --clean build_onedir.spec
 
          - name: Create dummy metadata.json
@@ -48,7 +48,7 @@ jobs:
            run: |
               & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=0.0.0-test" setup.iss
 
-         - name: Upload test artifact
+         - name: Upload installer artifact
            uses: actions/upload-artifact@v4
            with:
               name: FC_Online_Tool-test-build-${{ github.event.pull_request.number }}
