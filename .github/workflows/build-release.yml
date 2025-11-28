@@ -11,10 +11,12 @@ permissions:
 
 jobs:
    version:
-      name: Compute next tag
+      name: Determine next version
       runs-on: ubuntu-latest
       outputs:
          next_tag: ${{ steps.bump.outputs.next_tag }}
+         previous_tag: ${{ steps.bump.outputs.previous_tag }}
+         changelog: ${{ steps.read_changelog.outputs.changelog }}
       steps:
          - name: Checkout (full history for tags)
            uses: actions/checkout@v4
@@ -66,7 +68,33 @@ jobs:
 
               NEXT_TAG="v${MAJOR}.${MINOR}.${PATCH}"
               echo "next_tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+              echo "previous_tag=$LATEST" >> "$GITHUB_OUTPUT"
               echo "Latest: $LATEST -> Next: $NEXT_TAG"
+
+         - name: Generate Changelog
+           id: changelog
+           uses: orhun/git-cliff-action@v4
+           with:
+              config: cliff.toml
+              args: |
+                 ${{ steps.bump.outputs.previous_tag == 'v0.0.0' && '--unreleased' || format('{0}..{1}', steps.bump.outputs.previous_tag, steps.bump.outputs.next_tag) }}
+                 --tag ${{ steps.bump.outputs.next_tag }}
+           env:
+              OUTPUT: CHANGELOG.md
+
+         - name: Read Changelog
+           id: read_changelog
+           shell: bash
+           run: |
+              CHANGELOG=$(cat CHANGELOG.md)
+
+              # Save changelog to output (escape for GitHub Actions)
+              echo "changelog<<EOF" >> "$GITHUB_OUTPUT"
+              echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
+              echo "EOF" >> "$GITHUB_OUTPUT"
+
+              echo "Generated changelog:"
+              echo "$CHANGELOG"
 
    build:
       name: Build Windows exe
@@ -78,10 +106,14 @@ jobs:
          PROGRAM_NAME: 'FC Online Automation Tool'
          SECRET_KEY: ${{ secrets.SECRET_KEY }}
          DEBUG: 'False' # Set to False for production builds
+         INTERNAL_API_URL: ${{ secrets.INTERNAL_API_URL }}
          RELEASE_URL: ${{ secrets.RELEASE_URL }}
-         DISCORD_WEBHOOK_ID: ${{ secrets.DISCORD_WEBHOOK_ID }}
-         DISCORD_WEBHOOK_TOKEN: ${{ secrets.DISCORD_WEBHOOK_TOKEN }}
-         DISCORD_ROLE_ID: ${{ secrets.DISCORD_ROLE_ID }}
+         DISCORD__ROLES__DEVELOPER: ${{ secrets.DISCORD__ROLES__DEVELOPER }}
+         DISCORD__WEBHOOKS__DEVELOP__ID: ${{ secrets.DISCORD__WEBHOOKS__DEVELOP__ID }}
+         DISCORD__WEBHOOKS__DEVELOP__TOKEN: ${{ secrets.DISCORD__WEBHOOKS__DEVELOP__TOKEN }}
+         DISCORD__ROLES__FCO: ${{ secrets.DISCORD__ROLES__FCO }}
+         DISCORD__WEBHOOKS__FCO_REWARD__ID: ${{ secrets.DISCORD__WEBHOOKS__FCO_REWARD__ID }}
+         DISCORD__WEBHOOKS__FCO_REWARD__TOKEN: ${{ secrets.DISCORD__WEBHOOKS__FCO_REWARD__TOKEN }}
          # OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
          # OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
          # OPENAI_TEMPERATURE: ${{ secrets.OPENAI_TEMPERATURE }}
@@ -113,17 +145,36 @@ jobs:
          - name: Install Inno Setup
            run: choco install innosetup
 
-         - name: Create .env file with secrets
+         - name: Generate build_config.py with secrets
            shell: bash
            run: |
-              cat > .env << EOF
-              PROGRAM_NAME=${{ env.PROGRAM_NAME }}
-              SECRET_KEY=${{ secrets.SECRET_KEY }}
-              DEBUG=${{ env.DEBUG }}
-              RELEASE_URL=${{ secrets.RELEASE_URL }}
-              DISCORD_WEBHOOK_ID=${{ secrets.DISCORD_WEBHOOK_ID }}
-              DISCORD_WEBHOOK_TOKEN=${{ secrets.DISCORD_WEBHOOK_TOKEN }}
-              DISCORD_ROLE_ID=${{ secrets.DISCORD_ROLE_ID }}
+              cat > app/core/build_config.py << 'EOF'
+              # Auto-generated during build - DO NOT EDIT
+              # This file contains production configuration
+
+              PROGRAM_NAME = "${{ env.PROGRAM_NAME }}"
+              SECRET_KEY = "${{ secrets.SECRET_KEY }}"
+              DEBUG = ${{ env.DEBUG }}
+              INTERNAL_API_URL = "${{ env.INTERNAL_API_URL }}"
+              RELEASE_URL = "${{ secrets.RELEASE_URL }}"
+
+              # Discord configuration with nested structure
+              DISCORD = {
+                  "webhooks": {
+                      "develop": {
+                          "id": "${{ secrets.DISCORD__WEBHOOKS__DEVELOP__ID }}",
+                          "token": "${{ secrets.DISCORD__WEBHOOKS__DEVELOP__TOKEN }}"
+                      },
+                      "fco_reward": {
+                          "id": "${{ secrets.DISCORD__WEBHOOKS__FCO_REWARD__ID }}",
+                          "token": "${{ secrets.DISCORD__WEBHOOKS__FCO_REWARD__TOKEN }}"
+                      }
+                  },
+                  "roles": {
+                      "developer": "${{ secrets.DISCORD__ROLES__DEVELOPER }}",
+                      "fco": "${{ secrets.DISCORD__ROLES__FCO }}"
+                  }
+              }
               EOF
 
          - name: Build executable
@@ -171,21 +222,25 @@ jobs:
               tag_name: ${{ needs.version.outputs.next_tag }} # <- automatically creates tag if it does not exist
               name: 'FC Online Tool ${{ needs.version.outputs.next_tag }}'
               files: ./dist/FC_Online_Tool_Setup-${{ needs.version.outputs.next_tag }}.exe
-              generate_release_notes: true
               draft: false
               prerelease: false
               body: |
                  ## 🚀 FC Online Automation Tool ${{ needs.version.outputs.next_tag }}
 
-                  ### 📦 Download
-                  - **FC_Online_Tool_Setup-${{ needs.version.outputs.next_tag }}.exe** — Windows Installer
+                 ### 📦 Download
+                 - **FC_Online_Tool_Setup-${{ needs.version.outputs.next_tag }}.exe** — Windows Installer
 
-                  ### 🔧 Installation
-                  1. Download the installer
-                  2. Run the installer and follow the steps
-                  3. Windows Defender may show a warning — click "More info" then "Run anyway"
+                 ### 🔧 Installation
+                 1. Download the installer
+                 2. Run the installer and follow the steps
+                 3. Windows Defender may show a warning — click "More info" then "Run anyway"
 
                  ---
-                 **Note**: This release is automatically built from source.
+
+                 ${{ needs.version.outputs.changelog }}
+
+                 ---
+
+                 **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ needs.version.outputs.previous_tag }}...${{ needs.version.outputs.next_tag }} automatically built from source.
            env:
               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

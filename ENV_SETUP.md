@@ -62,12 +62,12 @@ You need to add secrets to your GitHub repository for CI/CD builds to work prope
 3. Click **"New repository secret"**
 4. Add each of these secrets with values from your `.env` file:
 
-| Secret Name                       | Description                                               | Default Value                |
-| --------------------------------- | --------------------------------------------------------- | ---------------------------- |
-| `SECRET_KEY`                      | Encryption key for securing application data              | **Required**                 |
-| `DISCORD_WEBHOOK_ID`              | _(Optional)_ Discord webhook ID for notifications         | None                         |
-| `DISCORD_WEBHOOK_TOKEN`           | _(Optional)_ Discord webhook token for notifications      | None                         |
-| `DISCORD_ROLE_ID`                 | _(Optional)_ Discord role ID to mention for notifications | None                         |
+| Secret Name             | Description                                               | Default Value |
+| ----------------------- | --------------------------------------------------------- | ------------- |
+| `SECRET_KEY`            | Encryption key for securing application data              | **Required**  |
+| `DISCORD_WEBHOOK_ID`    | _(Optional)_ Discord webhook ID for notifications         | None          |
+| `DISCORD_WEBHOOK_TOKEN` | _(Optional)_ Discord webhook token for notifications      | None          |
+| `DISCORD_ROLE_ID`       | _(Optional)_ Discord role ID to mention for notifications | None          |
 
 ### 2. Default Values & Fallbacks
 
@@ -86,9 +86,8 @@ The GitHub Actions workflow automatically:
 
 1. **Sets environment variables** from GitHub Secrets
 2. **Uses fallback defaults** for any missing optional configuration
-3. **Creates `.env` file** during build using `setup-env.py` script
-4. **Includes environment in build** so the executable has access to configuration
-5. **Keeps secrets secure** - they never appear in logs or build artifacts
+3. **Injects secrets directly into code** during build (no .env file needed in production)
+4. **Keeps secrets secure** - they never appear in logs or build artifacts
 
 ## 🔍 Validation & Troubleshooting
 

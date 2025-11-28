@@ -7,35 +7,27 @@ Run this locally to check if all required secrets are set up.
 
 import sys
 from pathlib import Path
+from typing import Any, Dict
 
+from app.core.settings import Settings
+
+# Add project root to python path to allow importing app
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.append(str(ROOT))
+
+
 ENV_FILE = ROOT / ".env"
 
-# Required secrets for the application
-REQUIRED_SECRETS = {
-    "SECRET_KEY": "Encryption key for securing application data",
-    "DISCORD_WEBHOOK_ID": "Discord webhook ID for notifications",
-    "DISCORD_WEBHOOK_TOKEN": "Discord webhook token for notifications",
-    "DISCORD_ROLE_ID": "Discord role ID to mention for notifications",
-}
 
-# Optional secrets (application will work without these but with limited features)
-OPTIONAL_SECRETS = {
-    "OPENAI_API_KEY": "OpenAI API key for AI features",
-    "OPENAI_MODEL": "OpenAI model to use (default: 03)",
-    "OPENAI_TEMPERATURE": "OpenAI temperature setting (default: 0.8)",
-    "OPENAI_MAX_RETRIES": "OpenAI maximum retries (default: 2)",
-    "ANTHROPIC_API_KEY": "Anthropic API key for AI features",
-    "ANTHROPIC_MODEL": "Anthropic model to use (default: claude-sonnet-4-20250514)",
-    "ANTHROPIC_TEMPERATURE": "Anthropic temperature setting (default: 0.8)",
-    "ANTHROPIC_MAX_RETRIES": "Anthropic maximum retries (default: 2)",
-}
+def get_settings_fields() -> Dict[str, Any]:
+    """Get all fields from Settings model."""
+    return Settings.model_fields
 
 
 def validate_local_env() -> bool:
     """Validate local .env file has required variables."""
     if not ENV_FILE.exists():
-        print("❌ No .env file found. Use scripts/setup-env.py to create one.")
+        print("❌ No .env file found. Please copy .env.template to .env and configure it.")
         return False
 
     # Load .env file
@@ -51,41 +43,39 @@ def validate_local_env() -> bool:
 
     print("🔍 Validating local .env file...")
 
-    # Check required secrets
+    fields = get_settings_fields()
     missing_required = []
-    for secret, description in REQUIRED_SECRETS.items():
-        if secret not in env_vars or not env_vars[secret]:
-            missing_required.append(f"  {secret}: {description}")
-        else:
-            print(f"✅ {secret}")
 
-    # Check optional secrets
-    missing_optional = []
-    for secret, description in OPTIONAL_SECRETS.items():
-        if secret not in env_vars or not env_vars[secret]:
-            missing_optional.append(f"  {secret}: {description}")
+    # Track nested configs to handle them specially
+    nested_configs = ["discord"]
+
+    for name, field in fields.items():
+        # Skip nested configs for now
+        if name in nested_configs:
+            continue
+
+        env_key = name.upper()
+        is_required = field.is_required()
+
+        if env_key not in env_vars or not env_vars[env_key]:
+            if is_required:
+                missing_required.append(f"  {env_key}")
         else:
-            print(f"✅ {secret}")
+            print(f"✅ {env_key}")
 
     if missing_required:
         print("\n❌ Missing required environment variables:")
         print("\n".join(missing_required))
+        return False
 
-    if missing_optional:
-        print("\n⚠️  Missing optional environment variables (features will be limited):")
-        print("\n".join(missing_optional))
-
-    if not missing_required:
-        print("\n🎉 All required environment variables are configured!")
-        return True
-
-    return False
+    print("\n🎉 All required environment variables are configured!")
+    return True
 
 
 def generate_github_secrets_json() -> None:
     """Generate JSON template for GitHub CLI to set secrets."""
     if not ENV_FILE.exists():
-        print("❌ No .env file found. Use scripts/setup-env.py to create one.")
+        print("❌ No .env file found. Please copy .env.template to .env and configure it.")
         return
 
     # Load .env file
@@ -104,8 +94,14 @@ def generate_github_secrets_json() -> None:
     print("\n🔧 GitHub CLI commands to set secrets:")
     print("Run these commands to set up GitHub Actions secrets:\n")
 
+    fields = get_settings_fields()
+    known_keys = set()
+    for name in fields:
+        known_keys.add(name.upper())
+
     for key, value in secrets.items():
-        if key in {**REQUIRED_SECRETS, **OPTIONAL_SECRETS}:
+        # Only suggest setting secrets that are known settings or start with DISCORD (nested)
+        if key in known_keys or key.startswith("DISCORD__"):
             print(f'gh secret set {key} --body "{value}"')
 
     print("\nOr set them manually in GitHub:")
@@ -135,7 +131,6 @@ def main():
     else:
         print("\n📚 Next steps:")
         print("1. Set the missing environment variables in your .env file")
-        print("   python scripts/setup-env.py")
         print("2. Run this script again to validate")
 
 
