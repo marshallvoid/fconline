@@ -76,9 +76,7 @@ jobs:
            uses: orhun/git-cliff-action@v4
            with:
               config: cliff.toml
-              args: |
-                 ${{ steps.bump.outputs.previous_tag == 'v0.0.0' && '--unreleased' || format('{0}..HEAD', steps.bump.outputs.previous_tag) }}
-                 --tag ${{ steps.bump.outputs.next_tag }}
+              args: "${{ steps.bump.outputs.previous_tag == 'v0.0.0' && '--unreleased' || format('{0}..HEAD', steps.bump.outputs.previous_tag) }} --tag ${{ steps.bump.outputs.next_tag }}"
            env:
               OUTPUT: CHANGELOG.md
 
