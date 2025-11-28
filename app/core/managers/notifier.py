@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 class NotifierManager:
     def __init__(self) -> None:
         self.discord_developer_role_id = settings.discord.roles["developer"]
-        self.discord_developer_webhook_id = settings.discord.webhooks["developer"]["id"]
-        self.discord_developer_webhook_token = settings.discord.webhooks["developer"]["token"]
+        self.discord_developer_webhook_id = settings.discord.webhooks["develop"]["id"]
+        self.discord_developer_webhook_token = settings.discord.webhooks["develop"]["token"]
         self.discord_fco_role_id = settings.discord.roles["fco"]
         self.discord_fco_webhook_id = settings.discord.webhooks["fco_reward"]["id"]
         self.discord_fco_webhook_token = settings.discord.webhooks["fco_reward"]["token"]
