@@ -6,6 +6,9 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 from typing import Optional
 
+import markdown2
+from tkhtmlview import HTMLText
+
 from app.core.managers.update import update_mgr
 from app.ui.utils.ui_factory import UIFactory
 from app.utils.helpers import get_window_position
@@ -23,10 +26,15 @@ class _UpdateState:
 
 
 class UpdateDialog(tk.Toplevel):
-    def __init__(self, parent: tk.Tk):
+    def __init__(
+        self,
+        parent: tk.Tk,
+        latest_version: Optional[str] = None,
+        release_notes: Optional[str] = None,
+    ):
         super().__init__(parent)
         self.title("Software Update")
-        self.geometry("600x500")
+        self.geometry("700x600")  # Increased size for better reading
 
         # Center the dialog on screen
         self.update_idletasks()
@@ -40,11 +48,21 @@ class UpdateDialog(tk.Toplevel):
         # State management
         self._state = _UpdateState()
 
+        # If data provided, update state immediately
+        if latest_version:
+            self._state.has_update = True
+            self._state.latest_version = latest_version
+            self._state.release_notes = release_notes
+
         self._setup_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        # Start checking immediately
-        self.after(100, self._start_check)
+        # Start checking only if data not provided
+        if not latest_version:
+            self.after(100, self._start_check)
+        else:
+            # Update UI with provided data
+            self._on_check_complete(True, latest_version, release_notes)
 
     def _setup_ui(self) -> None:
         main_frame = ttk.Frame(self, padding="20")
@@ -75,18 +93,24 @@ class UpdateDialog(tk.Toplevel):
         text_container = ttk.Frame(notes_frame)
         text_container.pack(fill="both", expand=True)
 
-        # Use factory to create text widget with scrollbar
-        self.notes_text, scrollbar = UIFactory.create_text_widget(
-            parent=text_container,
-            height=10,
-            bg="#ffffff",
-            fg="#000000",
-            state="disabled",
+        # Use HTMLText for Markdown rendering
+        self.notes_text = HTMLText(
+            text_container,
+            html="<p>Checking for release notes...</p>",
+            background="#ffffff",
+            foreground="#000000",
+            font=("Segoe UI", 10),
         )
 
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(text_container, orient="vertical", command=self.notes_text.yview)
+        self.notes_text.configure(yscrollcommand=scrollbar.set)
+
         self.notes_text.pack(side="left", fill="both", expand=True)
-        if scrollbar:
-            scrollbar.pack(side="right", fill="y")
+        scrollbar.pack(side="right", fill="y")
+
+        # Fit height
+        self.notes_text.fit_height()
 
     def _setup_progress_bar(self, parent: tk.Misc) -> None:
         self.progress_frame = ttk.Frame(parent)
@@ -146,25 +170,27 @@ class UpdateDialog(tk.Toplevel):
             self.install_button.config(state="normal")
 
             if release_notes:
-                self.notes_text.config(state="normal")
-                self.notes_text.delete("1.0", "end")
-                self.notes_text.insert("1.0", release_notes)
-                self.notes_text.config(state="disabled")
+                # Convert Markdown to HTML
+                html_content = markdown2.markdown(
+                    release_notes, extras=["fenced-code-blocks", "tables", "break-on-newline"]
+                )
+
+                # Add some basic styling
+                styled_html = f"""
+                <div style="font-family: Segoe UI, sans-serif; padding: 10px;">
+                    {html_content}
+                </div>
+                """
+                self.notes_text.set_html(styled_html)
         else:
             self.title_label.config(text="You're up to date!")
             self.latest_label.config(text=f"Latest Version: {update_mgr.current_version}")
-            self.notes_text.config(state="normal")
-            self.notes_text.delete("1.0", "end")
-            self.notes_text.insert("1.0", "No updates available at this time.")
-            self.notes_text.config(state="disabled")
+            self.notes_text.set_html("<p>No updates available at this time.</p>")
 
     def _on_check_error(self, error: str) -> None:
         self.title_label.config(text="Error checking for updates")
         self.latest_label.config(text="Latest Version: Unknown")
-        self.notes_text.config(state="normal")
-        self.notes_text.delete("1.0", "end")
-        self.notes_text.insert("1.0", f"Error: {error}")
-        self.notes_text.config(state="disabled")
+        self.notes_text.set_html(f"<p style='color: red;'>Error: {error}</p>")
 
     def _start_download(self) -> None:
         if self._state.downloading or not self._state.has_update:

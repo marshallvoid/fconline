@@ -12,6 +12,7 @@ from loguru import logger
 from app.core.managers.config import config_mgr
 from app.core.managers.file import file_mgr
 from app.core.managers.platform import platform_mgr
+from app.core.managers.update import update_mgr
 from app.core.settings import Settings
 from app.schemas.configs import Account
 from app.schemas.enums.message_tag import MessageTag
@@ -45,12 +46,35 @@ class MainWindow:
 
         self._setup_ui()
 
+        # Check for updates silently after 2 seconds
+        self._root.after(2000, self._check_for_updates_silently)
+
     def run(self) -> None:
         logger.info(f"Running {self._settings.program_name}")
 
         self._root.protocol(name="WM_DELETE_WINDOW", func=self._on_close)
         self._setup_theme()
         self._root.mainloop()
+
+    def _check_for_updates_silently(self) -> None:
+        async def _check() -> None:
+            try:
+                has_update, latest_version, release_notes = await update_mgr.check_for_updates()
+                if has_update and latest_version:
+                    # Schedule UI update on main thread
+                    self._root.after(
+                        0,
+                        lambda: UpdateDialog(
+                            parent=self._root,
+                            latest_version=latest_version,
+                            release_notes=release_notes,
+                        ),
+                    )
+
+            except Exception as e:
+                logger.warning(f"Silent update check failed: {e}")
+
+        run_in_thread(coro_func=_check)
 
     def _setup_window_icon(self) -> None:
         with contextlib.suppress(Exception):
