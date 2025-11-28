@@ -5,19 +5,21 @@ from typing import List, Optional
 
 from app.core.managers.config import config_mgr
 from app.schemas.configs import Config, Notification
-from app.ui.components.notification_dialog import NotificationDialog
+from app.ui.components.dialogs.notification_dialog import NotificationDialog
 
 
 class NotificationIcon:
     def __init__(self, parent: tk.Misc, configs: Optional[Config] = None) -> None:
+        # Widgets
         self._parent: tk.Misc = parent
         self._frame: ttk.Frame = ttk.Frame(master=parent)
         self._dialog: Optional[NotificationDialog] = None
 
+        # Configs
         self._configs: Config = configs if configs is not None else config_mgr.load_configs()
         self._notifications: List[Notification] = self._configs.notifications
 
-        self._setup_ui()
+        self._initialize()
 
     @property
     def frame(self) -> ttk.Frame:
@@ -30,7 +32,7 @@ class NotificationIcon:
         self._save_notifications_to_config()
 
     # ==================== Private Methods ====================
-    def _setup_ui(self) -> None:
+    def _initialize(self) -> None:
         # Notification icon button
         self._icon_label = ttk.Label(
             master=self._frame,
@@ -51,9 +53,7 @@ class NotificationIcon:
             padding=(4, 2),
             text="0",
         )
-
-        # Initially hidden
-        self._count_label.pack_forget()
+        self._count_label.pack_forget()  # Initially hidden
 
         # Update icon to reflect loaded notifications
         self._update_icon()
@@ -67,7 +67,6 @@ class NotificationIcon:
         # Mark all notifications as seen
         for notification in self._notifications:
             notification.is_seen = True
-
         self._save_notifications_to_config()
 
         # Remove count badge as all are now seen

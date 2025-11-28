@@ -10,7 +10,7 @@ import app
 class VersionManager:
     METADATA_FILE = "metadata.json"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._version = self._load_version()
 
     @property
@@ -42,7 +42,7 @@ class VersionManager:
             logger.error(f"Error loading version metadata: {e}")
             return app.__version__
 
-    def update_version(self, new_version: str):
+    def update_version(self, new_version: str) -> None:
         try:
             if getattr(sys, "frozen", False):
                 base_path = Path(sys.executable).parent

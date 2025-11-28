@@ -19,14 +19,14 @@ class FileManager:
     def get_resource_path(self, relative_path: str) -> str:
         base_path: Path | str
         if hasattr(sys, "_MEIPASS"):
-            base_path = Path(sys._MEIPASS)  # type: ignore
+            base_path = Path(sys._MEIPASS)
         else:
             base_path = os.path.abspath(".")
 
         return os.path.join(base_path, relative_path)
 
     def get_configs_directory(self) -> str:
-        if platform_mgr.is_windows():  # Windows
+        if platform_mgr.is_windows:  # Windows
             app_data = os.environ.get("APPDATA", os.path.expanduser("~"))
             configs_dir = os.path.join(app_data, settings.program_name.replace(" ", ""))
         else:  # MacOS and Linux
@@ -44,7 +44,7 @@ class FileManager:
     def get_data_directory(self) -> str:
         dir_name = f"{settings.program_name.casefold().replace(' ', '-')}-{int(time.time())}-{shortuuid.uuid()}"
 
-        if platform_mgr.is_windows():  # Windows
+        if platform_mgr.is_windows:  # Windows
             temp_dir = os.environ.get("TEMP", os.environ.get("TMP", tempfile.gettempdir()))
             data_dir = os.path.join(temp_dir, dir_name)
         else:  # MacOS and Linux

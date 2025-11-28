@@ -1,7 +1,7 @@
 import contextlib
 import tkinter as tk
 from tkinter import ttk
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 
 class UIHelpers:
@@ -102,26 +102,6 @@ class UIHelpers:
             delay_ms: Delay in milliseconds before executing
         """
         root.after(ms=delay_ms, func=callback)
-
-    @staticmethod
-    def create_ui_callback(root: tk.Tk, callback: Callable[..., None]) -> Callable[..., None]:
-        """Create a thread-safe UI callback wrapper.
-
-        Args:
-            root: Root window
-            callback: Original callback function
-
-        Returns:
-            Wrapped callback that executes in UI thread
-        """
-
-        def wrapper(*args: Any, **kwargs: Any) -> None:
-            def _execute() -> None:
-                callback(*args, **kwargs)
-
-            root.after(ms=0, func=_execute)
-
-        return wrapper
 
     @staticmethod
     def center_window(window: tk.Toplevel, parent: Optional[tk.Misc] = None) -> None:

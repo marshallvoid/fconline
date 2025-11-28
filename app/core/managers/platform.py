@@ -7,29 +7,36 @@ from app.utils.decorators.singleton import singleton
 
 @singleton
 class PlatformManager:
+    @property
+    def is_windows(self) -> bool:
+        return self.platform == "windows"
+
+    @property
+    def is_macos(self) -> bool:
+        return self.platform == "darwin"
+
+    @property
+    def is_linux(self) -> bool:
+        return self.platform == "linux"
+
+    @property
+    def is_unix(self) -> bool:
+        return self.platform in ["linux", "darwin"]
+
+    @property
     def platform(self) -> str:
         return platform.system().casefold()
 
-    def is_windows(self) -> bool:
-        return self.platform() == "windows"
-
-    def is_macos(self) -> bool:
-        return self.platform() == "darwin"
-
-    def is_linux(self) -> bool:
-        return self.platform() == "linux"
-
-    def is_unix(self) -> bool:
-        return self.platform() in ["linux", "darwin"]
-
-    def node(self) -> str:
-        return platform.node()
-
+    @property
     def machine(self) -> str:
-        return platform.machine()
+        return platform.machine().casefold()
+
+    @property
+    def node(self) -> str:
+        return platform.node().casefold()
 
     def get_chrome_executable_path(self) -> Optional[str]:
-        match self.platform():
+        match self.platform:
             case "windows":
                 # Common Chrome installation paths on Windows
                 chrome_paths = [

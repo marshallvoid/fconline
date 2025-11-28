@@ -1,4 +1,5 @@
-# pyright: reportOptionalMemberAccess=false
+# mypy: disable-error-code="union-attr"
+
 import asyncio
 import contextlib
 from typing import TYPE_CHECKING
@@ -21,7 +22,7 @@ class LoginHandler:
         self._event_config = main_service._event_config
 
         # Handlers
-        self._websocket_handler = main_service._websocket_handler
+        self._websocket_handler = main_service.websocket_handler
 
         # Callbacks
         self._on_add_message = main_service._on_add_message

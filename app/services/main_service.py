@@ -40,11 +40,11 @@ class MainService:
         auto_refresh: bool,
         event_config: EventConfig,
         # Callbacks
-        on_account_won: OnAccountWonCallback,
         on_add_message: OnAddMessageCallback,
         on_add_notification: OnAddNotificationCallback,
         on_update_current_jp: OnUpdateCurrentJackpotCallback,
         on_update_prize_winner: OnUpdateWinnerCallback,
+        on_account_won: OnAccountWonCallback,
     ) -> None:
         # Browser configs
         self._is_running = is_running
@@ -58,11 +58,11 @@ class MainService:
         self._event_config = event_config
 
         # Callbacks
-        self._on_account_won = on_account_won
         self._on_add_message = on_add_message
         self._on_add_notification = on_add_notification
         self._on_update_current_jp = on_update_current_jp
         self._on_update_prize_winner = on_update_prize_winner
+        self._on_account_won = on_account_won
 
         # Browser session and page
         self._session: Optional[BrowserSession] = None
@@ -71,10 +71,6 @@ class MainService:
         # User data
         self._user_data_dir: Optional[str] = None
         self._user_info: Optional[UserReponse] = None
-
-        # Clients and handlers
-        self._client: Optional[MainClient] = None
-        self._websocket_handler: Optional[WebsocketHandler] = None
 
         # Auto refresh configuration
         self._refresh_interval = 60 * 60  # 60 minutes in seconds
@@ -103,8 +99,8 @@ class MainService:
 
             # Setup websocket handler
             logger.info("Setting up websocket handler...")
-            self._websocket_handler = WebsocketHandler(main_service=self)
-            self._websocket_handler.setup_websocket()
+            self.websocket_handler = WebsocketHandler(main_service=self)
+            self.websocket_handler.setup_websocket()
 
             # Setup login handler and ensure user is logged in
             logger.info("Setting up login handler and ensuring user is logged in...")
@@ -114,14 +110,14 @@ class MainService:
 
             # Setup API client and fetch user profile information
             logger.info("Setting up API client and fetching user profile information...")
-            self._client = MainClient(main_service=self)
-            self._user_info = await self._client.lookup()
+            self.client = MainClient(main_service=self)
+            self._user_info = await self.client.lookup()
 
             self._update_ui()
 
             # Connect websocket handler with API client and user info
-            self._websocket_handler.user_info = self._user_info
-            self._websocket_handler.main_client = self._client
+            self.websocket_handler.user_info = self._user_info
+            self.websocket_handler.main_client = self.client
 
             # Main monitoring loop - keep running until stopped
             self._last_refresh_time = time.time()
@@ -142,7 +138,7 @@ class MainService:
                         await self._page.wait_for_load_state(state="networkidle")
 
                         # Re-fetch user info after refresh
-                        self._user_info = await self._client.lookup()
+                        self._user_info = await self.client.lookup()
                         self._update_ui()
 
                 await asyncio.sleep(delay=0.1)

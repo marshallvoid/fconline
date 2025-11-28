@@ -27,11 +27,13 @@ class ActivityLogTab:
     _MINI_JACKPOT_WINNER_TEXT = "Mini Prize Winner: {nickname} ({value})"
 
     def __init__(self, parent: tk.Misc) -> None:
+        # Widgets
         self._frame = ttk.Frame(master=parent)
 
+        # States
         self._message_tabs: Dict[str, MessageTabInfo] = {}
 
-        self._setup_ui()
+        self._initialize()
 
     @property
     def frame(self) -> ttk.Frame:
@@ -78,7 +80,7 @@ class ActivityLogTab:
             self._mini_prize_label.config(text=self._MINI_JACKPOT_WINNER_TEXT.format(nickname=nickname, value=value))
 
     # ==================== Private Methods ====================
-    def _setup_ui(self) -> None:
+    def _initialize(self) -> None:
         container = ttk.Frame(master=self._frame)
         container.pack(fill="both", expand=True, padx=20, pady=10)
 
@@ -172,7 +174,7 @@ class ActivityLogTab:
         self._message_tabs[tab_name] = MessageTabInfo(
             frame=tab_frame,
             text_widget=text_widget,
-            scrollbar=scrollbar,  # type: ignore
+            scrollbar=scrollbar,
         )
 
     def _extract_message_content(self, message: str) -> str:

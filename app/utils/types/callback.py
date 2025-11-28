@@ -12,10 +12,6 @@ class Callback(Protocol[P, R]):
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
 
 
-class OnAccountWonCallback(Protocol):
-    def __call__(self, username: str) -> None: ...
-
-
 class OnAddMessageCallback(Protocol):
     def __call__(self, tag: "MessageTag", message: str, compact: bool = False) -> None: ...
 
@@ -30,6 +26,10 @@ class OnUpdateCurrentJackpotCallback(Protocol):
 
 class OnUpdateWinnerCallback(Protocol):
     def __call__(self, nickname: str, value: str, is_jackpot: bool = False) -> None: ...
+
+
+class OnAccountWonCallback(Protocol):
+    def __call__(self, username: str) -> None: ...
 
 
 class OnAccountRunCallback(Protocol):

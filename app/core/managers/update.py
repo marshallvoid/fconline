@@ -1,7 +1,6 @@
 import os
 import platform
 import shutil
-import ssl
 import subprocess
 import sys
 import zipfile
@@ -9,51 +8,39 @@ from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 import aiohttp
-import certifi
 from loguru import logger
 from packaging import version
 
+from app.core.managers.platform import platform_mgr
+from app.core.managers.request import request_mgr
 from app.core.managers.version import version_manager
 from app.core.settings import settings
 
 
 class UpdateManager:
-    """Manages application updates from GitHub releases."""
-
-    GITHUB_API_URL = settings.release_url
-    DOWNLOAD_TIMEOUT = 300  # 5 minutes
-
     def __init__(self) -> None:
-        # self._current_version = app.__version__
+        self._release_url = settings.release_url
 
         self._current_version = version_manager.version
         self._latest_version: Optional[str] = None
-        self._download_url: Optional[str] = None
 
-        # Create SSL context with certifi certificates
-        self._ssl_context = ssl.create_default_context(cafile=certifi.where())
+        self._download_timeout = 300  # 5 minutes
+        self._download_url: Optional[str] = None
 
     @property
     def current_version(self) -> str:
-        """Get current application version."""
         return self._current_version
 
     @property
     def latest_version(self) -> Optional[str]:
-        """Get latest available version."""
         return self._latest_version
 
     async def check_for_updates(self) -> Tuple[bool, Optional[str], Optional[str]]:
-        """
-        Check if a new version is available.
+        # Return Tuple of (has_update, latest_version, release_notes)
 
-        Returns:
-            Tuple of (has_update, latest_version, release_notes)
-        """
         try:
-            connector = aiohttp.TCPConnector(ssl=self._ssl_context)
-            async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.get(self.GITHUB_API_URL, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with aiohttp.ClientSession(connector=request_mgr.secure_connector) as session:
+                async with session.get(self._release_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                     if not response.ok:
                         logger.error(f"Failed to check for updates: {response.status}")
                         return False, None, None
@@ -72,14 +59,17 @@ class UpdateManager:
 
                     # Compare versions
                     current = version.parse(self._current_version)
-                    latest = version.parse(tag_name)
+                    latest = version.parse(self._latest_version)
 
                     if latest > current:
                         # Find appropriate asset for current platform
-                        self._download_url = self._get_download_url(data.get("assets", []))
+                        self._download_url = self._get_download_url(assets=data.get("assets", []))
                         if self._download_url:
                             logger.info(f"New version available: {tag_name} (current: {self._current_version})")
                             return True, tag_name, release_notes
+                        else:
+                            logger.warning("No download URL found for current platform")
+                            return False, tag_name, None
 
                     logger.info(f"Already on latest version: {self._current_version}")
                     return False, tag_name, None
@@ -88,10 +78,72 @@ class UpdateManager:
             logger.exception(f"Error checking for updates: {error}")
             return False, None, None
 
+    async def download_update(self, progress_callback: Optional[Callable[[int, int], None]] = None) -> Optional[Path]:
+        if not self._download_url:
+            logger.error("No download URL available")
+            return None
+
+        try:
+            # Create temp directory for download
+            temp_dir = Path.home() / ".fconline_updates"
+            temp_dir.mkdir(exist_ok=True)
+
+            # Extract filename from URL
+            filename = self._download_url.split("/")[-1]
+            download_path = temp_dir / filename
+
+            logger.info(f"Downloading update from: {self._download_url}")
+
+            async with aiohttp.ClientSession(connector=request_mgr.secure_connector) as session:
+                async with session.get(
+                    self._download_url,
+                    timeout=request_mgr.get_timeout(timeout=self._download_timeout),
+                ) as response:
+                    if not response.ok:
+                        logger.error(f"Failed to download update: {response.status}")
+                        return None
+
+                    total_size = int(response.headers.get("content-length", 0))
+                    downloaded_size = 0
+
+                    with open(download_path, "wb") as f:
+                        async for chunk in response.content.iter_chunked(8192):
+                            f.write(chunk)
+                            downloaded_size += len(chunk)
+
+                            if progress_callback and total_size > 0:
+                                progress_callback(downloaded_size, total_size)
+
+            logger.success(f"Update downloaded to: {download_path}")
+            return download_path
+
+        except Exception as error:
+            logger.exception(f"Error downloading update: {error}")
+            return None
+
+    def install_update(self, download_path: Path) -> bool:
+        try:
+            system = platform.system().lower()
+
+            if platform_mgr.is_windows:
+                return self._install_windows(download_path)
+
+            if platform_mgr.is_macos:
+                return self._install_macos(download_path)
+
+            if platform_mgr.is_linux:
+                return self._install_linux(download_path)
+
+            logger.error(f"Unsupported platform: {system}")
+            return False
+
+        except Exception as error:
+            logger.exception(f"Error installing update: {error}")
+            return False
+
     def _get_download_url(self, assets: list) -> Optional[str]:
-        """Get download URL for current platform."""
-        system = platform.system().lower()
-        machine = platform.machine().lower()
+        system = platform_mgr.platform
+        machine = platform_mgr.machine
 
         # Define platform-specific patterns
         patterns = {
@@ -130,87 +182,7 @@ class UpdateManager:
         logger.warning(f"No suitable asset found for {system} {machine}")
         return None
 
-    async def download_update(self, progress_callback: Optional[Callable[[int, int], None]] = None) -> Optional[Path]:
-        """
-        Download the update file.
-
-        Args:
-            progress_callback: Optional callback for progress updates (current, total)
-
-        Returns:
-            Path to downloaded file or None if failed
-        """
-        if not self._download_url:
-            logger.error("No download URL available")
-            return None
-
-        try:
-            # Create temp directory for download
-            temp_dir = Path.home() / ".fconline_updates"
-            temp_dir.mkdir(exist_ok=True)
-
-            # Extract filename from URL
-            filename = self._download_url.split("/")[-1]
-            download_path = temp_dir / filename
-
-            logger.info(f"Downloading update from: {self._download_url}")
-
-            connector = aiohttp.TCPConnector(ssl=self._ssl_context)
-            async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.get(
-                    self._download_url, timeout=aiohttp.ClientTimeout(total=self.DOWNLOAD_TIMEOUT)
-                ) as response:
-                    if not response.ok:
-                        logger.error(f"Failed to download update: {response.status}")
-                        return None
-
-                    total_size = int(response.headers.get("content-length", 0))
-                    downloaded_size = 0
-
-                    with open(download_path, "wb") as f:
-                        async for chunk in response.content.iter_chunked(8192):
-                            f.write(chunk)
-                            downloaded_size += len(chunk)
-
-                            if progress_callback and total_size > 0:
-                                progress_callback(downloaded_size, total_size)
-
-            logger.success(f"Update downloaded to: {download_path}")
-            return download_path
-
-        except Exception as error:
-            logger.exception(f"Error downloading update: {error}")
-            return None
-
-    def install_update(self, download_path: Path) -> bool:
-        """
-        Install the downloaded update and restart the application.
-
-        Args:
-            download_path: Path to downloaded update file
-
-        Returns:
-            True if installation initiated successfully
-        """
-        try:
-            system = platform.system().lower()
-
-            if system == "windows":
-                return self._install_windows(download_path)
-            elif system == "darwin":
-                return self._install_macos(download_path)
-            elif system == "linux":
-                return self._install_linux(download_path)
-            else:
-                logger.error(f"Unsupported platform: {system}")
-                return False
-
-        except Exception as error:
-            logger.exception(f"Error installing update: {error}")
-            return False
-
     def _install_windows(self, download_path: Path) -> bool:
-        """Install update on Windows."""
         try:
             if download_path.suffix == ".exe":
                 # Run installer
@@ -245,7 +217,6 @@ class UpdateManager:
             return False
 
     def _install_macos(self, download_path: Path) -> bool:
-        """Install update on macOS."""
         try:
             if download_path.suffix == ".dmg":
                 # Mount DMG and copy app
@@ -280,7 +251,6 @@ class UpdateManager:
             return False
 
     def _install_linux(self, download_path: Path) -> bool:
-        """Install update on Linux."""
         try:
             # Extract archive
             extract_dir = download_path.parent / "extract"

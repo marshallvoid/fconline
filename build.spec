@@ -23,6 +23,11 @@ a = Analysis(
 
         # Networking and automation
         'aiohttp',
+        'apprise',
+        'certifi',
+        'markdown2',
+        'packaging',
+        'tkhtmlview',
         'loguru',
         'pydantic',
         'cryptography',

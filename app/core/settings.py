@@ -13,7 +13,7 @@ from pydantic_settings import (
 
 def get_build_config_values() -> Dict[str, Any]:
     try:
-        from app.core import build_config
+        from app.core import build_config  # type: ignore[attr-defined]
 
         # Dynamically get all UPPERCASE attributes from build_config
         config_values = {}
@@ -54,21 +54,19 @@ class Settings(BaseSettings):
         nested_model_default_partial_update=False,
     )
 
-    # Application settings
-    program_name: str = "FC Online Automation Tool"
-    secret_key: str = "secret_key"
-    debug: bool = False
+    # Application configuration
+    program_name: str = Field(default="FC Online Automation Tool", description="Application name")
+    secret_key: str = Field(default="secret_key", description="Secret key for authentication")
+    debug: bool = Field(default=False, description="Debug mode")
 
-    # Internal API settings
-    internal_api_url: str = "internal_api_url"
-
-    # Github API settings
-    release_url: str = "github_api_url"
+    # Github API configuration
+    release_url: str = Field(description="GitHub API URL for checking releases")
+    gist_url: str = Field(description="GitHub Gist URL for application configuration and license validation")
 
     # Discord configuration
-    discord: DiscordConfig = Field(default_factory=DiscordConfig)
+    discord: DiscordConfig = Field(default_factory=DiscordConfig, description="Discord configuration")
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """Initialize settings, prioritizing build_config.py over .env file."""
         # Get build config values (production) or empty dict (development)
         build_values = get_build_config_values()

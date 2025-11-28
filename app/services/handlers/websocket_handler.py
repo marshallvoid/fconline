@@ -84,7 +84,7 @@ class WebsocketHandler:
         self._main_client = new_main_client
 
     def setup_websocket(self) -> None:
-        logger.info(f"Monitoring WebSocket on {self._page.url}")
+        logger.info(f"Monitoring WebSocket on {self._page.url}")  # type: ignore[union-attr]
 
         def _on_websocket(websocket: WebSocket) -> None:
             # Only process websocket events when logged in
@@ -111,13 +111,13 @@ class WebsocketHandler:
 
             def _on_close(ws: WebSocket) -> None:
                 logger.info(f"WebSocket closed: {ws.url}")
-                run_in_thread(coro_func=self._page.reload)
+                run_in_thread(coro_func=self._page.reload)  # type: ignore[union-attr]
 
             websocket.on("framereceived", _on_framereceived)
             websocket.on("framesent", _on_framesent)
             websocket.on("close", _on_close)
 
-        self._page.on("websocket", _on_websocket)  # type: ignore
+        self._page.on("websocket", _on_websocket)  # type: ignore[union-attr]
 
     async def _parse_socket_frame(self, frame: str) -> Optional[Tuple[str, int | str, str]]:
         # Extract the JSON payload from socket.io message format

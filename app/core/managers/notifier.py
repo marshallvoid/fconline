@@ -21,9 +21,9 @@ class NotifierManager:
         self.discord_fco_webhook_id = settings.discord.webhooks["fco_reward"]["id"]
         self.discord_fco_webhook_token = settings.discord.webhooks["fco_reward"]["token"]
 
-        self.appriser = self._setup()
+        self.appriser = self._initialize()
 
-    def _setup(self) -> apprise.Apprise:
+    def _initialize(self) -> apprise.Apprise:
         appriser = apprise.Apprise()
 
         appriser.add(

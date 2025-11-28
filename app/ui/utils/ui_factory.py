@@ -220,7 +220,7 @@ class UIFactory:
         elif widget_type == "combobox":
             widget = UIFactory.create_combobox(parent=frame, **widget_kwargs)
         elif widget_type == "text":
-            widget, _ = UIFactory.create_text_widget(parent=frame, with_scrollbar=False, **widget_kwargs)
+            widget, _ = UIFactory.create_text_widget(parent=frame, with_scrollbar=False, **widget_kwargs)  # type: ignore[assignment]
         else:
             msg = f"Unknown widget type: {widget_type}"
             raise ValueError(msg)
@@ -263,3 +263,14 @@ class UIFactory:
             button_widgets.append(btn)
 
         return frame, button_widgets
+
+    @staticmethod
+    def show_blocking_error(root: tk.Tk, message: str) -> None:
+        """Show blocking error dialog and close application.
+
+        Args:
+            root: Root window to close
+            message: Error message to display
+        """
+        tk.messagebox.showerror("Access Denied", message)
+        root.destroy()

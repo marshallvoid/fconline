@@ -31,7 +31,7 @@ class UpdateDialog(tk.Toplevel):
         parent: tk.Tk,
         latest_version: Optional[str] = None,
         release_notes: Optional[str] = None,
-    ):
+    ) -> None:
         super().__init__(parent)
         self.title("Software Update")
         self.geometry("700x600")  # Increased size for better reading
@@ -54,7 +54,7 @@ class UpdateDialog(tk.Toplevel):
             self._state.latest_version = latest_version
             self._state.release_notes = release_notes
 
-        self._setup_ui()
+        self._initialize()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         # Start checking only if data not provided
@@ -64,7 +64,7 @@ class UpdateDialog(tk.Toplevel):
             # Update UI with provided data
             self._on_check_complete(True, latest_version, release_notes)
 
-    def _setup_ui(self) -> None:
+    def _initialize(self) -> None:
         main_frame = ttk.Frame(self, padding="20")
         main_frame.pack(fill="both", expand=True)
 

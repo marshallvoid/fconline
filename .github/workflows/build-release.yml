@@ -104,8 +104,8 @@ jobs:
          PROGRAM_NAME: 'FC Online Automation Tool'
          SECRET_KEY: ${{ secrets.SECRET_KEY }}
          DEBUG: 'False' # Set to False for production builds
-         INTERNAL_API_URL: ${{ secrets.INTERNAL_API_URL }}
          RELEASE_URL: ${{ secrets.RELEASE_URL }}
+         GIST_URL: ${{ secrets.GIST_URL }}
          DISCORD__ROLES__DEVELOPER: ${{ secrets.DISCORD__ROLES__DEVELOPER }}
          DISCORD__WEBHOOKS__DEVELOP__ID: ${{ secrets.DISCORD__WEBHOOKS__DEVELOP__ID }}
          DISCORD__WEBHOOKS__DEVELOP__TOKEN: ${{ secrets.DISCORD__WEBHOOKS__DEVELOP__TOKEN }}
@@ -153,8 +153,8 @@ jobs:
               PROGRAM_NAME = "${{ env.PROGRAM_NAME }}"
               SECRET_KEY = "${{ secrets.SECRET_KEY }}"
               DEBUG = ${{ env.DEBUG }}
-              INTERNAL_API_URL = "${{ env.INTERNAL_API_URL }}"
               RELEASE_URL = "${{ secrets.RELEASE_URL }}"
+              GIST_URL = "${{ secrets.GIST_URL }}"
 
               # Discord configuration with nested structure
               DISCORD = {

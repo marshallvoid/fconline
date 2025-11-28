@@ -1,0 +1,13 @@
+{
+  "is_active": true,
+  "message": "Application is under maintenance. Please try again later.",
+  "valid_licenses": [
+    "FCOL-XXXX-XXXX-XXXX-XXXX",
+    "FCOL-YYYY-YYYY-YYYY-YYYY"
+  ],
+  "blocked_licenses": [
+    "FCOL-ZZZZ-ZZZZ-ZZZZ-ZZZZ"
+  ],
+  "blocked_message": "Your license has been revoked. Please contact support.",
+  "invalid_license_message": "Invalid license key. Please contact support for a valid license."
+}

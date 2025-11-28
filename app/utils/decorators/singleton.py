@@ -8,7 +8,7 @@ def singleton(class_: Type[T]) -> Callable[..., T]:
 
     def getinstance(*args: Any, **kwargs: Any) -> T:
         if class_ not in instances:
-            instances[class_] = class_(*args, **kwargs)  # type: ignore[arg-type]
+            instances[class_] = class_(*args, **kwargs)
         return instances[class_]
 
     return getinstance

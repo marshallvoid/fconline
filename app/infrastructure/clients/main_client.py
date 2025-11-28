@@ -5,7 +5,9 @@ import aiohttp
 from loguru import logger
 
 from app.core.managers.request import request_mgr
+from app.core.mixins.async_init import AsyncMixin
 from app.schemas.enums.message_tag import MessageTag
+from app.schemas.enums.payment_type import PaymentType
 from app.schemas.spin_response import SpinResponse
 from app.schemas.user_response import UserReponse
 
@@ -13,11 +15,11 @@ if TYPE_CHECKING:
     from app.services.main_service import MainService
 
 
-class MainClient:
-    def __init__(self, main_service: "MainService") -> None:
+class MainClient(AsyncMixin):
+    async def __ainit__(self, main_service: "MainService") -> None:
         # Browser configs
-        self._cookies = request_mgr.get_cookies(page=main_service._page)
-        self._headers = request_mgr.get_headers(page=main_service._page, event_config=main_service._event_config)
+        self._cookies = await request_mgr.get_cookies(page=main_service._page)
+        self._headers = await request_mgr.get_headers(page=main_service._page, event_config=main_service._event_config)
 
         # Callbacks
         self._on_add_message = main_service._on_add_message
@@ -28,11 +30,7 @@ class MainClient:
 
     @property
     def session_props(self) -> Dict[str, Any]:
-        return {
-            "cookies": self._cookies,
-            "headers": self._headers,
-            "connector": request_mgr.connector(),
-        }
+        return {"cookies": self._cookies, "headers": self._headers, "connector": request_mgr.insecure_connector}
 
     async def lookup(self, silent: bool = False) -> Optional[UserReponse]:
         try:
@@ -63,10 +61,15 @@ class MainClient:
             logger.exception(f"Failed to lookup user info: {error}")
             return None
 
-    async def spin(self, spin_type: int, payment_type: int, params: Dict[str, Any] = {}) -> Optional[SpinResponse]:
+    async def spin(
+        self,
+        spin_type: int,
+        payment_type: PaymentType,
+        params: Dict[str, Any] = {},
+    ) -> Optional[SpinResponse]:
         try:
             async with aiohttp.ClientSession(**self.session_props) as session:
-                payload = {"spin_type": spin_type, "payment_type": payment_type, **params}
+                payload = {"spin_type": spin_type, "payment_type": payment_type.value, **params}
 
                 spin_response = await self._perform_spin(session=session, payload=payload)
                 if not spin_response:

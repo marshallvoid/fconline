@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
-from typing import List
+from typing import Callable, List
 
 from app.schemas.configs import Notification
 from app.ui.utils.ui_factory import UIFactory
@@ -13,11 +13,14 @@ class NotificationDialog(tk.Toplevel):
         self,
         parent: tk.Misc,
         notifications: List[Notification],
-        on_clear_all: callable,
+        on_clear_all: Callable[..., None],
     ) -> None:
         super().__init__(master=parent)
 
+        # Configs
         self._notifications = notifications
+
+        # Callbacks
         self._on_clear_all = on_clear_all
 
         self.title(string="Notifications")
@@ -26,7 +29,7 @@ class NotificationDialog(tk.Toplevel):
 
         # Make menu floating (always on top)
         self.attributes("-topmost", True)
-        self.transient(master=parent)  # type: ignore
+        self.transient(master=parent)  # type: ignore[call-overload]
 
         # Center the menu window
         self.update_idletasks()
@@ -35,7 +38,7 @@ class NotificationDialog(tk.Toplevel):
 
         # Configure menu appearance
         self._configure_appearance()
-        self._setup_ui()
+        self._initialize()
 
     def _configure_appearance(self) -> None:
         self.configure(bg="#1f2937")
@@ -43,7 +46,7 @@ class NotificationDialog(tk.Toplevel):
         self.option_add(pattern="*TLabel*background", value="#1f2937")
         self.option_add(pattern="*TButton*background", value="#374151")
 
-    def _setup_ui(self) -> None:
+    def _initialize(self) -> None:
         main_frame = ttk.Frame(master=self, padding=20)
         main_frame.pack(fill="both", expand=True)
 

@@ -2,6 +2,7 @@ import ssl
 from typing import Dict
 
 import aiohttp
+import certifi
 from browser_use.browser.types import Page
 from loguru import logger
 
@@ -11,11 +12,20 @@ from app.utils.decorators.singleton import singleton
 
 @singleton
 class RequestManager:
-    def connector(self) -> aiohttp.TCPConnector:
+    @property
+    def secure_connector(self) -> aiohttp.TCPConnector:
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        return aiohttp.TCPConnector(ssl=ssl_context)
+
+    @property
+    def insecure_connector(self) -> aiohttp.TCPConnector:
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
         return aiohttp.TCPConnector(ssl=ssl_context)
+
+    def get_timeout(self, timeout: int) -> aiohttp.ClientTimeout:
+        return aiohttp.ClientTimeout(total=timeout)
 
     async def get_cookies(self, page: Page) -> Dict[str, str]:
         try:
