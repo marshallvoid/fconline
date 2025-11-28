@@ -913,3 +913,6 @@ temporary/
 temp/
 /storage/
 /tmp/
+
+# Build-time generated config
+app/core/build_config.py

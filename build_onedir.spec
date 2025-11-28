@@ -9,7 +9,6 @@ a = Analysis(
     binaries=[],
     datas=[
         ('assets', 'assets') if os.path.exists('assets') else None,
-        ('.env', '.') if os.path.exists('.env') else None,
     ],
     hiddenimports=[
         # GUI and theming
