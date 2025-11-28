@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Optional, TextIO, cast
 from loguru import logger
 
 from app.core.managers.file import file_mgr
+from app.core.managers.notifier import notifier_mgr
 
 if TYPE_CHECKING:
     from loguru import Record
@@ -85,12 +86,12 @@ def init_logger(debug: Optional[bool] = False) -> None:
                 "backtrace": True,  # Include full traceback for exceptions
             },
             # Discord notification handler for errors
-            # {
-            #     "sink": notifier_mgr.discord_error_notifier,
-            #     "level": "ERROR",
-            #     "filter": lambda record: not record["extra"].get("apprise", False) and is_loggable_error(record=record),
-            #     "backtrace": True,  # Include full traceback for exceptions
-            # },
+            {
+                "sink": notifier_mgr.discord_error_notifier,
+                "level": "ERROR",
+                "filter": lambda record: not record["extra"].get("apprise", False) and is_loggable_error(record=record),
+                "backtrace": True,  # Include full traceback for exceptions
+            },
             # File handler for errors and exceptions with rotation
             {
                 "sink": os.path.join(file_mgr.get_configs_directory(), "app_error.log"),
