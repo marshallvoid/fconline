@@ -12,11 +12,11 @@ from app.utils.concurrency import run_in_thread
 
 
 class UpdateHandler(BaseHandler):
-    def check(self, is_auto_check: bool = True) -> None:
+    def check(self, license_key: str, is_auto_check: bool = True) -> None:
         async def _check() -> None:
             try:
                 # Check license first
-                license_valid = await self._check_license_key(is_auto_check=is_auto_check)
+                license_valid = await self._check_license_key(license_key=license_key, is_auto_check=is_auto_check)
                 if not license_valid:
                     return
 
@@ -28,10 +28,8 @@ class UpdateHandler(BaseHandler):
 
         run_in_thread(coro_func=_check)
 
-    async def _check_license_key(self, is_auto_check: bool) -> bool:
+    async def _check_license_key(self, license_key: str, is_auto_check: bool) -> bool:
         logger.info("Starting license key validation...")
-        # Get license key from config
-        license_key = self._local_configs.license_key
         logger.debug(f"License key from config: {'<set>' if license_key else '<empty>'}")
 
         # If no license key, prompt user to enter one
@@ -82,6 +80,12 @@ class UpdateHandler(BaseHandler):
             return False
 
         logger.success(f"License key validated successfully: {license_key[:8]}...")
+
+        # Save to config
+        if self._local_configs.license_key != license_key:
+            self._local_configs.license_key = license_key.strip()
+            local_config_mgr.save_local_configs(configs=self._local_configs)
+
         return True
 
     async def _check_latest_update(self) -> None:
@@ -137,10 +141,5 @@ class UpdateHandler(BaseHandler):
             # Valid input - save and validate
             break
 
-        # Save to config
-        if self._local_configs.license_key != license_key:
-            self._local_configs.license_key = license_key.strip()
-            local_config_mgr.save_local_configs(configs=self._local_configs)
-
         # Retry startup check
-        self._root.after(100, lambda: self.check(is_auto_check=is_auto_check))
+        self._root.after(100, lambda: self.check(license_key=license_key, is_auto_check=is_auto_check))

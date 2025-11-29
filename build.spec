@@ -8,7 +8,7 @@ block_cipher = None
 apprise_datas, apprise_binaries, apprise_hiddenimports = collect_all('apprise')
 
 a = Analysis(
-    ['app/main/ui/app.py'],
+    ['app/main/ui/native.py'],
     pathex=[os.getcwd()],
     binaries=apprise_binaries,
     datas=[

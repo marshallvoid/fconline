@@ -88,7 +88,7 @@ class MainWindow:
 
         # Check for updates silently after 2 seconds
         logger.info("Scheduling license and update check in 2 seconds...")
-        self._root.after(2000, self._update_handler.check)
+        self._root.after(2000, lambda: self._update_handler.check(license_key=self._local_configs.license_key))
 
     def _initialize_ui_components(self) -> None:
         logger.debug("Setting up window icon...")

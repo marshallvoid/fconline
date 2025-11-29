@@ -1,7 +1,7 @@
 [project]
 name = "app"
 version = "1.0.0"
-description = "FC Online Automation Tool"
+description = "FC Online Automation"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -22,7 +22,7 @@ dependencies = [
     "shortuuid>=1.0.13",
     "sv-ttk>=2.6.1",
     "tkhtmlview>=0.3.1",
-    "typer>=0.16.1",
+    "typer>=0.15.3,<0.16",
 ]
 
 [dependency-groups]
@@ -47,8 +47,9 @@ build = [
     "pyinstaller>=6.0.0",
 ]
 
+
 [project.scripts]
-fco = "app.main.ui.app:main"
+fco = "app.main.cli.app:run_cli"
 
 [build-system]
 requires = ["hatchling"]
