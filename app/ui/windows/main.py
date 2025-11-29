@@ -9,21 +9,23 @@ import sv_ttk
 from dishka import AsyncContainer
 from loguru import logger
 
-from app.core.managers.config import config_mgr
 from app.core.managers.file import file_mgr
+from app.core.managers.local_config import local_config_mgr
 from app.core.managers.platform import platform_mgr
 from app.core.settings import Settings
+from app.infrastructure.clients.github import GithubClient
+from app.schemas.app_config import AppConfigs, EventConfigs
+from app.schemas.local_config import LocalConfigs
 from app.services.main_service import MainService
-from app.ui.components.dialogs.update_dialog import UpdateDialog
+from app.ui.components.dialogs.update import UpdateDialog
 from app.ui.components.notification_icon import NotificationIcon
-from app.ui.components.tabs.accounts_tab import AccountsTab
-from app.ui.components.tabs.activity_log_tab import ActivityLogTab
-from app.ui.handlers.account_handler import AccountHandler
-from app.ui.handlers.update_handler import UpdateHandler
+from app.ui.components.tabs.accounts import AccountsTab
+from app.ui.components.tabs.activity_log import ActivityLogTab
+from app.ui.handlers.account import AccountHandler
+from app.ui.handlers.update import UpdateHandler
 from app.ui.utils.ui_factory import UIFactory
 from app.ui.utils.ui_helpers import UIHelpers
 from app.utils.concurrency import run_many_in_threads
-from app.utils.constants import EVENT_CONFIGS_MAP
 from app.utils.helpers import get_window_position
 
 TaskList = Sequence[tuple[Callable[..., Awaitable[Any]], Sequence[Any], Mapping[str, Any]]]
@@ -31,52 +33,95 @@ TaskList = Sequence[tuple[Callable[..., Awaitable[Any]], Sequence[Any], Mapping[
 
 class MainWindow:
     def __init__(self, container: AsyncContainer, settings: Settings) -> None:
+        logger.info("Initializing MainWindow...")
+
         self._container = container
         self._settings = settings
 
         # Initialize window
+        logger.info("Creating root window...")
         self._root = tk.Tk()
         self._root.title(string=self._settings.program_name)
         self._root.resizable(width=True, height=True)
         self._root.minsize(width=900, height=600)
+        logger.debug(f"Window title: {self._settings.program_name}")
 
-        # Widgets
-        self._accounts_tab: Optional[AccountsTab] = None
-        self._activity_log_tab: Optional[ActivityLogTab] = None
+        # Clients
+        self._github_client = GithubClient()
 
-        # Configs
-        self._configs = config_mgr.load_configs()
-        self._selected_event = self._configs.event
+        # These will be set in initialize()
+        self._app_configs: Optional[AppConfigs] = None
+        self._event_configs: Optional[Dict[str, EventConfigs]] = None
+        self._local_configs: Optional[LocalConfigs] = None
+        self._selected_event: Optional[str] = None
         self._running_services: Dict[str, MainService] = {}
 
+    async def initialize_configurations(self) -> None:
+        # App configuration
+        logger.info("Loading app configuration")
+        self._configs = await self._github_client.load_app_configs()
+        self._app_configs = self._configs.app_configs
+        self._event_configs = self._configs.event_configs
+        logger.info("Loaded app configuration successfully")
+
+        # Local configuration
+        logger.info("Loading local configuration...")
+        self._local_configs = local_config_mgr.load_local_configs()
+        self._local_configs.event = self._local_configs.event or list(self._event_configs.keys())[0]
+        self._selected_event = self._local_configs.event
+        logger.debug(f"Loaded {len(self._local_configs.accounts)} accounts, selected event: {self._selected_event}")
+
+    def initialize_ui(self) -> None:
         # Handlers
-        self._base_params_handler = {"settings": self._settings, "root": self._root, "configs": self._configs}
+        logger.info("Initializing handlers...")
+        self._base_params_handler = {"root": self._root, "configs": self._configs, "local_configs": self._local_configs}
         self._update_handler = UpdateHandler(**self._base_params_handler)  # type: ignore[arg-type]
         self._account_handler = AccountHandler(running_services=self._running_services, **self._base_params_handler)
+        logger.success("Handlers initialized successfully")
 
         # Setup UI
-        self._initialize()
+        logger.info("Setting up UI components...")
+        self._initialize_ui_components()
+        logger.success("UI components initialized successfully")
 
         # Check for updates silently after 2 seconds
+        logger.info("Scheduling license and update check in 2 seconds...")
         self._root.after(2000, self._update_handler.check)
 
-    def _initialize(self) -> None:
+    def _initialize_ui_components(self) -> None:
+        logger.debug("Setting up window icon...")
         self._setup_window_icon()
-        self._setup_menu_bar()
-        self._setup_notification_icon()
-        self._setup_event_selection()
-        self._setup_control_buttons()
-        self._setup_tabs()
-        self._adjust_window_size()
 
+        logger.debug("Setting up menu bar...")
+        self._setup_menu_bar()
+
+        logger.debug("Setting up notification icon...")
+        self._setup_notification_icon()
+
+        logger.debug("Setting up event selection...")
+        self._setup_event_selection()
+
+        logger.debug("Setting up control buttons...")
+        self._setup_control_buttons()
+
+        logger.debug("Setting up tabs...")
+        self._setup_tabs()
+
+        logger.debug("Adjusting window size...")
+        self._root.update_idletasks()
+        _, _, width, height, x, y = get_window_position(child_frame=self._root)
+        self._root.geometry(f"{width}x{height}+{x}+{y}")
+
+        logger.info("Connecting handlers to UI widgets...")
         self._account_handler.update_widgets(
+            notification_icon=self._notification_icon,
             run_all_accounts_btn=self._run_all_accounts_btn,
             stop_all_accounts_btn=self._stop_all_accounts_btn,
             refresh_all_pages_btn=self._refresh_all_pages_btn,
-            notification_icon=self._notification_icon,
-            accounts_tab=self._accounts_tab,  # type: ignore[arg-type]
-            activity_log_tab=self._activity_log_tab,  # type: ignore[arg-type]
+            accounts_tab=self._accounts_tab,
+            activity_log_tab=self._activity_log_tab,
         )
+        logger.success("Handler widgets connected successfully")
 
     def _setup_window_icon(self) -> None:
         # Set window icon
@@ -112,11 +157,11 @@ class MainWindow:
         spacer = ttk.Frame(master=notification_frame)
         spacer.pack(side="left", fill="x", expand=True)
 
-        self._notification_icon = NotificationIcon(parent=notification_frame, configs=self._configs)
+        self._notification_icon = NotificationIcon(parent=notification_frame, local_configs=self._local_configs)
         self._notification_icon.frame.pack(side="right")
 
     def _setup_event_selection(self) -> None:
-        event_frame = UIFactory.create_label_frame(parent=self._root, text="Select Event:")
+        event_frame = ttk.LabelFrame(master=self._root, text="Select Event:", padding=10)
         event_frame.pack(fill="x", padx=10, pady=(10, 5))
 
         # Event selection combobox
@@ -124,16 +169,16 @@ class MainWindow:
         event_combobox = UIFactory.create_combobox(
             parent=event_frame,
             textvariable=event_var,
-            values=list(EVENT_CONFIGS_MAP.keys()),
+            values=list(self._event_configs.keys()),
             width=30,
         )
 
         def on_combobox_select_changed() -> None:
             self._selected_event = event_var.get()
-            self._accounts_tab.selected_event = self._selected_event  # type: ignore[union-attr]
+            self._accounts_tab.selected_event = self._selected_event
 
-            self._configs.event = self._selected_event
-            config_mgr.save_configs(configs=self._configs)
+            self._local_configs.event = self._selected_event
+            local_config_mgr.save_local_configs(configs=self._local_configs)
 
             event_combobox.selection_clear()
 
@@ -142,10 +187,10 @@ class MainWindow:
 
         # Auto refresh checkbox
         def on_auto_refresh_changed() -> None:
-            self._configs.auto_refresh = auto_refresh_var.get()
-            config_mgr.save_configs(configs=self._configs)
+            self._local_configs.auto_refresh = auto_refresh_var.get()
+            local_config_mgr.save_local_configs(configs=self._local_configs)
 
-        auto_refresh_var = tk.BooleanVar(value=self._configs.auto_refresh)
+        auto_refresh_var = tk.BooleanVar(value=self._local_configs.auto_refresh)
         auto_refresh_checkbox = ttk.Checkbutton(
             master=event_frame,
             text="Auto Refresh after 1 hour",
@@ -155,7 +200,7 @@ class MainWindow:
         auto_refresh_checkbox.pack(anchor="w")
 
     def _setup_control_buttons(self) -> None:
-        buttons_frame = UIFactory.create_label_frame(parent=self._root, text="Actions")
+        buttons_frame = ttk.LabelFrame(master=self._root, text="Actions", padding=10)
         buttons_frame.pack(fill="x", padx=10, pady=(0, 5))
 
         button_frame, buttons = UIFactory.create_button_group(
@@ -196,7 +241,8 @@ class MainWindow:
         # Accounts tab
         self._accounts_tab = AccountsTab(
             parent=notebook,
-            configs=self._configs,
+            event_configs=self._event_configs,
+            local_configs=self._local_configs,
             selected_event=self._selected_event,
             on_account_run=self._account_handler.run_account,
             on_account_stop=self._account_handler.stop_account,
@@ -211,19 +257,10 @@ class MainWindow:
         # Setup focus management using helper
         UIHelpers.setup_focus_management(root_or_frame=self._root, notebook=notebook)
 
-    def _adjust_window_size(self) -> None:
-        self._root.update_idletasks()
-        _, _, width, height, x, y = get_window_position(child_frame=self._root)
-        self._root.geometry(f"{width}x{height}+{x}+{y}")
-
     def run(self) -> None:
-        logger.info(f"Running {self._settings.program_name}")
-
         self._root.protocol(name="WM_DELETE_WINDOW", func=self._on_close)
-        self._setup_theme()
-        self._root.mainloop()
 
-    def _setup_theme(self) -> None:
+        # Setup theme
         sv_ttk.set_theme(theme=darkdetect.theme() or "dark")
 
         with contextlib.suppress(Exception):
@@ -258,6 +295,7 @@ class MainWindow:
 
             cleaned_layout = strip_focus(elements=layout)
             style.layout(style="TNotebook.Tab", layoutspec=cleaned_layout)
+        self._root.mainloop()
 
     def _on_close(self) -> None:
         if self._running_services:
@@ -270,4 +308,5 @@ class MainWindow:
 
             threading.Thread(target=close_tools_concurrently, daemon=True).start()
 
+        local_config_mgr.save_local_configs(configs=self._local_configs)
         self._root.destroy()

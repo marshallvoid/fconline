@@ -11,7 +11,7 @@ from loguru import logger
 from playwright.async_api import WebSocket  # noqa: DEP003
 
 from app.core.managers.notifier import notifier_mgr
-from app.infrastructure.clients.main_client import MainClient
+from app.infrastructure.clients.main import MainClient
 from app.schemas.enums.message_tag import MessageTag
 from app.schemas.user_response import UserReponse
 from app.utils.concurrency import run_in_thread
@@ -39,7 +39,7 @@ class WebsocketHandler:
         self._on_account_won = main_service._on_account_won
         self._on_add_message = main_service._on_add_message
         self._on_add_notification = main_service._on_add_notification
-        self._on_update_current_jp = main_service._on_update_current_jp
+        self._on_update_current_jackpot = main_service._on_update_current_jackpot
         self._on_update_prize_winner = main_service._on_update_prize_winner
 
         # Internal state
@@ -221,7 +221,7 @@ class WebsocketHandler:
                             self._sjp_last_spin_time = current_time
                             logger.info(f"Created spin task for {self._account.username} at jackpot {new_value:,}")
 
-                    self._on_update_current_jp(value=new_value)
+                    self._on_update_current_jackpot(value=new_value)
 
                 case "jackpot" | "mini_jackpot":
                     # Stop auto spin when any jackpot is won by anyone

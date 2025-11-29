@@ -1,16 +1,16 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
-from typing import Any, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol
 
-from app.schemas.configs import Account
+from app.schemas.app_config import EventConfigs
 from app.schemas.enums.payment_type import PaymentType
+from app.schemas.local_config import Account
 from app.ui.utils.ui_factory import UIFactory
 from app.ui.utils.ui_helpers import UIHelpers
-from app.utils.constants import EVENT_CONFIGS_MAP
 from app.utils.helpers import get_window_position
 
 
-class OnSaveCallback(Protocol):
+class _OnSaveCallback(Protocol):
     def __call__(self, account: Account, is_new: bool) -> None: ...
 
 
@@ -18,9 +18,10 @@ class UpsertAccountDialog:
     def __init__(
         self,
         parent: tk.Misc,
+        event_configs: Dict[str, EventConfigs],
         selected_event: str,
         existing_accounts: List[Account],
-        on_save: OnSaveCallback,
+        on_save: _OnSaveCallback,
         account: Optional[Account] = None,
     ) -> None:
         # Widgets
@@ -28,6 +29,7 @@ class UpsertAccountDialog:
         self._dialog: Optional[tk.Toplevel] = None
 
         # Configs
+        self._event_configs = event_configs
         self._selected_event = selected_event
         self._existing_accounts = existing_accounts
         self._account = account
@@ -162,12 +164,15 @@ class UpsertAccountDialog:
             payment_prefix = PaymentType.from_int(payment_type).text
             return [
                 f"{i}. {spin_type.replace('Spin', f'{payment_prefix} Spin')}"
-                for i, spin_type in enumerate(EVENT_CONFIGS_MAP[self._selected_event].spin_types, start=1)
+                for i, spin_type in enumerate(self._event_configs[self._selected_event].spin_types, start=1)
             ]
 
         spin_type_options = get_spin_type_options(self._payment_type_var.get())
         initial_spin_display = (
-            (f"{self._account.spin_type}. {self._account.spin_type_name(selected_event=self._selected_event)}")
+            (
+                f"{self._account.spin_type}. "
+                f"{self._account.spin_type_name(event_configs=self._event_configs, selected_event=self._selected_event)}"  # noqa: E501
+            )
             if self._account
             else spin_type_options[0]
         )

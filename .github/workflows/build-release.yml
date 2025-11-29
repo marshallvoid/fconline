@@ -176,14 +176,14 @@ jobs:
               EOF
 
          - name: Build executable
-           run: uv run pyinstaller --clean build_onedir.spec
+           run: uv run pyinstaller --clean build.spec
 
          - name: Create metadata.json
            shell: bash
            run: |
               VERSION="${{ needs.version.outputs.next_tag }}"
               VERSION=${VERSION#v}
-              echo "{\"version\": \"$VERSION\"}" > dist/FC_Online_Tool/metadata.json
+              echo "{\"version\": \"$VERSION\"}" > dist/FC_Online_Automation/metadata.json
 
          - name: Compile Installer
            run: |
@@ -191,14 +191,14 @@ jobs:
 
          - name: Rename installer with version
            run: |
-              mv dist/FC_Online_Tool_Setup.exe dist/FC_Online_Tool_Setup-${{ needs.version.outputs.next_tag }}.exe
+              mv dist/FC_Online_Automation_Setup.exe dist/FC_Online_Automation_Setup-${{ needs.version.outputs.next_tag }}.exe
 
          - name: Upload artifact
            uses: actions/upload-artifact@v4
            with:
               # Name artifact with version so release job can fetch the correct one
-              name: FC_Online_Tool-${{ needs.version.outputs.next_tag }}
-              path: dist/FC_Online_Tool_Setup-${{ needs.version.outputs.next_tag }}.exe
+              name: FC_Online_Automation-${{ needs.version.outputs.next_tag }}
+              path: dist/FC_Online_Automation_Setup-${{ needs.version.outputs.next_tag }}.exe
               if-no-files-found: error
               retention-days: 7
 
@@ -211,7 +211,7 @@ jobs:
          - name: Download artifact
            uses: actions/download-artifact@v4
            with:
-              name: FC_Online_Tool-${{ needs.version.outputs.next_tag }}
+              name: FC_Online_Automation-${{ needs.version.outputs.next_tag }}
               path: ./dist/
 
          - name: Create Release (auto-create tag if missing)
@@ -219,14 +219,14 @@ jobs:
            with:
               tag_name: ${{ needs.version.outputs.next_tag }} # <- automatically creates tag if it does not exist
               name: 'FC Online Tool ${{ needs.version.outputs.next_tag }}'
-              files: ./dist/FC_Online_Tool_Setup-${{ needs.version.outputs.next_tag }}.exe
+              files: ./dist/FC_Online_Automation_Setup-${{ needs.version.outputs.next_tag }}.exe
               draft: false
               prerelease: false
               body: |
                  ## 🚀 FC Online Automation Tool ${{ needs.version.outputs.next_tag }}
 
                  ### 📦 Download
-                 - **FC_Online_Tool_Setup-${{ needs.version.outputs.next_tag }}.exe** — Windows Installer
+                 - **FC_Online_Automation_Setup-${{ needs.version.outputs.next_tag }}.exe** — Windows Installer
 
                  ### 🔧 Installation
                  1. Download the installer

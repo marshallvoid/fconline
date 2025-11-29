@@ -774,6 +774,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+.licenses
 .env
 .venv
 env/
@@ -916,3 +917,5 @@ temp/
 
 # Build-time generated config
 app/core/build_config.py
+
+metadata.json

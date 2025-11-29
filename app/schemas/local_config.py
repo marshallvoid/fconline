@@ -1,10 +1,10 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
+from app.schemas.app_config import EventConfigs
 from app.schemas.enums.payment_type import PaymentType
-from app.utils.constants import EVENT_CONFIGS_MAP
 
 
 class Notification(BaseModel):
@@ -33,13 +33,13 @@ class Account(BaseModel):
     def available(self) -> bool:
         return not self.has_won and not self.marked_not_run
 
-    def spin_type_name(self, selected_event: str) -> str:
-        base_name = EVENT_CONFIGS_MAP[selected_event].spin_types[self.spin_type - 1]
+    def spin_type_name(self, event_configs: Dict[str, EventConfigs], selected_event: str) -> str:
+        base_name = event_configs[selected_event].spin_types[self.spin_type - 1]
         payment_prefix = "FC" if self.payment_type == PaymentType.FC else "MC"
         return base_name.replace("Spin", f"{payment_prefix} Spin")
 
-    def running_message(self, selected_event: str) -> str:
-        spin_type_name = self.spin_type_name(selected_event)
+    def running_message(self, event_configs: Dict[str, EventConfigs], selected_event: str) -> str:
+        spin_type_name = self.spin_type_name(event_configs=event_configs, selected_event=selected_event)
         message = f"Running account '{self.username}' - Action: '{spin_type_name}' - Target SJP: '{self.target_sjp:,}'"
 
         if self.target_mjp is not None:
@@ -51,9 +51,9 @@ class Account(BaseModel):
         return message
 
 
-class Config(BaseModel):
+class LocalConfigs(BaseModel):
     license_key: str = ""
-    event: str = list(EVENT_CONFIGS_MAP.keys())[0]
+    event: str = ""
     auto_refresh: bool = False
 
     accounts: List[Account] = []

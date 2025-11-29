@@ -9,10 +9,12 @@ MINI_JACKPOT_BILLBOARD_ALIASES = ("mini_jackpot_billboard", "last_mini_jackpot_i
 
 
 class UserDetail(BaseModel):
-    free_spin: Optional[int] = None
-
     nickname: Optional[str] = None
     account_name: Optional[str] = None
+    fc: Optional[int] = None
+    mc: Optional[int] = None
+    free_spin: Optional[int] = None
+    accumulation: Optional[int] = None
 
     @property
     def nickname_norm(self) -> str:

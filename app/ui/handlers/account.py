@@ -3,16 +3,14 @@
 from tkinter import ttk
 from typing import Any, Callable, Dict, Optional
 
-from app.schemas.configs import Account
 from app.schemas.enums.message_tag import MessageTag
+from app.schemas.local_config import Account
 from app.services.main_service import MainService
 from app.ui.components.notification_icon import NotificationIcon
-from app.ui.components.tabs.accounts_tab import AccountsTab
-from app.ui.components.tabs.activity_log_tab import ActivityLogTab
-from app.ui.handlers.base_handler import BaseHandler
-from app.ui.utils.ui_helpers import UIHelpers
+from app.ui.components.tabs.accounts import AccountsTab
+from app.ui.components.tabs.activity_log import ActivityLogTab
+from app.ui.handlers.base import BaseHandler
 from app.utils.concurrency import run_in_thread
-from app.utils.constants import EVENT_CONFIGS_MAP
 
 
 class AccountHandler(BaseHandler):
@@ -24,6 +22,7 @@ class AccountHandler(BaseHandler):
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore[arg-type]
 
+        # States
         self._running_services = running_services
 
         # Widgets
@@ -37,17 +36,17 @@ class AccountHandler(BaseHandler):
     # ==================== Public Methods ====================
     def update_widgets(
         self,
+        notification_icon: NotificationIcon,
         run_all_accounts_btn: ttk.Button,
         stop_all_accounts_btn: ttk.Button,
         refresh_all_pages_btn: ttk.Button,
-        notification_icon: NotificationIcon,
         accounts_tab: AccountsTab,
         activity_log_tab: ActivityLogTab,
     ) -> None:
+        self._notification_icon = notification_icon
         self._run_all_accounts_btn = run_all_accounts_btn
         self._stop_all_accounts_btn = stop_all_accounts_btn
         self._refresh_all_pages_btn = refresh_all_pages_btn
-        self._notification_icon = notification_icon
         self._accounts_tab = accounts_tab
         self._activity_log_tab = activity_log_tab
 
@@ -65,11 +64,11 @@ class AccountHandler(BaseHandler):
         browser_index = len(self._running_services)
         self._accounts_tab.update_browser_position(username=account.username, browser_index=browser_index)
 
-        # Get current selected event from accounts_tab (always up-to-date)
-        selected_event = self._accounts_tab.selected_event
+        # Get current selected event from accounts_tab
+        selected_event = self._local_configs.event
 
         # Log running message
-        message = account.running_message(selected_event=selected_event)
+        message = account.running_message(event_configs=self._event_configs, selected_event=selected_event)
         self._activity_log_tab.add_message(tag=MessageTag.INFO, message=message)
 
         new_service = MainService(
@@ -78,8 +77,8 @@ class AccountHandler(BaseHandler):
             screen_width=self._root.winfo_screenwidth(),
             screen_height=self._root.winfo_screenheight(),
             account=account,
-            auto_refresh=self._configs.auto_refresh,
-            event_config=EVENT_CONFIGS_MAP[selected_event],
+            auto_refresh=self._local_configs.auto_refresh,
+            event_config=self._event_configs[selected_event],
             **self._build_callbacks(account=account),
         )
         self._running_services[account.username] = new_service
@@ -114,42 +113,38 @@ class AccountHandler(BaseHandler):
         self._refresh_all_pages_btn.config(state="normal" if bool(total_running_services) else "disabled")
 
     def _build_callbacks(self, account: Account) -> Dict[str, Callable[..., None]]:
-        def on_add_message(tag: MessageTag, message: str, compact: bool = False) -> None:
-            def _cb() -> None:
-                self._activity_log_tab.add_message(tag=tag, message=f"[{account.username}] {message}", compact=compact)
-
-            UIHelpers.schedule_ui_update(root=self._root, callback=_cb)
-
-        def on_add_notification(nickname: str, jackpot_value: str) -> None:
-            def _cb() -> None:
-                self._notification_icon.add_notification(nickname=nickname, jackpot_value=jackpot_value)
-
-            UIHelpers.schedule_ui_update(root=self._root, callback=_cb)
-
-        def on_update_current_jp(value: int) -> None:
-            def _cb() -> None:
-                self._activity_log_tab.update_current_jackpot(value=value)
-
-            UIHelpers.schedule_ui_update(root=self._root, callback=_cb)
-
-        def on_update_prize_winner(nickname: str, value: str, is_jackpot: bool = False) -> None:
-            def _cb() -> None:
-                self._activity_log_tab.update_prize_winner(nickname=nickname, value=value, is_jackpot=is_jackpot)
-
-            UIHelpers.schedule_ui_update(root=self._root, callback=_cb)
-
         def on_account_won(username: str) -> None:
             def _cb() -> None:
                 self._accounts_tab.mark_account_as_won(username=username)
                 if account.close_on_jp_win:
                     self.stop_account(username=username)
 
-            UIHelpers.schedule_ui_update(root=self._root, callback=_cb)
+            self._root.after(ms=0, func=_cb)
 
-        return {
-            on_add_message.__name__: on_add_message,
-            on_add_notification.__name__: on_add_notification,
-            on_update_current_jp.__name__: on_update_current_jp,
-            on_update_prize_winner.__name__: on_update_prize_winner,
-            on_account_won.__name__: on_account_won,
-        }
+        def on_update_current_jackpot(value: int) -> None:
+            def _cb() -> None:
+                self._activity_log_tab.update_current_jackpot(value=value)
+
+            self._root.after(ms=0, func=_cb)
+
+        def on_update_prize_winner(nickname: str, value: str, is_jackpot: bool = False) -> None:
+            def _cb() -> None:
+                self._activity_log_tab.update_prize_winner(nickname=nickname, value=value, is_jackpot=is_jackpot)
+
+            self._root.after(ms=0, func=_cb)
+
+        def on_add_message(tag: MessageTag, message: str, compact: bool = False) -> None:
+            def _cb() -> None:
+                self._activity_log_tab.add_message(tag=tag, message=f"[{account.username}] {message}", compact=compact)
+
+            self._root.after(ms=0, func=_cb)
+
+        def on_add_notification(nickname: str, jackpot_value: str) -> None:
+            def _cb() -> None:
+                self._notification_icon.add_notification(nickname=nickname, jackpot_value=jackpot_value)
+
+            self._root.after(ms=0, func=_cb)
+
+        # Auto-collect inner functions
+        callbacks = {name: fn for name, fn in locals().items() if callable(fn) and name.startswith("on_")}
+        return callbacks

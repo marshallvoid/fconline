@@ -94,7 +94,7 @@ def init_logger(debug: Optional[bool] = False) -> None:
             },
             # File handler for errors and exceptions with rotation
             {
-                "sink": os.path.join(file_mgr.get_configs_directory(), "app_error.log"),
+                "sink": os.path.join(file_mgr.get_configs_directory(), "logs.log"),
                 "level": "ERROR",
                 "format": LOGURU_FORMAT,
                 "filter": is_loggable_error,  # Only log errors and exceptions
@@ -108,5 +108,5 @@ def init_logger(debug: Optional[bool] = False) -> None:
     )
 
 
-original_error = logger.error
-logger.error = lambda *args, **kwargs: logger.opt(exception=True).log("ERROR", *args, **kwargs)
+# original_error = logger.error
+# logger.error = lambda *args, **kwargs: logger.opt(exception=True).log("ERROR", *args, **kwargs)

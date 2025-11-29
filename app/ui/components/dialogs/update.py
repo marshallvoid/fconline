@@ -69,8 +69,8 @@ class UpdateDialog(tk.Toplevel):
         main_frame.pack(fill="both", expand=True)
 
         # Title label
-        self.title_label = ttk.Label(main_frame, text="Checking for updates...", font=("", 14, "bold"))
-        self.title_label.pack(pady=(0, 20))
+        self._title_label = ttk.Label(main_frame, text="Checking for updates...", font=("", 14, "bold"))
+        self._title_label.pack(pady=(0, 20))
 
         self._setup_version_info(parent=main_frame)
         self._setup_release_notes(parent=main_frame)
@@ -78,23 +78,23 @@ class UpdateDialog(tk.Toplevel):
         self._setup_buttons(parent=main_frame)
 
     def _setup_version_info(self, parent: tk.Misc) -> None:
-        version_frame = UIFactory.create_label_frame(parent=parent, text="Version Information")
+        version_frame = ttk.LabelFrame(master=parent, text="Version Information", padding=10)
         version_frame.pack(fill="x", pady=(0, 10))
 
         current_version = update_mgr.current_version
         ttk.Label(version_frame, text=f"Current Version: {current_version}").pack(anchor="w")
-        self.latest_label = ttk.Label(version_frame, text="Latest Version: Checking...")
-        self.latest_label.pack(anchor="w", pady=(5, 0))
+        self._latest_label = ttk.Label(version_frame, text="Latest Version: Checking...")
+        self._latest_label.pack(anchor="w", pady=(5, 0))
 
     def _setup_release_notes(self, parent: tk.Misc) -> None:
-        notes_frame = UIFactory.create_label_frame(parent=parent, text="Release Notes")
+        notes_frame = ttk.LabelFrame(master=parent, text="Release Notes", padding=10)
         notes_frame.pack(fill="both", expand=True, pady=(0, 10))
 
         text_container = ttk.Frame(notes_frame)
         text_container.pack(fill="both", expand=True)
 
         # Use HTMLText for Markdown rendering
-        self.notes_text = HTMLText(
+        self._notes_text = HTMLText(
             text_container,
             html="<p>Checking for release notes...</p>",
             background="#ffffff",
@@ -103,39 +103,46 @@ class UpdateDialog(tk.Toplevel):
         )
 
         # Add scrollbar
-        scrollbar = ttk.Scrollbar(text_container, orient="vertical", command=self.notes_text.yview)
-        self.notes_text.configure(yscrollcommand=scrollbar.set)
+        scrollbar = ttk.Scrollbar(text_container, orient="vertical", command=self._notes_text.yview)
+        self._notes_text.configure(yscrollcommand=scrollbar.set)
 
-        self.notes_text.pack(side="left", fill="both", expand=True)
+        self._notes_text.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
         # Fit height
-        self.notes_text.fit_height()
+        self._notes_text.fit_height()
 
     def _setup_progress_bar(self, parent: tk.Misc) -> None:
-        self.progress_frame = ttk.Frame(parent)
-        self.progress_frame.pack(fill="x", pady=(0, 10))
-        self.progress_frame.pack_forget()  # Hide initially
+        self._progress_frame = ttk.Frame(parent)
+        self._progress_frame.pack(fill="x", pady=(0, 10))
+        self._progress_frame.pack_forget()  # Hide initially
 
-        self.progress_label = ttk.Label(self.progress_frame, text="")
-        self.progress_label.pack(anchor="w", pady=(0, 5))
+        self._progress_label = ttk.Label(self._progress_frame, text="")
+        self._progress_label.pack(anchor="w", pady=(0, 5))
 
-        self.progress_bar = ttk.Progressbar(self.progress_frame, mode="determinate", length=560)
-        self.progress_bar.pack(fill="x")
+        self._progress_bar = ttk.Progressbar(self._progress_frame, mode="determinate", length=560)
+        self._progress_bar.pack(fill="x")
 
     def _setup_buttons(self, parent: tk.Misc) -> None:
         button_frame, buttons = UIFactory.create_button_group(
             parent=parent,
             buttons=[
-                {"text": "Download and Install", "command": self._start_download, "state": "disabled"},
-                {"text": "Close", "command": self._on_close},
+                {
+                    "text": "Download and Install",
+                    "command": self._start_download,
+                    "state": "disabled",
+                },
+                {
+                    "text": "Close",
+                    "command": self._on_close,
+                },
             ],
             spacing=5,
         )
         button_frame.pack(fill="x")
 
-        self.install_button = buttons[0]
-        self.close_button = buttons[1]
+        self._install_button = buttons[0]
+        self._close_button = buttons[1]
 
     def _start_check(self) -> None:
         if self._state.checking:
@@ -153,9 +160,11 @@ class UpdateDialog(tk.Toplevel):
             loop.close()
 
             self.after(0, lambda: self._on_check_complete(has_update, latest_version, release_notes))
-        except Exception as e:
-            error_msg = str(e)
+
+        except Exception as error:
+            error_msg = str(error)
             self.after(0, lambda: self._on_check_error(error_msg))
+
         finally:
             self._state.checking = False
 
@@ -165,14 +174,16 @@ class UpdateDialog(tk.Toplevel):
         self._state.release_notes = release_notes
 
         if has_update and latest_version:
-            self.title_label.config(text="New version available!")
-            self.latest_label.config(text=f"Latest Version: {latest_version}")
-            self.install_button.config(state="normal")
+            self._title_label.config(text="New version available!")
+            self._latest_label.config(text=f"Latest Version: {latest_version}")
+            self._install_button.config(state="normal")
 
             if release_notes:
                 # Convert Markdown to HTML
                 html_content = markdown2.markdown(
-                    release_notes, extras=["fenced-code-blocks", "tables", "break-on-newline"]
+                    text=release_notes,
+                    tab_width=2,
+                    extras=["fenced-code-blocks", "tables", "break-on-newline"],
                 )
 
                 # Add some basic styling
@@ -181,26 +192,26 @@ class UpdateDialog(tk.Toplevel):
                     {html_content}
                 </div>
                 """
-                self.notes_text.set_html(styled_html)
+                self._notes_text.set_html(styled_html)
         else:
-            self.title_label.config(text="You're up to date!")
-            self.latest_label.config(text=f"Latest Version: {update_mgr.current_version}")
-            self.notes_text.set_html("<p>No updates available at this time.</p>")
+            self._title_label.config(text="You're up to date!")
+            self._latest_label.config(text=f"Latest Version: {update_mgr.current_version}")
+            self._notes_text.set_html("<p>No updates available at this time.</p>")
 
     def _on_check_error(self, error: str) -> None:
-        self.title_label.config(text="Error checking for updates")
-        self.latest_label.config(text="Latest Version: Unknown")
-        self.notes_text.set_html(f"<p style='color: red;'>Error: {error}</p>")
+        self._title_label.config(text="Error checking for updates")
+        self._latest_label.config(text="Latest Version: Unknown")
+        self._notes_text.set_html(f"<p style='color: red;'>Error: {error}</p>")
 
     def _start_download(self) -> None:
         if self._state.downloading or not self._state.has_update:
             return
 
         self._state.downloading = True
-        self.install_button.config(state="disabled")
-        self.close_button.config(state="disabled")
-        self.progress_frame.pack(fill="x", pady=(0, 10))
-        self.progress_label.config(text="Downloading update...")
+        self._install_button.config(state="disabled")
+        self._close_button.config(state="disabled")
+        self._progress_frame.pack(fill="x", pady=(0, 10))
+        self._progress_label.config(text="Downloading update...")
 
         thread = threading.Thread(target=self._download_update, daemon=True)
         thread.start()
@@ -221,29 +232,31 @@ class UpdateDialog(tk.Toplevel):
                 self.after(0, lambda: self._on_download_complete(download_path))
             else:
                 self.after(0, lambda: self._on_download_error("Failed to download update"))
-        except Exception as e:
-            error_msg = str(e)
+
+        except Exception as error:
+            error_msg = str(error)
             self.after(0, lambda: self._on_download_error(error_msg))
+
         finally:
             self._state.downloading = False
 
     def _update_progress(self, percent: int, current: int, total: int) -> None:
-        self.progress_bar["value"] = percent
+        self._progress_bar["value"] = percent
         current_mb = current / (1024 * 1024)
         total_mb = total / (1024 * 1024)
-        self.progress_label.config(text=f"Downloading update... {percent}% ({current_mb:.1f}/{total_mb:.1f} MB)")
+        self._progress_label.config(text=f"Downloading update... {percent}% ({current_mb:.1f}/{total_mb:.1f} MB)")
 
     def _on_download_complete(self, download_path: Path) -> None:
         self._state.download_path = download_path
-        self.progress_label.config(text="Download complete! Installing...")
-        self.progress_bar["value"] = 100
+        self._progress_label.config(text="Download complete! Installing...")
+        self._progress_bar["value"] = 100
 
         self.after(500, self._start_install)
 
     def _on_download_error(self, error: str) -> None:
-        self.progress_label.config(text=f"Download failed: {error}")
-        self.install_button.config(state="normal")
-        self.close_button.config(state="normal")
+        self._progress_label.config(text=f"Download failed: {error}")
+        self._install_button.config(state="normal")
+        self._close_button.config(state="normal")
         messagebox.showerror("Download Error", f"Failed to download update:\n{error}")
 
     def _start_install(self) -> None:
@@ -261,34 +274,41 @@ class UpdateDialog(tk.Toplevel):
         try:
             success = update_mgr.install_update(self._state.download_path)
             self.after(0, lambda: self._on_install_complete(success))
-        except Exception as e:
-            error_msg = str(e)
+
+        except Exception as error:
+            error_msg = str(error)
             self.after(0, lambda: self._on_install_error(error_msg))
+
         finally:
             self._state.installing = False
 
     def _on_install_complete(self, success: bool) -> None:
         if success:
-            self.progress_label.config(text="Update installed! Application will restart...")
+            self._progress_label.config(text="Update installed! Application will restart...")
             messagebox.showinfo(
-                "Update Complete", "Update has been installed successfully.\nThe application will now restart."
+                "Update Complete",
+                "Update has been installed successfully.\nThe application will now restart.",
             )
-        else:
-            self.progress_label.config(text="Installation failed")
-            self.close_button.config(state="normal")
-            messagebox.showerror(
-                "Installation Error", "Failed to install update. Please try again or download manually."
-            )
+            return
+
+        self._progress_label.config(text="Installation failed")
+        self._close_button.config(state="normal")
+        messagebox.showerror(
+            "Installation Error",
+            "Failed to install update. Please try again or download manually.",
+        )
 
     def _on_install_error(self, error: str) -> None:
-        self.progress_label.config(text=f"Installation failed: {error}")
-        self.close_button.config(state="normal")
+        self._progress_label.config(text="Installation failed")
+        self._close_button.config(state="normal")
         messagebox.showerror("Installation Error", f"Failed to install update:\n{error}")
 
     def _on_close(self) -> None:
         if self._state.downloading or self._state.installing:
             if not messagebox.askyesno(
-                "Operation in Progress", "An operation is in progress. Are you sure you want to cancel?"
+                "Operation in Progress",
+                "An operation is in progress. Are you sure you want to cancel?",
             ):
                 return
+
         self.destroy()

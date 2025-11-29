@@ -55,13 +55,19 @@ class Settings(BaseSettings):
     )
 
     # Application configuration
-    program_name: str = Field(default="FC Online Automation Tool", description="Application name")
+    program_name: str = Field(default="FC Online Automation", description="Application name")
     secret_key: str = Field(default="secret_key", description="Secret key for authentication")
     debug: bool = Field(default=False, description="Debug mode")
 
     # Github API configuration
-    release_url: str = Field(description="GitHub API URL for checking releases")
-    gist_url: str = Field(description="GitHub Gist URL for application configuration and license validation")
+    gist_url: str = Field(
+        default="https://gist.githubusercontent.com/{username}/{gist_id}/raw/{gist_name}",
+        description="GitHub Gist URL for application configuration and license validation",
+    )
+    release_url: str = Field(
+        default="https://api.github.com/repos/{username}/{repo_name}/releases/latest",
+        description="GitHub API URL for checking releases",
+    )
 
     # Discord configuration
     discord: DiscordConfig = Field(default_factory=DiscordConfig, description="Discord configuration")

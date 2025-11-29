@@ -5,21 +5,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 class UIFactory:
     @staticmethod
-    def create_label_frame(parent: tk.Misc, text: str, padding: int = 10, **kwargs: Any) -> ttk.LabelFrame:
-        """Create a standardized LabelFrame.
-
-        Args:
-            parent: Parent widget
-            text: Frame label text
-            padding: Frame padding
-            **kwargs: Additional ttk.LabelFrame arguments
-
-        Returns:
-            Configured LabelFrame widget
-        """
-        return ttk.LabelFrame(master=parent, text=text, padding=padding, **kwargs)
-
-    @staticmethod
     def create_button(
         parent: tk.Misc,
         text: str,
@@ -263,14 +248,3 @@ class UIFactory:
             button_widgets.append(btn)
 
         return frame, button_widgets
-
-    @staticmethod
-    def show_blocking_error(root: tk.Tk, message: str) -> None:
-        """Show blocking error dialog and close application.
-
-        Args:
-            root: Root window to close
-            message: Error message to display
-        """
-        tk.messagebox.showerror("Access Denied", message)
-        root.destroy()

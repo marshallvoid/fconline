@@ -38,8 +38,8 @@ class VersionManager:
             logger.info(f"Using hardcoded version {app.__version__}")
             return app.__version__
 
-        except Exception as e:
-            logger.error(f"Error loading version metadata: {e}")
+        except Exception as error:
+            logger.error(f"Error loading version metadata: {error}")
             return app.__version__
 
     def update_version(self, new_version: str) -> None:
@@ -64,9 +64,8 @@ class VersionManager:
             self._version = new_version
             logger.info(f"Updated version to {new_version} in {metadata_path}")
 
-        except Exception as e:
-            logger.error(f"Failed to update version metadata: {e}")
+        except Exception as error:
+            logger.error(f"Failed to update version metadata: {error}")
 
 
-# Singleton instance
 version_manager = VersionManager()

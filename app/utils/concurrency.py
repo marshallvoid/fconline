@@ -2,7 +2,7 @@ import asyncio
 import concurrent.futures
 import contextlib
 import threading
-from typing import Any, Awaitable, Callable, Coroutine, Mapping, Optional, Sequence, TypeVar
+from typing import Any, Awaitable, Callable, Coroutine, Mapping, Optional, Sequence, Tuple, TypeVar
 
 from loguru import logger
 
@@ -10,8 +10,8 @@ T = TypeVar("T")
 
 
 def run_in_thread(
-    coro_func: Callable[..., Coroutine[Any, Any, T]],
     *args: Any,
+    coro_func: Callable[..., Coroutine[Any, Any, T]],
     daemon: bool = True,
     **kwargs: Any,
 ) -> threading.Thread:
@@ -47,11 +47,37 @@ def run_in_thread(
     return thread
 
 
-def run_async_in_new_loop(coro: Awaitable[T], timeout: Optional[float] = None) -> None:
+def run_many_in_threads(
+    tasks: Sequence[Tuple[Callable[..., Awaitable[Any]], Sequence[Any], Mapping[str, Any]]],
+    timeout: Optional[float] = None,
+) -> None:
     """
-    Run a coroutine in a fresh event loop, optionally with a timeout.
+    Run multiple async callables concurrently in separate threads.
+
+    Args:
+        tasks: List of (async function, args, kwargs) tuples.
+        timeout: Optional timeout for each task.
     """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+        futures = {
+            executor.submit(
+                _run_async_in_new_loop,
+                func(*args, **kwargs),
+                timeout,
+            )
+            for func, args, kwargs in tasks
+        }
+
+        with contextlib.suppress(Exception):
+            concurrent.futures.wait(fs=futures, timeout=timeout)
+
+        _ = [f.cancel() for f in futures if not f.done()]
+
+
+def _run_async_in_new_loop(coro: Awaitable[T], timeout: Optional[float] = None) -> None:
+    """Run a coroutine in a fresh event loop, optionally with a timeout."""
     loop = asyncio.new_event_loop()
+
     try:
         asyncio.set_event_loop(loop)
         loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout) if timeout else coro)
@@ -65,30 +91,3 @@ def run_async_in_new_loop(coro: Awaitable[T], timeout: Optional[float] = None) -
     finally:
         with contextlib.suppress(Exception):
             loop.close()
-
-
-def run_many_in_threads(
-    tasks: Sequence[tuple[Callable[..., Awaitable[Any]], Sequence[Any], Mapping[str, Any]]],
-    timeout: Optional[float] = None,
-) -> None:
-    """
-    Run multiple async callables concurrently in separate threads.
-
-    Args:
-        tasks: List of (async function, args, kwargs) tuples.
-        timeout: Optional timeout for each task.
-    """
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(tasks)) as executor:
-        futures = {
-            executor.submit(
-                run_async_in_new_loop,
-                func(*args, **kwargs),
-                timeout,
-            )
-            for func, args, kwargs in tasks
-        }
-
-        with contextlib.suppress(Exception):
-            concurrent.futures.wait(fs=futures, timeout=timeout)
-
-        _ = [f.cancel() for f in futures if not f.done()]
