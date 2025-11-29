@@ -19,7 +19,7 @@ from app.utils.helpers import format_results_block
 from app.utils.sounds import play_audio
 
 if TYPE_CHECKING:
-    from app.services.main_service import MainService
+    from app.services.main import MainService
 
 
 class WebsocketHandler:

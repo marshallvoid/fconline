@@ -14,8 +14,8 @@ from app.schemas.app_config import EventConfigs
 from app.schemas.enums.message_tag import MessageTag
 from app.schemas.local_config import Account
 from app.schemas.user_response import UserReponse
-from app.services.handlers.login_handler import LoginHandler
-from app.services.handlers.websocket_handler import WebsocketHandler
+from app.services.handlers.login import LoginHandler
+from app.services.handlers.websocket import WebsocketHandler
 from app.utils.concurrency import run_in_thread
 from app.utils.helpers import get_browser_position
 from app.utils.types.callback import (

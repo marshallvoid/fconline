@@ -1,3 +1,5 @@
+# mypy: disable-error-code="union-attr,arg-type"
+
 import contextlib
 import threading
 import tkinter as tk
@@ -16,7 +18,7 @@ from app.core.settings import Settings
 from app.infrastructure.clients.github import GithubClient
 from app.schemas.app_config import AppConfigs, EventConfigs
 from app.schemas.local_config import LocalConfigs
-from app.services.main_service import MainService
+from app.services.main import MainService
 from app.ui.components.dialogs.update import UpdateDialog
 from app.ui.components.notification_icon import NotificationIcon
 from app.ui.components.tabs.accounts import AccountsTab

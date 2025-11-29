@@ -19,7 +19,7 @@ try:
         app = MainWindow(container=container, settings=settings)
 
         # Run async initialization in separate thread
-        def run_async_init():
+        def run_async_init() -> None:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(app.initialize_configurations())

@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, Optional
 
 from app.schemas.enums.message_tag import MessageTag
 from app.schemas.local_config import Account
-from app.services.main_service import MainService
+from app.services.main import MainService
 from app.ui.components.notification_icon import NotificationIcon
 from app.ui.components.tabs.accounts import AccountsTab
 from app.ui.components.tabs.activity_log import ActivityLogTab

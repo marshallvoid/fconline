@@ -9,7 +9,7 @@ from loguru import logger
 from app.schemas.enums.message_tag import MessageTag
 
 if TYPE_CHECKING:
-    from app.services.main_service import MainService
+    from app.services.main import MainService
 
 
 class LoginHandler:

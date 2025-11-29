@@ -1,15 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
+
+# Collect all apprise data, binaries, and hidden imports
+apprise_datas, apprise_binaries, apprise_hiddenimports = collect_all('apprise')
 
 a = Analysis(
     ['app/main/ui/app.py'],
     pathex=[os.getcwd()],
-    binaries=[],
+    binaries=apprise_binaries,
     datas=[
         ('assets', 'assets') if os.path.exists('assets') else None,
-    ],
+    ] + apprise_datas,
     hiddenimports=[
         # GUI and theming
         'tkinter',
@@ -23,7 +27,6 @@ a = Analysis(
 
         # Networking and automation
         'aiohttp',
-        'apprise',
         'certifi',
         'markdown2',
         'packaging',
@@ -45,7 +48,7 @@ a = Analysis(
         'browser_use.dom',
         'browser_use.dom.service',
 
-        # HTTP client libraries (required by browser_use and langchain)
+        # HTTP client libraries
         'httpx',
         'httpcore',
         'requests',
@@ -57,8 +60,8 @@ a = Analysis(
         # Additional runtime libraries
         'shortuuid',
 
-        # Project modules (explicit to help PyInstaller discovery)
-        'app.main',
+        # Project modules
+        'app.main.ui.app',
 
         'app.core.configs',
         'app.core.configs.settings',
@@ -70,60 +73,65 @@ a = Analysis(
         'app.core.managers.platform',
         'app.core.managers.request',
         'app.core.managers.update',
-        'app.core.managers.version_manager',  # Added new manager
+        'app.core.managers.version',
 
         'app.core.providers',
         'app.core.providers.configs',
         'app.core.providers.factory',
 
         'app.infrastructure',
-
-        'app.infrastructure.clients',
-        'app.infrastructure.clients.internal_client',
-        'app.infrastructure.clients.main_client',
-
         'app.infrastructure.logging',
 
+        'app.infrastructure.clients',
+        'app.infrastructure.clients.main',
+        'app.infrastructure.clients.github',
+
         'app.schemas',
+        'app.schemas.app_config',
+        'app.schemas.local_config',
+        'app.schemas.billboard',
+        'app.schemas.spin_response',
+        'app.schemas.user_response',
 
         'app.schemas.enums',
         'app.schemas.enums.account_tag',
         'app.schemas.enums.message_tag',
-
-        'app.schemas.billboard',
-        'app.schemas.configs',
-        'app.schemas.spin_response',
-        'app.schemas.user_response',
+        'app.schemas.enums.payment_type',
 
         'app.services',
-        'app.services.login_handler',
-        'app.services.main_service',
-        'app.services.websocket_handler',
+        'app.services.main',
+
+        'app.services.handlers.login',
+        'app.services.handlers.websocket',
 
         'app.ui',
-        'app.ui.components.accounts_tab',
-        'app.ui.components.activity_log_tab',
+
+        'app.ui.windows.main',
+
         'app.ui.components.notification_icon',
-        'app.ui.components.update_dialog',
+
+        'app.ui.components.tabs.accounts',
+        'app.ui.components.tabs.activity_log',
+
+        'app.ui.components.dialogs.notification',
+        'app.ui.components.dialogs.update',
+        'app.ui.components.dialogs.upsert_account',
 
         'app.ui.utils.ui_factory',
         'app.ui.utils.ui_helpers',
 
-        'app.ui.windows.main_window',
-
         'app.utils',
+        'app.utils.concurrency',
+        'app.utils.constants',
+        'app.utils.helpers',
+        'app.utils.sounds',
 
         'app.utils.decorators',
         'app.utils.decorators.singleton',
 
         'app.utils.types',
         'app.utils.types.callback',
-
-        'app.utils.concurrency',
-        'app.utils.constants',
-        'app.utils.helpers',
-        'app.utils.sounds',
-    ],
+    ] + apprise_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
