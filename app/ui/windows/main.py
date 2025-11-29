@@ -6,7 +6,6 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence
 
-import darkdetect
 import sv_ttk
 from dishka import AsyncContainer
 from loguru import logger
@@ -282,7 +281,10 @@ class MainWindow:
         self._root.protocol(name="WM_DELETE_WINDOW", func=self._on_close)
 
         # Setup theme
-        sv_ttk.set_theme(theme=darkdetect.theme() or "dark")
+        #   import darkdetect
+        #   sv_ttk.set_theme(theme=darkdetect.theme() or "dark")
+
+        sv_ttk.set_theme(theme="light")
 
         with contextlib.suppress(Exception):
             style = ttk.Style(master=self._root)

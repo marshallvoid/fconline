@@ -175,7 +175,9 @@ class UpdateManager:
     def _install_windows(self, download_path: Path) -> bool:
         try:
             if download_path.suffix == ".exe":
-                subprocess.Popen([str(download_path), "/SILENT"])  # Run installer
+                proc = subprocess.Popen([str(download_path), "/SILENT"])  # Run installer
+                proc.wait()
+                subprocess.Popen([sys.executable])
             elif download_path.suffix == ".zip":
                 # Extract and replace
                 extract_dir = download_path.parent / "extract"
