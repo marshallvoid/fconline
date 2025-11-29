@@ -11,14 +11,17 @@ from app.utils.decorators.singleton import singleton
 
 @singleton
 class CryptoManager:
+    def __init__(self) -> None:
+        self._key = self._get_encryption_key()
+        self._fernet = Fernet(self._key)
+
     def encrypt_data(self, value: Optional[str] = None) -> str:
         if not value:
             return ""
 
         try:
             # Use Fernet symmetric encryption for sensitive data
-            f = Fernet(self._get_encryption_key())
-            encrypted_data = f.encrypt(value.encode())
+            encrypted_data = self._fernet.encrypt(value.encode())
             return base64.urlsafe_b64encode(encrypted_data).decode()
 
         except Exception:
@@ -31,8 +34,7 @@ class CryptoManager:
 
         try:
             # Use Fernet symmetric encryption for sensitive data
-            f = Fernet(self._get_encryption_key())
-            decrypted_data = f.decrypt(base64.urlsafe_b64decode(value.encode()))
+            decrypted_data = self._fernet.decrypt(base64.urlsafe_b64decode(value.encode()))
             return decrypted_data.decode()
 
         except Exception:

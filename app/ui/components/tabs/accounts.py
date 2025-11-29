@@ -7,6 +7,7 @@ from app.core.managers.local_config import local_config_mgr
 from app.schemas.app_config import EventConfigs
 from app.schemas.enums.account_tag import AccountTag
 from app.schemas.local_config import Account, LocalConfigs
+from app.schemas.user_response import UserDetail
 from app.ui.components.dialogs.upsert_account import UpsertAccountDialog
 from app.ui.utils.ui_factory import UIFactory
 from app.utils.constants import BROWSER_POSITIONS
@@ -15,13 +16,17 @@ from app.utils.types.callback import OnAccountRunCallback, OnAccountStopCallback
 
 class AccountsTab:
     _BROWSER_POS_LABEL_TEXT = "Browser Position: {position}"
+    _FC_LABEL_TEXT = "FC: {value}"
+    _MC_LABEL_TEXT = "MC: {value}"
+    _FREE_SPIN_LABEL_TEXT = "Free Spin: {value}"
+    _ACCUMULATION_LABEL_TEXT = "Accumulation: {value}"
 
     _ACCOUNT_COLUMN_CONFIGS = {
         "Username": {"width": 160, "anchor": "w"},
         "Target Special Jackpot": {"width": 140, "anchor": "center"},
         "Target Mini Jackpot": {"width": 140, "anchor": "center"},
         "Spin Action": {"width": 120, "anchor": "center"},
-        "Close on JP Win": {"width": 140, "anchor": "center"},
+        "Close on Won Special Jackpot": {"width": 140, "anchor": "center"},
     }
 
     def __init__(
@@ -51,6 +56,7 @@ class AccountsTab:
         # States
         self._running_usernames: Set[str] = set()
         self._browser_pos_by_username: Dict[str, str] = {}
+        self._account_info_cache: Dict[str, UserDetail] = {}
 
         self._initialize()
 
@@ -148,6 +154,16 @@ class AccountsTab:
             self._on_refresh_page(username=username)
             time.sleep(1)
 
+    def mark_account_as_won(self, username: str) -> None:
+        account = next((a for a in self._accounts if a.username == username), None)
+        if not account:
+            return
+
+        account.has_won = True
+        self._save_accounts_to_config()
+        self._save_accounts_to_config()
+        self._update_accounts_tree()
+
     def update_browser_position(self, username: str, browser_index: int) -> None:
         account = next((a for a in self._accounts if a.username == username), None)
         if not account:
@@ -157,14 +173,13 @@ class AccountsTab:
         self._browser_pos_by_username[username] = BROWSER_POSITIONS.get((row, col), "Center")
         self._update_information_frame(account=account, is_running=username in self._running_usernames)
 
-    def mark_account_as_won(self, username: str) -> None:
-        account = next((a for a in self._accounts if a.username == username), None)
-        if not account:
-            return
+    def update_account_info(self, username: str, user_detail: UserDetail) -> None:
+        self._account_info_cache[username] = user_detail
 
-        account.has_won = True
-        self._save_accounts_to_config()
-        self._update_accounts_tree()
+        # If the updated account is currently selected, update the info frame
+        selected_accounts = self._get_selected_accounts()
+        if len(selected_accounts) == 1 and selected_accounts[0].username == username:
+            self._update_information_frame(account=selected_accounts[0], is_running=username in self._running_usernames)
 
     # ==================== Private Methods ====================
     def _initialize(self) -> None:
@@ -309,10 +324,42 @@ class AccountsTab:
         self._browser_pos_label = ttk.Label(
             master=info_frame,
             text=self._BROWSER_POS_LABEL_TEXT.format(position="-"),
-            font=("Arial", 14),
+            font=("Arial", 12),
             foreground="#6b7280",
         )
-        self._browser_pos_label.pack(anchor="w", pady=(0, 5))
+        self._browser_pos_label.pack(anchor="w", pady=(0, 2))
+
+        self._fc_label = ttk.Label(
+            master=info_frame,
+            text=self._FC_LABEL_TEXT.format(value="-"),
+            font=("Arial", 12),
+            foreground="#6b7280",
+        )
+        self._fc_label.pack(anchor="w", pady=(0, 2))
+
+        self._mc_label = ttk.Label(
+            master=info_frame,
+            text=self._MC_LABEL_TEXT.format(value="-"),
+            font=("Arial", 12),
+            foreground="#6b7280",
+        )
+        self._mc_label.pack(anchor="w", pady=(0, 2))
+
+        self._free_spin_label = ttk.Label(
+            master=info_frame,
+            text=self._FREE_SPIN_LABEL_TEXT.format(value="-"),
+            font=("Arial", 12),
+            foreground="#6b7280",
+        )
+        self._free_spin_label.pack(anchor="w", pady=(0, 2))
+
+        self._accumulation_label = ttk.Label(
+            master=info_frame,
+            text=self._ACCUMULATION_LABEL_TEXT.format(value="-"),
+            font=("Arial", 12),
+            foreground="#6b7280",
+        )
+        self._accumulation_label.pack(anchor="w", pady=(0, 2))
 
     def _on_tree_select(self) -> None:
         selected_accounts = self._get_selected_accounts()
@@ -325,6 +372,10 @@ class AccountsTab:
             self._stop_btn.config(state="disabled")
             self._refresh_btn.config(state="disabled")
             self._browser_pos_label.config(text=self._BROWSER_POS_LABEL_TEXT.format(position="-"), foreground="#6b7280")
+            self._fc_label.config(text=self._FC_LABEL_TEXT.format(value="-"), foreground="#6b7280")
+            self._mc_label.config(text=self._MC_LABEL_TEXT.format(value="-"), foreground="#6b7280")
+            self._free_spin_label.config(text=self._FREE_SPIN_LABEL_TEXT.format(value="-"), foreground="#6b7280")
+            self._accumulation_label.config(text=self._ACCUMULATION_LABEL_TEXT.format(value="-"), foreground="#6b7280")
             return
 
         if len(selected_accounts) == 1:
@@ -526,6 +577,41 @@ class AccountsTab:
                 "foreground": browser_color,
             },
         }
+
+        user_detail = self._account_info_cache.get(account.username)
+        if user_detail:
+            fc_val = f"{user_detail.fc:,}" if user_detail.fc is not None else "-"
+            mc_val = f"{user_detail.mc:,}" if user_detail.mc is not None else "-"
+            fs_val = f"{user_detail.free_spin:,}" if user_detail.free_spin is not None else "-"
+            acc_val = f"{user_detail.accumulation:,}" if user_detail.accumulation is not None else "-"
+
+            widgets_configs[self._fc_label] = {
+                "text": self._FC_LABEL_TEXT.format(value=fc_val),
+                "foreground": "#22c55e",
+            }
+            widgets_configs[self._mc_label] = {
+                "text": self._MC_LABEL_TEXT.format(value=mc_val),
+                "foreground": "#22c55e",
+            }
+            widgets_configs[self._free_spin_label] = {
+                "text": self._FREE_SPIN_LABEL_TEXT.format(value=fs_val),
+                "foreground": "#22c55e",
+            }
+            widgets_configs[self._accumulation_label] = {
+                "text": self._ACCUMULATION_LABEL_TEXT.format(value=acc_val),
+                "foreground": "#22c55e",
+            }
+        else:
+            widgets_configs[self._fc_label] = {"text": self._FC_LABEL_TEXT.format(value="-"), "foreground": "#6b7280"}
+            widgets_configs[self._mc_label] = {"text": self._MC_LABEL_TEXT.format(value="-"), "foreground": "#6b7280"}
+            widgets_configs[self._free_spin_label] = {
+                "text": self._FREE_SPIN_LABEL_TEXT.format(value="-"),
+                "foreground": "#6b7280",
+            }
+            widgets_configs[self._accumulation_label] = {
+                "text": self._ACCUMULATION_LABEL_TEXT.format(value="-"),
+                "foreground": "#6b7280",
+            }
 
         for label_widget, cofnigs in widgets_configs.items():
             label_widget.config(**cofnigs)

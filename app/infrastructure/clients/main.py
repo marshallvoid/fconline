@@ -12,7 +12,7 @@ from app.schemas.spin_response import SpinResponse
 from app.schemas.user_response import UserReponse
 
 if TYPE_CHECKING:
-    from app.services.main_service import MainService
+    from app.services.main import MainService
 
 
 class MainClient(AsyncMixin):

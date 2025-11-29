@@ -22,6 +22,7 @@ from app.utils.types.callback import (
     OnAccountWonCallback,
     OnAddMessageCallback,
     OnAddNotificationCallback,
+    OnUpdateAccountInfoCallback,
     OnUpdateCurrentJackpotCallback,
     OnUpdateWinnerCallback,
 )
@@ -38,11 +39,13 @@ class MainService:
         # Account configs
         account: Account,
         auto_refresh: bool,
+        headless: bool,
         event_config: EventConfigs,
         # Callbacks
         on_account_won: OnAccountWonCallback,
-        on_update_current_jackpot: OnUpdateCurrentJackpotCallback,
-        on_update_prize_winner: OnUpdateWinnerCallback,
+        on_update_account_info: OnUpdateAccountInfoCallback,  # Accounts Tab
+        on_update_current_jackpot: OnUpdateCurrentJackpotCallback,  # Activity Log Tab
+        on_update_prize_winner: OnUpdateWinnerCallback,  # Activity Log Tab
         on_add_message: OnAddMessageCallback,
         on_add_notification: OnAddNotificationCallback,
     ) -> None:
@@ -55,10 +58,12 @@ class MainService:
         # Account configs
         self._account = account
         self._auto_refresh = auto_refresh
+        self._headless = headless
         self._event_config = event_config
 
         # Callbacks
         self._on_account_won = on_account_won
+        self._on_update_account_info = on_update_account_info
         self._on_update_current_jackpot = on_update_current_jackpot
         self._on_update_prize_winner = on_update_prize_winner
         self._on_add_message = on_add_message
@@ -110,7 +115,7 @@ class MainService:
 
             # Setup API client and fetch user profile information
             logger.info("Setting up API client and fetching user profile information...")
-            self.client = MainClient(main_service=self)
+            self.client = await MainClient(main_service=self)
             self._user_info = await self.client.lookup()
 
             self._update_ui()
@@ -171,6 +176,10 @@ class MainService:
             self._page = None
 
     def _update_ui(self) -> None:
+        # Update account info
+        if self._user_info and self._user_info.payload.user:
+            self._on_update_account_info(username=self._account.username, user_detail=self._user_info.payload.user)
+
         # Update ultimate prize winner display
         if self._user_info and (jackpot_billboard := self._user_info.payload.sjp_billboard):
             nickname = jackpot_billboard.nickname
@@ -239,6 +248,7 @@ class MainService:
                     executable_path=chrome_path,
                     window_position={"width": x, "height": y},
                     window_size={"width": width, "height": height},
+                    headless=self._headless,
                 )
 
                 # Start browser session and get initial page

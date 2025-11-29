@@ -1,5 +1,7 @@
 from typing import TYPE_CHECKING, ParamSpec, Protocol, TypeVar
 
+from app.schemas.user_response import UserDetail
+
 if TYPE_CHECKING:
     from app.schemas.enums.message_tag import MessageTag
     from app.schemas.local_config import Account
@@ -42,3 +44,7 @@ class OnAccountStopCallback(Protocol):
 
 class OnRefreshPageCallback(Protocol):
     def __call__(self, username: str) -> None: ...
+
+
+class OnUpdateAccountInfoCallback(Protocol):
+    def __call__(self, username: str, user_detail: UserDetail) -> None: ...

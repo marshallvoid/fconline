@@ -1,4 +1,5 @@
 # pyright: reportOptionalMemberAccess=false
+
 import asyncio
 import contextlib
 import json
@@ -37,10 +38,11 @@ class WebsocketHandler:
 
         # Callbacks
         self._on_account_won = main_service._on_account_won
-        self._on_add_message = main_service._on_add_message
-        self._on_add_notification = main_service._on_add_notification
+        self._on_update_account_info = main_service._on_update_account_info
         self._on_update_current_jackpot = main_service._on_update_current_jackpot
         self._on_update_prize_winner = main_service._on_update_prize_winner
+        self._on_add_message = main_service._on_add_message
+        self._on_add_notification = main_service._on_add_notification
 
         # Internal state
         self._current_jackpot: int = 0
@@ -300,6 +302,10 @@ class WebsocketHandler:
             if spin_response and spin_response.payload and spin_response.payload.spin_results:
                 message = format_results_block(results=spin_response.payload.spin_results)
                 self._on_add_message(tag=MessageTag.REWARD, message=message)
+
+            if self._user_info and spin_response and spin_response.payload and spin_response.payload.user:
+                self._user_info.payload.user = spin_response.payload.user
+                self._on_update_account_info(username=self._account.username, user_detail=spin_response.payload.user)
 
             self._sjp_spin_task = None
             self._mjp_spin_task = None

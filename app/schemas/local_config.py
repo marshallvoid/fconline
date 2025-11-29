@@ -55,6 +55,7 @@ class LocalConfigs(BaseModel):
     license_key: str = ""
     event: str = ""
     auto_refresh: bool = False
+    headless: bool = False
 
     accounts: List[Account] = []
     notifications: List[Notification] = []

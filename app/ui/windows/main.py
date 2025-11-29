@@ -46,6 +46,7 @@ class MainWindow:
         self._root.title(string=self._settings.program_name)
         self._root.resizable(width=True, height=True)
         self._root.minsize(width=900, height=600)
+        #   self._root.attributes("-fullscreen", True)
         logger.debug(f"Window title: {self._settings.program_name}")
 
         # Clients
@@ -117,9 +118,13 @@ class MainWindow:
         logger.info("Connecting handlers to UI widgets...")
         self._account_handler.update_widgets(
             notification_icon=self._notification_icon,
+            event_combobox=self._event_combobox,
+            auto_refresh_checkbox=self._auto_refresh_checkbox,
+            headless_checkbox=self._headless_checkbox,
             run_all_accounts_btn=self._run_all_accounts_btn,
             stop_all_accounts_btn=self._stop_all_accounts_btn,
             refresh_all_pages_btn=self._refresh_all_pages_btn,
+            notebook=self._notebook,
             accounts_tab=self._accounts_tab,
             activity_log_tab=self._activity_log_tab,
         )
@@ -168,7 +173,7 @@ class MainWindow:
 
         # Event selection combobox
         event_var = tk.StringVar(value=self._selected_event)
-        event_combobox = UIFactory.create_combobox(
+        self._event_combobox = UIFactory.create_combobox(
             parent=event_frame,
             textvariable=event_var,
             values=list(self._event_configs.keys()),
@@ -182,10 +187,10 @@ class MainWindow:
             self._local_configs.event = self._selected_event
             local_config_mgr.save_local_configs(configs=self._local_configs)
 
-            event_combobox.selection_clear()
+            self._event_combobox.selection_clear()
 
-        event_combobox.bind(sequence="<<ComboboxSelected>>", func=lambda _: on_combobox_select_changed())
-        event_combobox.pack(anchor="w", fill="x", pady=(0, 10))
+        self._event_combobox.bind(sequence="<<ComboboxSelected>>", func=lambda _: on_combobox_select_changed())
+        self._event_combobox.pack(anchor="w", fill="x", pady=(0, 10))
 
         # Auto refresh checkbox
         def on_auto_refresh_changed() -> None:
@@ -193,13 +198,27 @@ class MainWindow:
             local_config_mgr.save_local_configs(configs=self._local_configs)
 
         auto_refresh_var = tk.BooleanVar(value=self._local_configs.auto_refresh)
-        auto_refresh_checkbox = ttk.Checkbutton(
+        self._auto_refresh_checkbox = ttk.Checkbutton(
             master=event_frame,
             text="Auto Refresh after 1 hour",
             variable=auto_refresh_var,
             command=on_auto_refresh_changed,
         )
-        auto_refresh_checkbox.pack(anchor="w")
+        self._auto_refresh_checkbox.pack(anchor="w", side="left", padx=(0, 20))
+
+        # Headless checkbox
+        def on_headless_changed() -> None:
+            self._local_configs.headless = headless_var.get()
+            local_config_mgr.save_local_configs(configs=self._local_configs)
+
+        headless_var = tk.BooleanVar(value=self._local_configs.headless)
+        self._headless_checkbox = ttk.Checkbutton(
+            master=event_frame,
+            text="Headless",
+            variable=headless_var,
+            command=on_headless_changed,
+        )
+        self._headless_checkbox.pack(anchor="w", side="left")
 
     def _setup_control_buttons(self) -> None:
         buttons_frame = ttk.LabelFrame(master=self._root, text="Actions", padding=10)
@@ -237,12 +256,12 @@ class MainWindow:
         tabs_container = ttk.Frame(master=self._root)
         tabs_container.pack(fill="both", expand=True, padx=10, pady=5)
 
-        notebook = ttk.Notebook(master=tabs_container, takefocus=False)
-        notebook.pack(fill="both", expand=True)
+        self._notebook = ttk.Notebook(master=tabs_container, takefocus=False)
+        self._notebook.pack(fill="both", expand=True)
 
         # Accounts tab
         self._accounts_tab = AccountsTab(
-            parent=notebook,
+            parent=self._notebook,
             event_configs=self._event_configs,
             local_configs=self._local_configs,
             selected_event=self._selected_event,
@@ -250,14 +269,14 @@ class MainWindow:
             on_account_stop=self._account_handler.stop_account,
             on_refresh_page=self._account_handler.refresh_page,
         )
-        notebook.add(child=self._accounts_tab.frame, text="Accounts")
+        self._notebook.add(child=self._accounts_tab.frame, text="Accounts")
 
         # Activity log tab
-        self._activity_log_tab = ActivityLogTab(parent=notebook)
-        notebook.add(child=self._activity_log_tab.frame, text="Activity Log")
+        self._activity_log_tab = ActivityLogTab(parent=self._notebook)
+        self._notebook.add(child=self._activity_log_tab.frame, text="Activity Log")
 
         # Setup focus management using helper
-        UIHelpers.setup_focus_management(root_or_frame=self._root, notebook=notebook)
+        UIHelpers.setup_focus_management(root_or_frame=self._root, notebook=self._notebook)
 
     def run(self) -> None:
         self._root.protocol(name="WM_DELETE_WINDOW", func=self._on_close)

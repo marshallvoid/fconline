@@ -1,9 +1,10 @@
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox
 
 from loguru import logger
 
 from app.core.managers.local_config import local_config_mgr
 from app.core.managers.update import update_mgr
+from app.ui.components.dialogs.input import ask_string_custom
 from app.ui.components.dialogs.update import UpdateDialog
 from app.ui.handlers.base import BaseHandler
 from app.ui.utils.ui_helpers import UIHelpers
@@ -108,11 +109,12 @@ class UpdateHandler(BaseHandler):
 
     def _prompt_license_key(self, initial_value: str = "", is_auto_check: bool = True) -> None:
         while True:
-            license_key = simpledialog.askstring(
-                "License Key Required",
-                "Please enter your license key:",
-                initialvalue=initial_value,
+            license_key = ask_string_custom(
+                title="License Key Required",
+                prompt="Please enter your license key:",
                 parent=self._root,
+                initialvalue=initial_value,
+                width=60,
             )
 
             # User cancelled
@@ -120,7 +122,8 @@ class UpdateHandler(BaseHandler):
                 if is_auto_check:
                     # Must enter license, cancel closes app
                     UIHelpers.show_blocking_error(
-                        root=self._root, message="License key is required to use this application."
+                        root=self._root,
+                        message="License key is required to use this application.",
                     )
                 # else: Manual change, just close dialog
                 return
