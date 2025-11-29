@@ -29,13 +29,17 @@ class MainClient(AsyncMixin):
         self._spin_api = f"{main_service._event_config.base_url}/{main_service._event_config.spin_endpoint}"
 
     @property
-    def session_props(self) -> Dict[str, Any]:
-        return {"cookies": self._cookies, "headers": self._headers, "connector": request_mgr.insecure_connector}
+    def client_params(self) -> Dict[str, Any]:
+        return {
+            "cookies": self._cookies,
+            "headers": self._headers,
+            "connector": request_mgr.insecure_connector,
+        }
 
     async def lookup(self, silent: bool = False) -> Optional[UserReponse]:
         try:
-            async with aiohttp.ClientSession(**self.session_props) as session:
-                async with session.get(self._user_api) as response:
+            async with aiohttp.ClientSession(**self.client_params) as session:
+                async with session.get(url=self._user_api) as response:
                     if not response.ok:
                         message = f"User API request failed with status: {response.status}"
                         logger.error(f"{message} - {await response.text(encoding='utf-8')}")
@@ -67,44 +71,38 @@ class MainClient(AsyncMixin):
         payment_type: PaymentType,
         params: Dict[str, Any] = {},
     ) -> Optional[SpinResponse]:
-        try:
-            async with aiohttp.ClientSession(**self.session_props) as session:
-                payload = {"spin_type": spin_type, "payment_type": payment_type.value, **params}
+        payload = {"spin_type": spin_type, "payment_type": payment_type.value, **params}
 
-                spin_response = await self._perform_spin(session=session, payload=payload)
+        try:
+            spin_response = await self._perform_spin(payload=payload)
+            if not spin_response:
+                return None
+
+            # If balance not enough, try free spin
+            if spin_response.error_code == "balance_not_enough":
+                spin_response = await self._perform_spin(payload=payload, is_free_spin=True)
                 if not spin_response:
                     return None
 
-                # If balance not enough, try free spin
-                if spin_response.error_code == "balance_not_enough":
-                    spin_response = await self._perform_spin(session=session, payload=payload, is_free_spin=True)
-                    if not spin_response:
-                        return None
-
-                    # Check if free spin was successful
-                    if spin_response.invalid_response:
-                        self._on_add_message(tag=MessageTag.ERROR, message=spin_response.invalid_message)
-                        return None
-
-                    return spin_response
-
-                # Check if normal spin was successful
+                # Check if free spin was successful
                 if spin_response.invalid_response:
                     self._on_add_message(tag=MessageTag.ERROR, message=spin_response.invalid_message)
                     return None
 
                 return spin_response
 
+            # Check if normal spin was successful
+            if spin_response.invalid_response:
+                self._on_add_message(tag=MessageTag.ERROR, message=spin_response.invalid_message)
+                return None
+
+            return spin_response
+
         except Exception as error:
             logger.exception(f"Failed to spin: {error}")
             return None
 
-    async def _perform_spin(
-        self,
-        session: aiohttp.ClientSession,
-        payload: Dict[str, Any],
-        is_free_spin: bool = False,
-    ) -> Optional[SpinResponse]:
+    async def _perform_spin(self, payload: Dict[str, Any], is_free_spin: bool = False) -> Optional[SpinResponse]:
         spin_type = payload["spin_type"]
         payment_type = payload["payment_type"]
 
@@ -132,14 +130,15 @@ class MainClient(AsyncMixin):
 
             payload = {"free_spin_amount": free_spin, "spin_type": 0, "payment_type": payment_type}
 
-        async with session.post(url=self._spin_api, json=payload) as response:
-            if not response.ok:
-                spin_type = "Free spin" if is_free_spin else "Spin"
-                message = f"{spin_type} API request failed with status: {response.status}"
-                logger.error(f"{message} - {await response.text(encoding='utf-8')}")
-                self._on_add_message(tag=MessageTag.ERROR, message=message)
-                return None
+        async with aiohttp.ClientSession(**self.client_params) as session:
+            async with session.post(url=self._spin_api, json=payload) as response:
+                if not response.ok:
+                    spin_type = "Free spin" if is_free_spin else "Spin"
+                    message = f"{spin_type} API request failed with status: {response.status}"
+                    logger.error(f"{message} - {await response.text(encoding='utf-8')}")
+                    self._on_add_message(tag=MessageTag.ERROR, message=message)
+                    return None
 
-        # Return response even if it has error_code, let caller handle it
-        spin_response = SpinResponse.model_validate(await response.json())
-        return spin_response
+                # Return response even if it has error_code, let caller handle it
+                spin_response = SpinResponse.model_validate(await response.json())
+                return spin_response

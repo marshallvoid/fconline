@@ -6,13 +6,13 @@ from loguru import logger
 
 from app.core.managers.crypto import crypto_mgr
 from app.core.managers.file import file_mgr
-from app.schemas.configs import Config
+from app.schemas.local_config import LocalConfigs
 from app.utils.decorators.singleton import singleton
 
 
 @singleton
-class ConfigManager:
-    def save_configs(self, configs: Config) -> None:
+class LocalConfigManager:
+    def save_local_configs(self, configs: LocalConfigs) -> None:
         try:
             encrypted_configs: Dict[str, Any] = {
                 **configs.model_dump(mode="json", exclude={"accounts", "notifications"}),
@@ -31,11 +31,11 @@ class ConfigManager:
             with open(configs_file, "w", encoding="utf-8") as f:
                 json.dump(encrypted_configs, f, indent=2, ensure_ascii=False)
 
-        except Exception:
-            logger.exception("Failed to save configs")
+        except Exception as error:
+            logger.exception(f"Failed to save configs: {error}")
 
-    def load_configs(self) -> Config:
-        configs = Config()
+    def load_local_configs(self) -> LocalConfigs:
+        configs = LocalConfigs()
         try:
             configs_file = os.path.join(file_mgr.get_configs_directory(), "configs.json")
             if not os.path.exists(configs_file):
@@ -58,7 +58,7 @@ class ConfigManager:
                     for account in encrypted_configs["accounts"]
                 ]
 
-            return Config.model_validate(encrypted_configs)
+            return LocalConfigs.model_validate(encrypted_configs)
 
         except Exception:
             logger.exception("Failed to load configs")
@@ -66,4 +66,4 @@ class ConfigManager:
         return configs
 
 
-config_mgr = ConfigManager()
+local_config_mgr = LocalConfigManager()

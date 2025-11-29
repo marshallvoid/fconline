@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, List
 
-from app.schemas.configs import Notification
+from app.schemas.local_config import Notification
 from app.ui.utils.ui_factory import UIFactory
 from app.ui.utils.ui_helpers import UIHelpers
 from app.utils.helpers import get_window_position

@@ -55,7 +55,7 @@ playwright install chromium
 uv run python manage.py
 
 # Alternative entry point
-uv run python app/main.py
+uv run python app/main/ui/__init__.py
 ```
 
 ## ⚙️ Configuration
@@ -99,16 +99,6 @@ uv run pre-commit run --all-files
 
 ## 📦 Building
 
-### Quick Build
-
-```bash
-# Linux/macOS
-./build.sh
-
-# Windows
-build.bat
-```
-
 ### Manual Build
 
 ```bash
@@ -116,7 +106,7 @@ build.bat
 uv sync --group build
 
 # Create executable
-uv run pyinstaller build.spec
+uv run pyinstaller --clean build.spec
 
 # Clean build artifacts (optional)
 rm -rf build/ dist/ __pycache__/ app/__pycache__/ app/*/__pycache__/ app/*/*/__pycache__/

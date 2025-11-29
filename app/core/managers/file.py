@@ -26,14 +26,20 @@ class FileManager:
         return os.path.join(base_path, relative_path)
 
     def get_configs_directory(self) -> str:
-        if platform_mgr.is_windows:  # Windows
+        if getattr(sys, "frozen", False):  # Production mode - save next to executable
+            base_path = Path(sys.executable).parent
+            configs_dir = str(base_path / "data")
+
+        elif platform_mgr.is_windows:  # Development mode - save in user directory
             app_data = os.environ.get("APPDATA", os.path.expanduser("~"))
-            configs_dir = os.path.join(app_data, settings.program_name.replace(" ", ""))
+            configs_dir = os.path.join(app_data, settings.program_name.casefold().replace(" ", "-"))
+
         else:  # MacOS and Linux
             configs_dir = os.path.expanduser(f"~/.{settings.program_name.casefold().replace(' ', '-')}")
 
         try:
             os.makedirs(configs_dir, exist_ok=True)
+            logger.debug(f"Configs directory: {configs_dir}")
 
         except Exception as error:
             logger.exception(f"Failed to create configs directory: {error}")
@@ -41,7 +47,7 @@ class FileManager:
 
         return configs_dir
 
-    def get_data_directory(self) -> str:
+    def get_user_data_directory(self) -> str:
         dir_name = f"{settings.program_name.casefold().replace(' ', '-')}-{int(time.time())}-{shortuuid.uuid()}"
 
         if platform_mgr.is_windows:  # Windows
@@ -59,7 +65,7 @@ class FileManager:
 
         return data_dir
 
-    def cleanup_data_directory(self, data_dir: Optional[str] = None) -> None:
+    def cleanup_user_data_directory(self, data_dir: Optional[str] = None) -> None:
         if not data_dir or not os.path.exists(data_dir):
             return
 

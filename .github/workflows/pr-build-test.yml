@@ -37,12 +37,12 @@ jobs:
            run: choco install innosetup
 
          - name: Build executable
-           run: uv run pyinstaller --clean build_onedir.spec
+           run: uv run pyinstaller --clean build.spec
 
          - name: Create dummy metadata.json
            shell: bash
            run: |
-              echo "{\"version\": \"0.0.0-test\"}" > dist/FC_Online_Tool/metadata.json
+              echo "{\"version\": \"0.0.0-test\"}" > dist/FC_Online_Automation/metadata.json
 
          - name: Compile Installer
            run: |
@@ -51,7 +51,7 @@ jobs:
          - name: Upload installer artifact
            uses: actions/upload-artifact@v4
            with:
-              name: FC_Online_Tool-test-build-${{ github.event.pull_request.number }}
-              path: dist/FC_Online_Tool_Setup.exe
+              name: FC_Online_Automation-test-build-${{ github.event.pull_request.number }}
+              path: dist/FC_Online_Automation_Setup.exe
               if-no-files-found: error
               retention-days: 3

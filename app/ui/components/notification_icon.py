@@ -3,21 +3,21 @@ import tkinter as tk
 from tkinter import ttk
 from typing import List, Optional
 
-from app.core.managers.config import config_mgr
-from app.schemas.configs import Config, Notification
-from app.ui.components.dialogs.notification_dialog import NotificationDialog
+from app.core.managers.local_config import local_config_mgr
+from app.schemas.local_config import LocalConfigs, Notification
+from app.ui.components.dialogs.notification import NotificationDialog
 
 
 class NotificationIcon:
-    def __init__(self, parent: tk.Misc, configs: Optional[Config] = None) -> None:
+    def __init__(self, parent: tk.Misc, local_configs: Optional[LocalConfigs] = None) -> None:
         # Widgets
         self._parent: tk.Misc = parent
         self._frame: ttk.Frame = ttk.Frame(master=parent)
         self._dialog: Optional[NotificationDialog] = None
 
         # Configs
-        self._configs: Config = configs if configs is not None else config_mgr.load_configs()
-        self._notifications: List[Notification] = self._configs.notifications
+        self._local_configs: LocalConfigs = local_configs if local_configs else local_config_mgr.load_local_configs()
+        self._notifications: List[Notification] = self._local_configs.notifications
 
         self._initialize()
 
@@ -28,7 +28,7 @@ class NotificationIcon:
     # ==================== Public Methods ====================
     def add_notification(self, nickname: str, jackpot_value: str) -> None:
         self._notifications.append(Notification(nickname=nickname, jackpot_value=jackpot_value))
-        self._update_icon()
+        self._update_count_badge()
         self._save_notifications_to_config()
 
     # ==================== Private Methods ====================
@@ -56,7 +56,7 @@ class NotificationIcon:
         self._count_label.pack_forget()  # Initially hidden
 
         # Update icon to reflect loaded notifications
-        self._update_icon()
+        self._update_count_badge()
 
     def _on_icon_click(self) -> None:
         # Close existing dialog if any
@@ -80,7 +80,7 @@ class NotificationIcon:
             on_clear_all=self._clear_all_notifications,
         )
 
-    def _update_icon(self) -> None:
+    def _update_count_badge(self) -> None:
         unread_count: int = sum(1 for notification in self._notifications if not notification.is_seen)
 
         if unread_count == 0:
@@ -100,12 +100,12 @@ class NotificationIcon:
 
     def _clear_all_notifications(self) -> None:
         self._notifications.clear()
-        self._update_icon()
+        self._update_count_badge()
         self._save_notifications_to_config()
 
         if self._dialog:
             self._dialog.destroy()
 
     def _save_notifications_to_config(self) -> None:
-        self._configs.notifications = self._notifications
-        config_mgr.save_configs(configs=self._configs)
+        self._local_configs.notifications = self._notifications
+        local_config_mgr.save_local_configs(configs=self._local_configs)

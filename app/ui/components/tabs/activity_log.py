@@ -1,7 +1,8 @@
 import tkinter as tk
+from collections import deque
 from datetime import datetime
 from tkinter import ttk
-from typing import Dict
+from typing import Deque, Dict, Tuple
 
 from pydantic import BaseModel, ConfigDict
 
@@ -26,12 +27,18 @@ class ActivityLogTab:
     _JACKPOT_WINNER_TEXT = "Ultimate Prize Winner: {nickname} ({value})"
     _MINI_JACKPOT_WINNER_TEXT = "Mini Prize Winner: {nickname} ({value})"
 
+    # Cache size - keep last N messages for duplicate detection
+    _MAX_RECENT_MESSAGES = 100
+
     def __init__(self, parent: tk.Misc) -> None:
         # Widgets
         self._frame = ttk.Frame(master=parent)
 
         # States
-        self._message_tabs: Dict[str, MessageTabInfo] = {}
+        self._message_tabs: Dict[str, MessageTabInfo] = {}  # Format: { tab_name: MessageTabInfo }
+
+        # Cache for duplicate detection: deque of (message_content, timestamp_dt)
+        self._recent_messages: Deque[Tuple[str, datetime]] = deque(maxlen=self._MAX_RECENT_MESSAGES)
 
         self._initialize()
 
@@ -40,16 +47,32 @@ class ActivityLogTab:
         return self._frame
 
     # ==================== Public Methods ====================
+    def update_current_jackpot(self, value: int) -> None:
+        self._current_jackpot_label.config(text=self._CURRENT_JACKPOT_LABEL_TEXT.format(value=value))
+
+    def update_prize_winner(self, nickname: str, value: str, is_jackpot: bool = False) -> None:
+        if is_jackpot:
+            self._ultimate_prize_label.config(text=self._JACKPOT_WINNER_TEXT.format(nickname=nickname, value=value))
+            return
+
+        self._mini_prize_label.config(text=self._MINI_JACKPOT_WINNER_TEXT.format(nickname=nickname, value=value))
+
     def add_message(self, tag: MessageTag, message: str, compact: bool = False) -> None:
         if not message.strip():
             return
 
-        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        now = datetime.now()
+        timestamp = now.strftime("%d/%m/%Y %H:%M:%S")
 
         if compact:
             message_content = self._extract_message_content(message=message)
-            if self._is_message_duplicate(message_content=message_content, now_timestamp=timestamp):
+
+            # Fast duplicate check using in-memory cache
+            if self._is_duplicate_message(message_content=message_content, now=now):
                 return
+
+            # Add to cache for future duplicate checks
+            self._recent_messages.append((message_content, now))
 
             timestamped_message = f"[{timestamp}] {message_content}"
         else:
@@ -60,24 +83,19 @@ class ActivityLogTab:
         self._add_message_to_tab(tab_name=tag.tab_name, tag=tag.name, message=timestamped_message)
 
     def clear_messages(self) -> None:
+        # Clear text widgets
         for tab_info in self._message_tabs.values():
             text_widget = tab_info.text_widget
             text_widget.config(state="normal")
             text_widget.delete("1.0", tk.END)
             text_widget.config(state="disabled")
 
+        # Clear duplicate detection cache
+        self._recent_messages.clear()
+
         self.update_current_jackpot(value=0)
         self.update_prize_winner(nickname="Unknown", value="0", is_jackpot=True)
         self.update_prize_winner(nickname="Unknown", value="0")
-
-    def update_current_jackpot(self, value: int) -> None:
-        self._current_jackpot_label.config(text=self._CURRENT_JACKPOT_LABEL_TEXT.format(value=value))
-
-    def update_prize_winner(self, nickname: str, value: str, is_jackpot: bool = False) -> None:
-        if is_jackpot:
-            self._ultimate_prize_label.config(text=self._JACKPOT_WINNER_TEXT.format(nickname=nickname, value=value))
-        else:
-            self._mini_prize_label.config(text=self._MINI_JACKPOT_WINNER_TEXT.format(nickname=nickname, value=value))
 
     # ==================== Private Methods ====================
     def _initialize(self) -> None:
@@ -93,7 +111,7 @@ class ActivityLogTab:
         self._setup_messages_notebook(parent=container)
 
     def _setup_status_panel(self, parent: tk.Misc) -> None:
-        status_frame = UIFactory.create_label_frame(parent=parent, text="Status", padding=8)
+        status_frame = ttk.LabelFrame(master=parent, text="Status", padding=8)
         status_frame.pack(side="left", fill="both", expand=True)
 
         jackpot_container = ttk.Frame(master=status_frame)
@@ -108,7 +126,7 @@ class ActivityLogTab:
         self._current_jackpot_label.pack(anchor="w")
 
     def _setup_winners_panel(self, parent: tk.Misc) -> None:
-        winners_frame = UIFactory.create_label_frame(parent=parent, text="Winners", padding=8)
+        winners_frame = ttk.LabelFrame(master=parent, text="Winners", padding=8)
         winners_frame.pack(side="right", fill="both", expand=True, padx=(8, 0))
 
         winners_container = ttk.Frame(master=winners_frame)
@@ -131,7 +149,7 @@ class ActivityLogTab:
         self._mini_prize_label.pack(anchor="w", pady=(5, 0))
 
     def _setup_messages_notebook(self, parent: tk.Misc) -> None:
-        messages_frame = UIFactory.create_label_frame(parent=parent, text="Messages", padding=8)
+        messages_frame = ttk.LabelFrame(master=parent, text="Messages", padding=8)
         messages_frame.pack(fill="both", expand=True, pady=(5, 0))
 
         self._notebook = ttk.Notebook(master=messages_frame)
@@ -186,45 +204,23 @@ class ActivityLogTab:
 
         return message.strip()
 
-    def _is_message_duplicate(self, message_content: str, now_timestamp: str) -> bool:
-        now_dt = datetime.strptime(now_timestamp, "%d/%m/%Y %H:%M:%S")
-        for tab_info in self._message_tabs.values():
-            text_widget = tab_info.text_widget
-            current_text = text_widget.get("1.0", tk.END)
+    def _is_duplicate_message(self, message_content: str, now: datetime) -> bool:
+        """Check if message is duplicate using in-memory cache.
 
-            lines = current_text.split("\n")
-            for line in reversed(lines):
-                line = line.strip()
-                if not line:
-                    continue
+        Performance: O(n) where n = min(100, total_messages)
+        Much faster than parsing text widgets which is O(n*m*k)
+        """
+        for cached_content, cached_time in reversed(self._recent_messages):
+            # Stop checking if we've gone past the duplicate window
+            time_diff = abs((now - cached_time).total_seconds())
+            if time_diff > DUPLICATE_WINDOW_SECONDS:
+                break
 
-                content, timestamp_str = self._extract_line_content(line=line)
-                if content != message_content or not timestamp_str:
-                    continue
-
-                past_dt = datetime.strptime(timestamp_str, "%d/%m/%Y %H:%M:%S")
-                if abs((now_dt - past_dt).total_seconds()) <= DUPLICATE_WINDOW_SECONDS:
-                    return True
+            # Check if content matches
+            if cached_content == message_content:
+                return True
 
         return False
-
-    def _extract_line_content(self, line: str) -> tuple[str, str]:
-        if not line.startswith("["):
-            return line.strip(), ""
-
-        try:
-            ts_end = line.index("]")
-            timestamp = line[1:ts_end]
-        except ValueError:
-            return line.strip(), ""
-
-        rest = line[ts_end + 1 :]
-
-        # Strip optional "[username]"
-        if rest.startswith("[") and "]" in rest:
-            rest = rest[rest.index("]") + 1 :]
-
-        return rest.strip(), timestamp.strip()
 
     def _add_message_to_tab(self, tab_name: str, tag: str, message: str) -> None:
         if tab_name not in self._message_tabs:

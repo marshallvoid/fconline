@@ -46,8 +46,7 @@ build = [
 ]
 
 [project.scripts]
-fco = "app.main:main"
-fco-cli = "cli:main"
+fco = "app.main.ui.app:main"
 
 [build-system]
 requires = ["hatchling"]

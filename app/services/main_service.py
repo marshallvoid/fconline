@@ -9,14 +9,14 @@ from loguru import logger
 from app.core.managers.file import file_mgr
 from app.core.managers.platform import platform_mgr
 from app.core.settings import settings
-from app.infrastructure.clients.main_client import MainClient
-from app.schemas.configs import Account
+from app.infrastructure.clients.main import MainClient
+from app.schemas.app_config import EventConfigs
 from app.schemas.enums.message_tag import MessageTag
+from app.schemas.local_config import Account
 from app.schemas.user_response import UserReponse
 from app.services.handlers.login_handler import LoginHandler
 from app.services.handlers.websocket_handler import WebsocketHandler
 from app.utils.concurrency import run_in_thread
-from app.utils.constants import EventConfig
 from app.utils.helpers import get_browser_position
 from app.utils.types.callback import (
     OnAccountWonCallback,
@@ -38,13 +38,13 @@ class MainService:
         # Account configs
         account: Account,
         auto_refresh: bool,
-        event_config: EventConfig,
+        event_config: EventConfigs,
         # Callbacks
+        on_account_won: OnAccountWonCallback,
+        on_update_current_jackpot: OnUpdateCurrentJackpotCallback,
+        on_update_prize_winner: OnUpdateWinnerCallback,
         on_add_message: OnAddMessageCallback,
         on_add_notification: OnAddNotificationCallback,
-        on_update_current_jp: OnUpdateCurrentJackpotCallback,
-        on_update_prize_winner: OnUpdateWinnerCallback,
-        on_account_won: OnAccountWonCallback,
     ) -> None:
         # Browser configs
         self._is_running = is_running
@@ -58,11 +58,11 @@ class MainService:
         self._event_config = event_config
 
         # Callbacks
+        self._on_account_won = on_account_won
+        self._on_update_current_jackpot = on_update_current_jackpot
+        self._on_update_prize_winner = on_update_prize_winner
         self._on_add_message = on_add_message
         self._on_add_notification = on_add_notification
-        self._on_update_current_jp = on_update_current_jp
-        self._on_update_prize_winner = on_update_prize_winner
-        self._on_account_won = on_account_won
 
         # Browser session and page
         self._session: Optional[BrowserSession] = None
@@ -165,7 +165,7 @@ class MainService:
             logger.exception(f"Failed to clean up browser resource: {error}")
 
         finally:
-            file_mgr.cleanup_data_directory(data_dir=self._user_data_dir)
+            file_mgr.cleanup_user_data_directory(data_dir=self._user_data_dir)
             self._user_data_dir = None
             self._session = None
             self._page = None
@@ -216,7 +216,7 @@ class MainService:
         for attempt in range(3):
             try:
                 # Use persistent profile on first attempt, temporary on retries
-                user_data_dir = None if attempt > 0 else file_mgr.get_data_directory()
+                user_data_dir = None if attempt > 0 else file_mgr.get_user_data_directory()
                 # Store for cleanup later
                 if user_data_dir:
                     self._user_data_dir = user_data_dir

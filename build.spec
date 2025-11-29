@@ -4,7 +4,7 @@ import os
 block_cipher = None
 
 a = Analysis(
-    ['app/main.py'],
+    ['app/main/ui/app.py'],
     pathex=[os.getcwd()],
     binaries=[],
     datas=[
@@ -70,6 +70,7 @@ a = Analysis(
         'app.core.managers.platform',
         'app.core.managers.request',
         'app.core.managers.update',
+        'app.core.managers.version_manager',  # Added new manager
 
         'app.core.providers',
         'app.core.providers.configs',
@@ -150,18 +151,13 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
-    version='version_info.txt',
-    name='FC_Online_Tool',
+    [], # Exclude binaries/datas for onedir
+    exclude_binaries=True,
+    name='FC_Online_Automation',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     target_arch=None,
@@ -178,5 +174,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='FC_Online_Tool'
+    name='FC_Online_Automation'
 )

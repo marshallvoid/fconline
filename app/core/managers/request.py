@@ -6,7 +6,7 @@ import certifi
 from browser_use.browser.types import Page
 from loguru import logger
 
-from app.utils.constants import EventConfig
+from app.schemas.app_config import EventConfigs
 from app.utils.decorators.singleton import singleton
 
 
@@ -40,7 +40,7 @@ class RequestManager:
             logger.exception(f"Failed to extract cookies: {error}")
             return {}
 
-    async def get_headers(self, page: Page, event_config: EventConfig) -> Dict[str, str]:
+    async def get_headers(self, page: Page, event_config: EventConfigs) -> Dict[str, str]:
         cookies = await self.get_cookies(page=page)
 
         return {

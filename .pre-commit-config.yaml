@@ -3,6 +3,7 @@ repos:
      rev: v0.6.1
      hooks:
         - id: uv-sort
+
    - repo: https://github.com/pre-commit/pre-commit-hooks
      rev: v5.0.0
      hooks:
@@ -11,6 +12,7 @@ repos:
         - id: check-yaml
         - id: detect-private-key
         - id: check-added-large-files
+
    - repo: https://github.com/psf/black
      rev: 25.1.0
      hooks:
@@ -18,11 +20,13 @@ repos:
           args:
              - --line-length=120
              - --skip-string-normalization
+
    - repo: https://github.com/astral-sh/ruff-pre-commit
      rev: v0.11.7
      hooks:
         - id: ruff-format
         - id: ruff
+
    - repo: https://github.com/pre-commit/mirrors-mypy
      rev: v1.15.0
      hooks:

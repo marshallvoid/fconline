@@ -1,0 +1,66 @@
+{
+   "app_configs": {
+      "is_active": true,
+      "message": "Application is under maintenance. Please try again later.",
+      "blocked_licenses": [
+         "FCOL-YYYY-YYYY-YYYY-YYYY"
+      ],
+      "blocked_license_message": "Your license has been revoked. Please contact support.",
+      "valid_licenses": [
+         "FCOL-XXXX-XXXX-XXXX-XXXX"
+      ],
+      "invalid_license_message": "Invalid license key. Please contact support for a valid license."
+   },
+   "event_configs": {
+      "Bi Lắc": {
+         "base_url": "https://bilac.fconline.garena.vn",
+         "spin_types": [
+            "10 Spin",
+            "190 Spin",
+            "900 Spin"
+         ]
+      },
+      "Tỷ Phú": {
+         "base_url": "https://typhu.fconline.garena.vn",
+         "spin_types": [
+            "20 Spin",
+            "190 Spin",
+            "900 Spin",
+            "1800 Spin"
+         ]
+      },
+      "Vòng Quanh Thế Giới": {
+         "base_url": "https://vqtg.fconline.garena.vn",
+         "spin_endpoint": "api/reward/spin",
+         "params": {
+            "is_free": false,
+            "use_topup_deal": false
+         },
+         "spin_types": [
+            "20 Spin",
+            "190 Spin",
+            "900 Spin"
+         ]
+      },
+      "Tuyển Chọn Siêu Sao": {
+         "base_url": "https://tcss.fconline.garena.vn",
+         "spin_types": [
+            "20 Spin",
+            "190 Spin",
+            "900 Spin",
+            "1800 Spin"
+         ],
+         "login_btn_selector": "header a:has-text('Đăng nhập')"
+      },
+      "Lồng Đèn Siêu Sao": {
+         "base_url": "https://ruocden.fconline.garena.vn",
+         "spin_types": [
+            "20 Spin",
+            "190 Spin",
+            "900 Spin",
+            "1800 Spin"
+         ],
+         "login_btn_selector": "header a:has-text('Đăng nhập')"
+      }
+   }
+}

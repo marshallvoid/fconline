@@ -3,10 +3,11 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Dict, List, Optional, Set, Tuple
 
-from app.core.managers.config import config_mgr
-from app.schemas.configs import Account, Config
+from app.core.managers.local_config import local_config_mgr
+from app.schemas.app_config import EventConfigs
 from app.schemas.enums.account_tag import AccountTag
-from app.ui.components.dialogs.upsert_account_dialog import UpsertAccountDialog
+from app.schemas.local_config import Account, LocalConfigs
+from app.ui.components.dialogs.upsert_account import UpsertAccountDialog
 from app.ui.utils.ui_factory import UIFactory
 from app.utils.constants import BROWSER_POSITIONS
 from app.utils.types.callback import OnAccountRunCallback, OnAccountStopCallback, OnRefreshPageCallback
@@ -26,7 +27,8 @@ class AccountsTab:
     def __init__(
         self,
         parent: tk.Misc,
-        configs: Config,
+        event_configs: Dict[str, EventConfigs],
+        local_configs: LocalConfigs,
         selected_event: str,
         on_account_run: OnAccountRunCallback,
         on_account_stop: OnAccountStopCallback,
@@ -36,8 +38,9 @@ class AccountsTab:
         self._frame = ttk.Frame(master=parent)
 
         # Configs
-        self._configs = configs
-        self._accounts = self._configs.accounts
+        self._event_configs = event_configs
+        self._local_configs = local_configs
+        self._accounts = self._local_configs.accounts
         self._selected_event = selected_event
 
         # Callbacks
@@ -175,7 +178,7 @@ class AccountsTab:
         self._setup_action_buttons(parent=main_frame)
 
     def _setup_accounts_tree(self, parent: ttk.Frame) -> None:
-        self._left_frame = UIFactory.create_label_frame(parent=parent, text=f"({len(self._accounts)})")
+        self._left_frame = ttk.LabelFrame(master=parent, text=f"Accounts ({len(self._accounts)})", padding=10)
         self._left_frame.pack(side="left", fill="both", expand=True)
 
         # Create a frame to constrain treeview width
@@ -222,7 +225,7 @@ class AccountsTab:
         self._update_accounts_tree()
 
     def _setup_action_buttons(self, parent: ttk.Frame) -> None:
-        self._right_frame = UIFactory.create_label_frame(parent=parent, text="Actions")
+        self._right_frame = ttk.LabelFrame(master=parent, text="Actions", padding=10)
         self._right_frame.pack(side="right", fill="y", padx=(10, 0))
 
         # Add Account button
@@ -300,7 +303,7 @@ class AccountsTab:
         self._refresh_btn.pack(fill="x")
 
         # Information frame
-        info_frame = UIFactory.create_label_frame(parent=self._right_frame, text="Information")
+        info_frame = ttk.LabelFrame(master=self._right_frame, text="Information", padding=10)
         info_frame.pack(fill="x", pady=(15, 0))
 
         self._browser_pos_label = ttk.Label(
@@ -502,6 +505,7 @@ class AccountsTab:
 
         UpsertAccountDialog(
             parent=self._frame,
+            event_configs=self._event_configs,
             selected_event=self._selected_event,
             existing_accounts=self._accounts,
             account=account,
@@ -545,13 +549,13 @@ class AccountsTab:
                     account.username,
                     account.target_sjp,
                     account.target_mjp if account.target_mjp is not None else "-",
-                    account.spin_type_name(selected_event=self._selected_event),
+                    account.spin_type_name(event_configs=self._event_configs, selected_event=self._selected_event),
                     account.close_on_jp_win,
                 ),
             )
 
-        self._left_frame.config(text=f"({len(self._accounts)})")
+        self._left_frame.config(text=f"Accounts ({len(self._accounts)})")
 
     def _save_accounts_to_config(self) -> None:
-        self._configs.accounts = self._accounts
-        config_mgr.save_configs(configs=self._configs)
+        self._local_configs.accounts = self._accounts
+        local_config_mgr.save_local_configs(configs=self._local_configs)

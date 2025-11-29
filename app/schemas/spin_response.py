@@ -2,6 +2,8 @@ from typing import List, Optional
 
 from pydantic import AliasChoices, BaseModel, Field
 
+from app.schemas.user_response import UserDetail
+
 SPIN_RESULT_ALIASES = ("spin_results", "receive_reward_infos")
 REWARD_NAME_ALIASES = ("reward_name", "item_name")
 
@@ -11,6 +13,7 @@ class SpinResult(BaseModel):
 
 
 class SpinPayload(BaseModel):
+    user: Optional[UserDetail] = None
     spin_results: List[SpinResult] = Field(validation_alias=AliasChoices(*SPIN_RESULT_ALIASES))
 
 

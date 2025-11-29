@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING, ParamSpec, Protocol, TypeVar
 
 if TYPE_CHECKING:
-    from app.schemas.configs import Account
     from app.schemas.enums.message_tag import MessageTag
+    from app.schemas.local_config import Account
 
 P = ParamSpec("P")  # parameter specification
 R = TypeVar("R", covariant=True)  # return type

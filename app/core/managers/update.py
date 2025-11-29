@@ -1,5 +1,4 @@
 import os
-import platform
 import shutil
 import subprocess
 import sys
@@ -14,17 +13,15 @@ from packaging import version
 from app.core.managers.platform import platform_mgr
 from app.core.managers.request import request_mgr
 from app.core.managers.version import version_manager
-from app.core.settings import settings
+from app.infrastructure.clients.github import GithubClient
 
 
 class UpdateManager:
     def __init__(self) -> None:
-        self._release_url = settings.release_url
+        self._github_client = GithubClient()
 
         self._current_version = version_manager.version
         self._latest_version: Optional[str] = None
-
-        self._download_timeout = 300  # 5 minutes
         self._download_url: Optional[str] = None
 
     @property
@@ -39,40 +36,36 @@ class UpdateManager:
         # Return Tuple of (has_update, latest_version, release_notes)
 
         try:
-            async with aiohttp.ClientSession(connector=request_mgr.secure_connector) as session:
-                async with session.get(self._release_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                    if not response.ok:
-                        logger.error(f"Failed to check for updates: {response.status}")
-                        return False, None, None
+            release_data = await self._github_client.check_release()
+            if not release_data:
+                return False, None, None
 
-                    data = await response.json()
+            # Extract version from tag (e.g., "v1.0.0" -> "1.0.0")
+            tag_name = release_data.get("tag_name", "").lstrip("v")
+            release_notes = release_data.get("body", "")
 
-                    # Extract version from tag (e.g., "v1.0.0" -> "1.0.0")
-                    tag_name = data.get("tag_name", "").lstrip("v")
-                    release_notes = data.get("body", "")
+            if not tag_name:
+                logger.warning("No tag name found in release data")
+                return False, None, None
 
-                    if not tag_name:
-                        logger.warning("No tag name found in release data")
-                        return False, None, None
+            self._latest_version = tag_name
 
-                    self._latest_version = tag_name
+            # Compare versions
+            current = version.parse(self._current_version)
+            latest = version.parse(self._latest_version)
 
-                    # Compare versions
-                    current = version.parse(self._current_version)
-                    latest = version.parse(self._latest_version)
+            if latest > current:
+                # Find appropriate asset for current platform
+                self._download_url = self._get_download_url(assets=release_data.get("assets", []))
+                if self._download_url:
+                    logger.info(f"New version available: {self._latest_version} (current: {self._current_version})")
+                    return True, self._latest_version, release_notes
+                else:
+                    logger.warning("No download URL found for current platform")
+                    return False, self._latest_version, None
 
-                    if latest > current:
-                        # Find appropriate asset for current platform
-                        self._download_url = self._get_download_url(assets=data.get("assets", []))
-                        if self._download_url:
-                            logger.info(f"New version available: {tag_name} (current: {self._current_version})")
-                            return True, tag_name, release_notes
-                        else:
-                            logger.warning("No download URL found for current platform")
-                            return False, tag_name, None
-
-                    logger.info(f"Already on latest version: {self._current_version}")
-                    return False, tag_name, None
+            logger.info(f"Already on latest version: {self._current_version}")
+            return False, self._latest_version, None
 
         except Exception as error:
             logger.exception(f"Error checking for updates: {error}")
@@ -93,12 +86,11 @@ class UpdateManager:
             download_path = temp_dir / filename
 
             logger.info(f"Downloading update from: {self._download_url}")
-
-            async with aiohttp.ClientSession(connector=request_mgr.secure_connector) as session:
-                async with session.get(
-                    self._download_url,
-                    timeout=request_mgr.get_timeout(timeout=self._download_timeout),
-                ) as response:
+            async with aiohttp.ClientSession(
+                connector=request_mgr.secure_connector,
+                timeout=request_mgr.get_timeout(timeout=300),
+            ) as session:
+                async with session.get(url=self._download_url) as response:
                     if not response.ok:
                         logger.error(f"Failed to download update: {response.status}")
                         return None
@@ -107,7 +99,7 @@ class UpdateManager:
                     downloaded_size = 0
 
                     with open(download_path, "wb") as f:
-                        async for chunk in response.content.iter_chunked(8192):
+                        async for chunk in response.content.iter_chunked(8192):  # Read 8MB per time
                             f.write(chunk)
                             downloaded_size += len(chunk)
 
@@ -123,8 +115,6 @@ class UpdateManager:
 
     def install_update(self, download_path: Path) -> bool:
         try:
-            system = platform.system().lower()
-
             if platform_mgr.is_windows:
                 return self._install_windows(download_path)
 
@@ -134,7 +124,7 @@ class UpdateManager:
             if platform_mgr.is_linux:
                 return self._install_linux(download_path)
 
-            logger.error(f"Unsupported platform: {system}")
+            logger.error(f"Unsupported platform: {platform_mgr.platform}")
             return False
 
         except Exception as error:
@@ -185,8 +175,7 @@ class UpdateManager:
     def _install_windows(self, download_path: Path) -> bool:
         try:
             if download_path.suffix == ".exe":
-                # Run installer
-                subprocess.Popen([str(download_path), "/SILENT"])
+                subprocess.Popen([str(download_path), "/SILENT"])  # Run installer
             elif download_path.suffix == ".zip":
                 # Extract and replace
                 extract_dir = download_path.parent / "extract"
@@ -290,5 +279,4 @@ class UpdateManager:
             return False
 
 
-# Singleton instance
 update_mgr = UpdateManager()
